@@ -1,0 +1,17 @@
+# Core (Phase 1 + dashboard)
+numpy>=2.0
+scipy>=1.13
+pandas>=2.2
+matplotlib>=3.8
+opencv-python>=4.10
+pyyaml>=6.0
+streamlit>=1.40
+
+# Phase 1 production detector (optional; AGPL-3.0 -- fine for personal/local use).
+# Skip if you only use the classical --detector color backend.
+ultralytics>=8.3
+
+# Phase 2 pose estimation (MediaPipe BlazePose via Tasks API).
+# The pose model (.task) auto-downloads to models/ on first --pose run.
+mediapipe>=0.10.30
+# Phase 3 spin uses only opencv (already above).

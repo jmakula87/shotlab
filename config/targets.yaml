@@ -1,0 +1,48 @@
+# ShotLab shot targets & deviation thresholds.
+# Edit these to tune what the analyzer treats as "clean" mechanics.
+# Every metric has an ideal band [min, max]; values outside the band raise a flag.
+# Units: angles in degrees, durations in seconds, heights in feet.
+
+session:
+  camera_angle: side_on        # side_on | front_on  (sets which metrics are trusted)
+  handedness: right            # right | left  (shooting hand)
+
+# ---------------- Phase 1: ball arc ----------------
+arc:
+  entry_angle_deg:             # angle the ball drops into the rim
+    target: 45.0               # classic "soft" entry; tune to taste
+    band: [40.0, 50.0]
+  release_angle_deg:           # launch angle off the hand
+    target: 52.0
+    band: [45.0, 60.0]
+  apex_height_ft:              # peak height of the ball above release (approx, monocular)
+    target: null               # set a number to enable flagging; null = report only
+    band: [null, null]
+
+# ---------------- Phase 2: form / pose ----------------
+form:
+  elbow_angle_at_release_deg:  # shoulder-elbow-wrist angle at ball release
+    target: 90.0               # ~90 at set point, extending through release
+    band: [80.0, 100.0]
+  knee_bend_deg:               # min knee angle in the dip (smaller = deeper bend)
+    target: 115.0
+    band: [100.0, 130.0]
+  release_vs_apex_s:           # time(release) - time(jump apex); + = release after apex (late)
+    target: 0.0
+    band: [-0.08, 0.08]
+  follow_through_hold_s:       # how long the wrist stays snapped after release
+    target: 0.5
+    band: [0.35, 1.0]
+  balance_drift_px_per_ht:     # horizontal CoM drift over the shot, normalized by body height
+    target: 0.0
+    band: [0.0, 0.12]
+  squareness_deg:              # shoulder-line yaw vs square-to-rim (front_on only, low-conf)
+    target: 0.0
+    band: [-10.0, 10.0]
+
+# ---------------- Phase 3: spin (slow-mo only) ----------------
+spin:
+  min_fps_for_spin: 110        # below this, skip spin and say so
+  backspin_rpm:
+    target: 130.0              # ~120-150 rpm is commonly cited as ideal backspin
+    band: [90.0, 180.0]

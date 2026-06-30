@@ -1,0 +1,362 @@
+"""Phase 2 form metrics, computed per shot from the pose timeseries synced to
+the ball track.
+
+Each metric carries an explicit confidence that honors the camera angle, per the
+2026 survey: in-plane angles on a square camera are trustworthy; depth-dependent
+ones (elbow flare, squareness) are LOW and labeled as such.
+
+Release frame is found by syncing pose to the ball: among frames around the shot
+start, the one where the ball is closest to the shooting wrist is the release.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, asdict, field
+
+import numpy as np
+
+from .pose import FramePose, joint_angle, side_keys, L
+
+
+@dataclass
+class FormMetric:
+    name: str
+    value: float | None
+    confidence: str           # high | medium | low | na
+    note: str = ""
+
+
+# Flip if 'left'/'right' come out reversed for a camera setup (one-line anchor).
+LEFT_RIGHT_FLIP = False
+
+
+@dataclass
+class ReleaseEstimate:
+    """Where the ball leaves the shooting hand, to sub-frame precision."""
+    frame: int               # integer release frame (divergence onset)
+    t: float                 # sub-frame release time, in frame units (>= frame)
+    confidence: str          # high | medium | low
+    diverging: bool          # ball separation grows after release (true hand-off)
+    note: str = ""
+
+
+@dataclass
+class ShotForm:
+    shot: int
+    release_frame: int
+    movement_dir: str = "unknown"   # left | right | set | unknown
+    release_t: float = 0.0          # sub-frame release time (frame units)
+    release_conf: str = "na"        # confidence in the ball/pose release sync
+    metrics: list = field(default_factory=list)
+
+    def as_row(self) -> dict:
+        row = {"shot": self.shot, "release_frame": self.release_frame,
+               "release_t": round(self.release_t, 2),
+               "release_conf": self.release_conf,
+               "movement_dir": self.movement_dir}
+        for m in self.metrics:
+            row[m.name] = m.value
+            row[m.name + "_conf"] = m.confidence
+        return row
+
+
+def movement_direction(rel_f, poses, keys, rim_xy, fps,
+                       window_s=0.30, set_thresh=0.12) -> str:
+    """Which way the shooter was moving INTO the shot, relative to facing the rim.
+
+    Uses the hip-center trajectory in the ~0.3s before release. Small lateral
+    travel -> 'set' (catch-and-shoot). Otherwise the sign of (facing × velocity)
+    in the image gives a consistent left/right per camera setup (flip with
+    LEFT_RIGHT_FLIP if the labels read backwards on your footage)."""
+    if rim_xy is None or not poses:
+        return "unknown"
+    lo = rel_f - int(window_s * fps)
+    hips = []
+    for f in range(lo, rel_f + 1):
+        fp = poses.get(f)
+        if fp is None:
+            continue
+        if fp.vis[L["l_hip"]] >= 0.3 and fp.vis[L["r_hip"]] >= 0.3:
+            hips.append((fp.xy[L["l_hip"]] + fp.xy[L["r_hip"]]) / 2.0)
+    if len(hips) < 3:
+        return "unknown"
+    v = hips[-1] - hips[0]                       # image-space movement
+    fp_rel = poses.get(rel_f)
+    bh = _body_height_px(fp_rel, keys) if fp_rel else float("nan")
+    if not (bh == bh) or bh < 1:
+        bh = 1.0
+    if (v[0] ** 2 + v[1] ** 2) ** 0.5 / bh < set_thresh:
+        return "set"
+    shooter = hips[-1]
+    f_vec = (rim_xy[0] - shooter[0], rim_xy[1] - shooter[1])   # facing the rim
+    cross = f_vec[0] * v[1] - f_vec[1] * v[0]
+    right = (cross > 0) != LEFT_RIGHT_FLIP
+    return "right" if right else "left"
+
+
+def _vis_ok(fp: FramePose, names, thr=0.4) -> bool:
+    return all(fp.v(n) >= thr for n in names)
+
+
+def find_release(shot, ball_track, poses, handedness) -> ReleaseEstimate:
+    """Where the ball separates from the shooting hand, to sub-frame precision.
+
+    While the ball is loaded it sits at ~minimum distance from the shooting
+    wrist; at release that distance starts to grow and keeps growing as the ball
+    flies. We locate the END of the in-hand minimum cluster -- the *onset of
+    divergence* -- which is sharper and earlier than a fixed distance threshold
+    (which only trips once the ball has already travelled a few radii). Then we
+    interpolate the sub-frame moment the ball clears the hand (separation passes
+    half a ball radius).
+
+    Sub-frame timing matters: at 30 fps the ball moves ~a foot per frame, so a
+    whole-frame release quantizes both the release-vs-apex timing and the
+    elbow-at-release angle. Returns a confidence and a `diverging` flag; falls
+    back to the global minimum-distance frame (low confidence) when the hand-off
+    is never clean (noisy/sparse keypoints)."""
+    keys = side_keys(handedness)
+    start = int(shot.frames[0])
+    lo = max(min(poses) if poses else start, start - 12)
+    window = range(lo, start + 8)
+
+    samples = []  # (frame, dist, ball_radius, wrist_visibility)
+    for f in window:
+        fp = poses.get(f)
+        bc = ball_track.get(f)
+        if fp is None or bc is None:
+            continue
+        wrist = fp.pt(keys["wrist"])
+        d = float(np.hypot(bc.cx - wrist[0], bc.cy - wrist[1]))
+        samples.append((f, d, float(bc.r), fp.v(keys["wrist"])))
+
+    if len(samples) < 2:
+        return ReleaseEstimate(frame=start, t=float(start), confidence="low",
+                               diverging=False,
+                               note="ball/pose not tracked at the hand-off")
+
+    dists = [s[1] for s in samples]
+    rmed = float(np.median([s[2] for s in samples])) or 1.0
+    imin = int(np.argmin(dists))
+    dmin = dists[imin]
+    tol = 0.6 * rmed
+
+    # Extend the held cluster forward from the minimum while still ~in hand; its
+    # last frame is the divergence onset.
+    j = imin
+    while j + 1 < len(samples) and dists[j + 1] <= dmin + tol:
+        j += 1
+    rel_f = samples[j][0]
+
+    # Divergence check: separation rises over the next couple of samples.
+    rises = 0
+    for k in range(j, min(j + 3, len(samples)) - 1):
+        if dists[k + 1] > dists[k] + 1e-6:
+            rises += 1
+    diverging = rises >= 1
+
+    # Sub-frame: interpolate where separation crosses half a ball radius.
+    rel_t = float(rel_f)
+    if j + 1 < len(samples):
+        f0, d0 = samples[j][0], dists[j]
+        f1, d1 = samples[j + 1][0], dists[j + 1]
+        sep_thr = dmin + 0.5 * rmed
+        if d1 > d0 and d0 <= sep_thr <= d1 and f1 > f0:
+            frac = (sep_thr - d0) / (d1 - d0)
+            rel_t = f0 + frac * (f1 - f0)
+
+    wrist_vis_ok = samples[j][3] >= 0.4
+    if diverging and wrist_vis_ok and rises >= 2:
+        conf = "high"
+    elif diverging and wrist_vis_ok:
+        conf = "medium"
+    else:
+        conf = "low"
+
+    if not diverging:
+        rel_f = samples[imin][0]                     # min-distance fallback
+        rel_t = float(rel_f)
+        return ReleaseEstimate(frame=rel_f, t=rel_t, confidence="low",
+                               diverging=False,
+                               note="no clean separation; min-distance fallback")
+    return ReleaseEstimate(frame=rel_f, t=rel_t, confidence=conf, diverging=True)
+
+
+def find_release_frame(shot, ball_track, poses, handedness) -> int:
+    """Back-compat shim: the integer release frame. See find_release for the full
+    sub-frame estimate and confidence."""
+    return find_release(shot, ball_track, poses, handedness).frame
+
+
+def _body_height_px(fp: FramePose, keys) -> float:
+    sh = fp.pt(keys["shoulder"])
+    ank = fp.pt(keys["ankle"])
+    h = abs(ank[1] - sh[1])
+    return h if h > 1 else float("nan")
+
+
+def _apex_frame(poses, frames) -> int | None:
+    """Frame of highest body position (hip midpoint y minimal)."""
+    best_f, best_y = None, float("inf")
+    for f in frames:
+        fp = poses.get(f)
+        if fp is None:
+            continue
+        hip = (fp.xy[L["l_hip"]] + fp.xy[L["r_hip"]]) / 2
+        if hip[1] < best_y:
+            best_y, best_f = hip[1], f
+    return best_f
+
+
+def _hip_y(poses, f) -> float | None:
+    fp = poses.get(f)
+    if fp is None:
+        return None
+    return float(((fp.xy[L["l_hip"]] + fp.xy[L["r_hip"]]) / 2)[1])
+
+
+def _apex_subframe(poses, frames) -> float | None:
+    """Sub-frame apex via a parabolic vertex fit on hip-y at the peak and its two
+    neighbours -- so release-vs-apex timing isn't quantized to whole frames."""
+    af = _apex_frame(poses, frames)
+    if af is None:
+        return None
+    y0, ym, yp = _hip_y(poses, af), _hip_y(poses, af - 1), _hip_y(poses, af + 1)
+    if y0 is None or ym is None or yp is None:
+        return float(af)
+    denom = ym - 2 * y0 + yp
+    if abs(denom) < 1e-6:
+        return float(af)
+    off = 0.5 * (ym - yp) / denom
+    return af + max(-1.0, min(1.0, off))
+
+
+def _elbow_angle_at(poses, f, keys) -> float | None:
+    fp = poses.get(f)
+    if fp is None or not _vis_ok(fp, [keys["shoulder"], keys["elbow"], keys["wrist"]]):
+        return None
+    return joint_angle(fp.pt(keys["shoulder"]), fp.pt(keys["elbow"]),
+                       fp.pt(keys["wrist"]))
+
+
+def _elbow_angle_at_t(poses, t, keys) -> float | None:
+    """Elbow angle at a sub-frame release time, interpolated between the two
+    bracketing frames when both are visible (else the nearest visible one)."""
+    f0 = int(np.floor(t))
+    frac = t - f0
+    a0, a1 = _elbow_angle_at(poses, f0, keys), _elbow_angle_at(poses, f0 + 1, keys)
+    if a0 is None:
+        return a1
+    if a1 is None or frac <= 0:
+        return a0
+    return a0 + frac * (a1 - a0)
+
+
+def compute_form(shot, ball_track, poses, fps, *, handedness="right",
+                 camera_angle="side_on", rim_xy=None) -> ShotForm:
+    keys = side_keys(handedness)
+    side_on = camera_angle == "side_on"
+    rel = find_release(shot, ball_track, poses, handedness)
+    rel_f, rel_t = rel.frame, rel.t
+    move = movement_direction(rel_f, poses, keys, rim_xy, fps)
+    frames = [int(f) for f in shot.frames]
+    span = range(max(min(poses) if poses else frames[0], frames[0] - 20),
+                 frames[-1] + 1)
+
+    metrics: list[FormMetric] = []
+
+    # ---- 1. elbow angle at release (sub-frame interpolated) -------------
+    fp = poses.get(rel_f)
+    if fp and _vis_ok(fp, [keys["shoulder"], keys["elbow"], keys["wrist"]]):
+        ang = _elbow_angle_at_t(poses, rel_t, keys)
+        if ang is None:                       # bracket frame invisible: use rel_f
+            ang = joint_angle(fp.pt(keys["shoulder"]), fp.pt(keys["elbow"]),
+                              fp.pt(keys["wrist"]))
+        conf = "medium" if side_on else "low"
+        note = "" if side_on else "front-on: in-plane elbow angle ok, but flare is out-of-plane"
+        if abs(rel_t - rel_f) > 1e-3:
+            note = (note + "; " if note else "") + "sub-frame interpolated to release"
+        metrics.append(FormMetric("elbow_angle_at_release_deg", round(ang, 1), conf, note))
+    else:
+        metrics.append(FormMetric("elbow_angle_at_release_deg", None, "na",
+                                  "shooting arm not clearly visible at release"))
+
+    # ---- 2. knee bend depth (min knee angle in the load) ----------------
+    knee_angs = []
+    for f in span:
+        if f > rel_f:
+            break
+        fp = poses.get(f)
+        if fp and _vis_ok(fp, [keys["hip"], keys["knee"], keys["ankle"]]):
+            knee_angs.append(joint_angle(fp.pt(keys["hip"]), fp.pt(keys["knee"]),
+                                         fp.pt(keys["ankle"])))
+    if knee_angs:
+        conf = "high" if side_on else "low"
+        metrics.append(FormMetric("knee_bend_deg", round(min(knee_angs), 1), conf,
+                                  "" if side_on else "knee flexion is sagittal; needs side-on"))
+    else:
+        metrics.append(FormMetric("knee_bend_deg", None, "na", "legs not visible"))
+
+    # ---- 3. release vs jump apex (seconds, both sub-frame) --------------
+    apex_t = _apex_subframe(poses, span)
+    if apex_t is not None:
+        dt = (rel_t - apex_t) / fps          # + = release after apex (late)
+        metrics.append(FormMetric("release_vs_apex_s", round(dt, 3), "high",
+                                  "+ = released after the peak (late)"))
+    else:
+        metrics.append(FormMetric("release_vs_apex_s", None, "na", "body not tracked"))
+
+    # ---- 4. follow-through hold (s the wrist stays snapped) -------------
+    hold = 0
+    fp0 = poses.get(rel_f)
+    if fp0 and _vis_ok(fp0, [keys["shoulder"], keys["wrist"], keys["elbow"]]):
+        for f in range(rel_f, frames[-1] + 1):
+            fp = poses.get(f)
+            if fp is None or not _vis_ok(fp, [keys["shoulder"], keys["wrist"]]):
+                break
+            wrist = fp.pt(keys["wrist"])
+            shoulder = fp.pt(keys["shoulder"])
+            # snapped == wrist still at/above shoulder height (image y smaller)
+            if wrist[1] <= shoulder[1] + 0.15 * _body_height_px(fp, keys):
+                hold += 1
+            else:
+                break
+        metrics.append(FormMetric("follow_through_hold_s", round(hold / fps, 3),
+                                  "medium",
+                                  "wrist-height proxy; finger snap needs a hand model"))
+    else:
+        metrics.append(FormMetric("follow_through_hold_s", None, "na",
+                                  "shooting hand not visible at release"))
+
+    # ---- 5. balance drift (CoM horizontal travel / body height) --------
+    hips, heights = [], []
+    for f in span:
+        fp = poses.get(f)
+        if fp and _vis_ok(fp, [keys["shoulder"], keys["ankle"]]):
+            hips.append(((fp.xy[L["l_hip"]] + fp.xy[L["r_hip"]]) / 2)[0])
+            heights.append(_body_height_px(fp, keys))
+    if len(hips) >= 3 and np.nanmedian(heights) > 1:
+        drift = (np.nanmax(hips) - np.nanmin(hips)) / np.nanmedian(heights)
+        metrics.append(FormMetric("balance_drift_px_per_ht", round(float(drift), 3),
+                                  "medium", "lateral lean/drift through the shot"))
+    else:
+        metrics.append(FormMetric("balance_drift_px_per_ht", None, "na", "body not tracked"))
+
+    # ---- 6. squareness (front-on only, LOW) ----------------------------
+    if not side_on:
+        fp = poses.get(rel_f) or poses.get(frames[0])
+        if fp and _vis_ok(fp, ["l_shoulder", "r_shoulder"]):
+            ls, rs = fp.pt("l_shoulder"), fp.pt("r_shoulder")
+            tilt = np.degrees(np.arctan2(rs[1] - ls[1], rs[0] - ls[0]))
+            # normalize to deviation from horizontal shoulder line
+            dev = ((tilt + 180) % 180)
+            dev = dev - 180 if dev > 90 else dev
+            metrics.append(FormMetric("squareness_deg", round(float(dev), 1), "low",
+                                      "out-of-plane; 1-camera estimate only"))
+        else:
+            metrics.append(FormMetric("squareness_deg", None, "na", "shoulders not visible"))
+    else:
+        metrics.append(FormMetric("squareness_deg", None, "na",
+                                  "needs a front-on session"))
+
+    return ShotForm(shot=shot.index, release_frame=rel_f, movement_dir=move,
+                    release_t=rel_t, release_conf=rel.confidence, metrics=metrics)

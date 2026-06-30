@@ -1,0 +1,11 @@
+{
+  "session": "Hoops_20260628",
+  "image_w": 1920,
+  "image_h": 1080,
+  "rim_x": 667.5,
+  "rim_y": 311.0,
+  "rim_radius_px": 64.5,
+  "shot_gate_px": 129.0,
+  "handedness": "right",
+  "note": "auto-detected rim; verify/override with calibrate.py"
+}
