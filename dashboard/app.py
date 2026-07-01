@@ -212,6 +212,107 @@ def court_chart(df):
     return fig
 
 
+def _clean(v):
+    try:
+        import numpy as _np
+        if isinstance(v, (_np.floating,)):
+            v = float(v)
+        if isinstance(v, (_np.integer,)):
+            v = int(v)
+    except Exception:
+        pass
+    if isinstance(v, float) and v != v:
+        return None
+    return v
+
+
+def _shot_inspector(view):
+    """Pick a shot row -> full metrics + play its rendered clip if one exists."""
+    show = [c for c in ["shot_num", "clip", "zone", "shot_form", "shot_setup",
+                        "made", "release_angle_deg", "entry_angle_deg",
+                        "tempo_dip_to_release_s", "apex_above_rim_ft"]
+            if c in view.columns]
+    if not show or "shot_in_clip" not in view.columns:
+        return
+    with st.container(border=True):
+        st.subheader("🔎 Shot inspector")
+        st.caption("Click a row to see its full metrics + clip.")
+        vv = view.reset_index(drop=True)
+        ev = st.dataframe(vv[show], hide_index=True, width="stretch",
+                          on_select="rerun", selection_mode="single-row",
+                          key="shot_inspect")
+        rows = []
+        try:
+            rows = ev.selection.rows
+        except Exception:
+            rows = (ev.get("selection", {}) or {}).get("rows", []) if ev else []
+        if not rows:
+            return
+        r = vv.iloc[rows[0]]
+        cols = st.columns([2, 3])
+        cols[0].json({k: _clean(r[k]) for k in show})
+        stem = os.path.splitext(str(r.get("clip", "")))[0]
+        sic = r.get("shot_in_clip")
+        clip_path = None
+        if stem and sic == sic:
+            cand = os.path.join(OUT_DIR, stem, "shots", f"shot_{int(sic)}_h264.mp4")
+            if os.path.exists(cand):
+                clip_path = cand
+        if clip_path:
+            cols[1].video(clip_path)
+        else:
+            cols[1].caption("No rendered clip for this shot yet — render with "
+                            "`python tools/render_shots.py <clip>`.")
+
+
+def _relationship_explorer(view):
+    """Scatter any two metrics against each other, colored by make / feel / zone --
+    a visual way to spot what goes with what."""
+    numeric = [m for m in _METRIC_LABELS
+               if m in view.columns and view[m].notna().sum() >= 4]
+    if len(numeric) < 2:
+        return
+    with st.container(border=True):
+        st.subheader("🔬 Explore relationships")
+        c = st.columns(3)
+        xm = c[0].selectbox("X", numeric, index=0,
+                            format_func=lambda m: _METRIC_LABELS[m], key="relx")
+        ym = c[1].selectbox("Y", numeric, index=min(1, len(numeric) - 1),
+                            format_func=lambda m: _METRIC_LABELS[m], key="rely")
+        by = c[2].selectbox("Color by", ["make", "feel", "zone", "none"], key="relc")
+        sub = view.copy()
+        color_col, enc = None, None
+        if by == "make" and "made" in sub.columns:
+            sub["make"] = sub["made"].map(
+                lambda v: "make" if v in (True, "True")
+                else ("miss" if v in (False, "False") else "?"))
+            color_col = "make"
+            enc = alt.Color("make:N", scale=alt.Scale(
+                domain=["make", "miss", "?"], range=["#39d98a", "#ff6b6b", "#888"]))
+        elif by == "feel" and "felt_good" in sub.columns:
+            sub["feel"] = sub["felt_good"].map(
+                lambda v: "good" if v in (True, "True")
+                else ("off" if v in (False, "False") else "?"))
+            color_col = "feel"
+            enc = alt.Color("feel:N", scale=alt.Scale(
+                domain=["good", "off", "?"], range=["#39d98a", "#ffb020", "#888"]))
+        elif by == "zone" and "zone" in sub.columns:
+            color_col = "zone"
+            enc = alt.Color("zone:N")
+        cols = [xm, ym] + ([color_col] if color_col else [])
+        data = sub[cols].dropna(subset=[xm, ym])
+        if data.empty:
+            st.caption("no overlapping data for those two metrics")
+            return
+        mark = alt.Chart(data).mark_circle(size=90, opacity=0.75).encode(
+            x=alt.X(xm, title=_METRIC_LABELS[xm], scale=alt.Scale(zero=False)),
+            y=alt.Y(ym, title=_METRIC_LABELS[ym], scale=alt.Scale(zero=False)),
+            tooltip=cols, **({"color": enc} if enc is not None else {}))
+        st.altair_chart(mark, use_container_width=True)
+        st.caption("Correlation ≠ causation, and single-camera metrics are "
+                   "foreshortened — use it to spot patterns, not prove them.")
+
+
 def _feel_tagging(df, view, d):
     """Tag shots good/off by FEEL and persist to felt_good in the session CSV.
     These labels power correlate_feel -> your personal ideal. Shows a live
@@ -373,6 +474,12 @@ def view_session():
             show = fb.copy()
             show["metric"] = show["metric"].map(lambda m: _METRIC_LABELS.get(m, m))
             st.dataframe(show, hide_index=True, width="stretch")
+
+    # ---- metric relationship explorer ----
+    _relationship_explorer(view)
+
+    # ---- shot inspector: click a row -> detail + its rendered clip ----
+    _shot_inspector(view)
 
     # ---- feel tagging (powers the personal-ideal / feel-correlation engine) ----
     _feel_tagging(df, view, d)
@@ -591,6 +698,51 @@ def view_compare():
                "are foreshortened, so use the visual pose difference, not the exact °.")
 
 
+def view_compare_sessions():
+    from shotlab.session import consistency_stats
+    st.subheader("Compare two sessions")
+    sdirs = session_dirs()
+    if len(sdirs) < 2:
+        st.info("Need at least two built sessions to compare.")
+        return
+    c = st.columns(2)
+    a = c[0].selectbox("Session A", sdirs, index=0, key="cmpA")
+    b = c[1].selectbox("Session B", sdirs, index=min(1, len(sdirs) - 1), key="cmpB")
+    dfa = pd.read_csv(os.path.join(OUT_DIR, a, "session_shots.csv"))
+    dfb = pd.read_csv(os.path.join(OUT_DIR, b, "session_shots.csv"))
+
+    def _mkpct(df):
+        if "made" not in df.columns:
+            return float("nan")
+        m = df[df["made"].isin([True, False, "True", "False"])]
+        return 100 * m["made"].isin([True, "True"]).mean() if len(m) else float("nan")
+
+    k = st.columns(3)
+    k[0].metric("Shots (A → B)", f"{len(dfa)} → {len(dfb)}")
+    k[1].metric("Make% A", f"{_mkpct(dfa):.0f}%")
+    k[2].metric("Make% B", f"{_mkpct(dfb):.0f}%", f"{_mkpct(dfb)-_mkpct(dfa):+.0f}%")
+
+    ca = consistency_stats(dfa).set_index("metric")
+    cb = consistency_stats(dfb).set_index("metric")
+    rows = []
+    for m in _METRIC_LABELS:
+        if (m in dfa.columns and m in dfb.columns
+                and dfa[m].notna().any() and dfb[m].notna().any()):
+            ma, mb = float(dfa[m].mean()), float(dfb[m].mean())
+            sa = float(ca.loc[m, "within_zone_std"]) if m in ca.index else float("nan")
+            sb = float(cb.loc[m, "within_zone_std"]) if m in cb.index else float("nan")
+            rows.append({"metric": _METRIC_LABELS[m], "mean_A": round(ma, 2),
+                         "mean_B": round(mb, 2), "Δmean": round(mb - ma, 2),
+                         "std_A": round(sa, 2), "std_B": round(sb, 2),
+                         "Δspread": round(sb - sa, 2)})
+    if rows:
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+        st.caption("Δspread negative = more consistent in B. ⚠️ Only comparable if "
+                   "the camera setup matched across the two sessions.")
+    else:
+        st.caption("No shared metrics with data in both sessions.")
+
+
 def view_progress():
     from shotlab.session import (aggregate_sessions, consistency_progress,
                                  mean_drift, consistency_stats, prescribe_target,
@@ -682,7 +834,7 @@ def view_progress():
 # ---------------------------------------------------------------- main
 st.title("🏀 ShotLab")
 mode = st.sidebar.radio("View", ["Per-clip", "Session analytics", "Shot review",
-                                 "Compare shots", "Progress"])
+                                 "Compare shots", "Compare sessions", "Progress"])
 if mode == "Per-clip":
     view_clip()
 elif mode == "Session analytics":
@@ -691,6 +843,8 @@ elif mode == "Shot review":
     view_shot_review()
 elif mode == "Compare shots":
     view_compare()
+elif mode == "Compare sessions":
+    view_compare_sessions()
 else:
     view_progress()
 

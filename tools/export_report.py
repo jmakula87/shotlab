@@ -55,6 +55,14 @@ def main(argv=None):
                     f"<div class='kpi'><b>{p2:.0f}%</b><span>2nd-half make "
                     f"({p2-p1:+.0f}% vs 1st)</span></div>")
 
+    # real-feet + tempo KPIs (rim-scaled, low-conf but concrete)
+    for col, lbl, unit in [("apex_above_rim_ft", "arc peak / rim", " ft"),
+                           ("release_height_ft", "release ht", " ft"),
+                           ("tempo_dip_to_release_s", "tempo", " s")]:
+        if col in df.columns and df[col].notna().sum() >= 3:
+            make += (f"<div class='kpi'><b>{df[col].mean():.2f}{unit}</b>"
+                     f"<span>{lbl}</span></div>")
+
     # coach review (markdown -> simple HTML)
     review_html = ""
     rpath = os.path.join(d, "review.md")
@@ -108,7 +116,9 @@ def main(argv=None):
     cols = [c for c in ["shot_num", "clip", "elapsed_min", "zone",
                         "shot_form", "shot_setup",
                         "release_angle_deg", "entry_angle_deg", "apex_height_ft",
-                        "knee_bend_deg", "made"] if c in df.columns]
+                        "apex_above_rim_ft", "release_height_ft", "jump_height_ft",
+                        "tempo_dip_to_release_s", "knee_bend_deg", "made"]
+            if c in df.columns]
     shots_html = df[cols].round(2).to_html(index=False, border=0, classes="t",
                                            justify="center")
 
