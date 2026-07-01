@@ -153,7 +153,103 @@ def view_clip():
 _METRIC_LABELS = {
     "release_angle_deg": "Release angle °", "entry_angle_deg": "Entry angle °",
     "apex_height_ft": "Apex height (ft)", "knee_bend_deg": "Knee bend °",
+    "apex_above_rim_ft": "Arc peak above rim (ft)",
+    "release_height_ft": "Release height (ft)", "jump_height_ft": "Jump height (ft)",
+    "tempo_dip_to_release_s": "Tempo dip→release (s)",
+    "elbow_angle_at_release_deg": "Elbow at release °",
+    "follow_through_hold_s": "Follow-through hold (s)",
 }
+
+
+def _norm_made(v):
+    if v in (True, "True"):
+        return True
+    if v in (False, "False"):
+        return False
+    return None
+
+
+def court_chart(df):
+    """Schematic half-court: the 9 zones (near/mid/far × left/center/right) shaded
+    by make% (green=high, red=low; grey=no makes classified), annotated with shot
+    counts. Honest to our zone system -- true court coords need calibration."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle, Circle
+    import numpy as np
+
+    depths, sides = ["near", "mid", "far"], ["left", "center", "right"]
+    cmap = plt.get_cmap("RdYlGn")
+    fig, ax = plt.subplots(figsize=(5.2, 5.6))
+    ax.set_xlim(0, 3); ax.set_ylim(-0.2, 3.6); ax.axis("off")
+    ax.add_patch(Circle((1.5, 3.25), 0.12, color="#e8703a", zorder=5))   # rim
+    ax.text(1.5, 3.45, "RIM", ha="center", va="bottom", fontsize=9, color="#444")
+    for di, depth in enumerate(depths):          # near band nearest the rim (top)
+        for si, side in enumerate(sides):
+            sub = df[(df.get("depth") == depth) & (df.get("side") == side)]
+            n = len(sub)
+            y = 2 - di
+            if n == 0:
+                color, txt = "#e9edf3", ""
+            else:
+                mm = sub["made"].map(_norm_made).dropna() if "made" in sub else []
+                mk = float((mm == True).mean()) if len(mm) else float("nan")
+                color = cmap(mk) if mk == mk else "#c8d0dc"
+                txt = f"{n} shot{'s' if n != 1 else ''}"
+                if mk == mk:
+                    txt += f"\n{mk*100:.0f}% make"
+            ax.add_patch(Rectangle((si, y), 1, 1, facecolor=color,
+                                   edgecolor="white", lw=2))
+            ax.text(si + 0.5, y + 0.5, txt, ha="center", va="center",
+                    fontsize=9, color="#1b2430")
+    for si, side in enumerate(sides):
+        ax.text(si + 0.5, -0.12, side, ha="center", fontsize=8, color="#888")
+    for di, depth in enumerate(depths):
+        ax.text(-0.05, 2 - di + 0.5, depth, ha="right", va="center",
+                fontsize=8, color="#888")
+    fig.tight_layout()
+    return fig
+
+
+def _feel_tagging(df, view, d):
+    """Tag shots good/off by FEEL and persist to felt_good in the session CSV.
+    These labels power correlate_feel -> your personal ideal. Shows a live
+    feel-drivers preview from whatever's tagged in the editor."""
+    from shotlab.correlate import correlate_feel, summarize_feel_drivers
+    key = os.path.basename(d)
+    with st.expander("✍️ Tag shots by feel — trains your personal ideal"):
+        st.caption("Mark how each shot FELT (not make/miss). These labels feed the "
+                   "engine that learns YOUR ideal form — stronger than make/miss.")
+        feel_of = (lambda v: "good" if v in (True, "True")
+                   else ("off" if v in (False, "False") else ""))
+        base = [c for c in ["shot_num", "clip", "zone", "release_angle_deg", "made"]
+                if c in df.columns]
+        tbl = df[base].copy()
+        tbl.insert(0, "feel",
+                   df["felt_good"].map(feel_of) if "felt_good" in df.columns else "")
+        edited = st.data_editor(
+            tbl, hide_index=True, width="stretch", key=f"feel_{key}",
+            column_config={"feel": st.column_config.SelectboxColumn(
+                "feel", options=["", "good", "off"], width="small")},
+            disabled=[c for c in tbl.columns if c != "feel"])
+        m = {"good": True, "off": False, "": None}
+        feels = edited["feel"].tolist()
+        if st.button("💾 Save feel tags", key=f"savefeel_{key}"):
+            full = pd.read_csv(os.path.join(d, "session_shots.csv"))
+            if len(full) == len(feels):
+                full["felt_good"] = [m.get(x) for x in feels]
+                full.to_csv(os.path.join(d, "session_shots.csv"), index=False)
+                st.success(f"Saved {sum(1 for x in feels if x)} feel tags.")
+            else:
+                st.error("row-count mismatch — reload the session and retry.")
+        rows = df.to_dict("records")
+        for r, fv in zip(rows, feels):
+            r["felt_good"] = m.get(fv)
+        n_good = sum(1 for x in feels if x == "good")
+        n_off = sum(1 for x in feels if x == "off")
+        st.caption(f"tagged so far: **{n_good}** good · **{n_off}** off")
+        st.markdown(summarize_feel_drivers(correlate_feel(rows)))
 
 
 def _halves_make(df):
@@ -202,6 +298,20 @@ def view_session():
                    f"🔥 longest make-streak **{vs['longest_make_streak']}** "
                    f"(make% is a low-confidence heuristic)")
 
+    # ---- real-feet + tempo KPIs (rim-scaled; low-conf but concrete) ----
+    feet = [("apex_above_rim_ft", "Arc peak above rim", " ft"),
+            ("release_height_ft", "Release height", " ft"),
+            ("jump_height_ft", "Jump height", " ft"),
+            ("tempo_dip_to_release_s", "Tempo dip→release", " s")]
+    have = [(c, lbl, u) for c, lbl, u in feet
+            if c in df.columns and df[c].notna().sum() >= 3]
+    if have:
+        cols = st.columns(len(have))
+        for col, (c, lbl, u) in zip(cols, have):
+            col.metric(lbl, f"{df[c].mean():.2f}{u}")
+        st.caption("Rim-scaled real-world estimates — concrete but low-confidence "
+                   "on one wide camera (calibration + the 2nd camera firm them up).")
+
     # ---- zone filter ----
     zones = sorted(df["zone"].dropna().unique()) if "zone" in df else []
     with st.sidebar:
@@ -239,6 +349,33 @@ def view_session():
                         "mean_made", "mean_miss", "diff", "cohen_d", "p_perm"]
                 st.dataframe(pd.DataFrame(shown)[cols], hide_index=True,
                              width="stretch")
+
+    # ---- shot chart (half-court zones by make%) ----
+    if {"depth", "side"}.issubset(df.columns):
+        with st.container(border=True):
+            st.subheader("🗺️ Shot chart")
+            cc = st.columns([3, 2])
+            cc[0].pyplot(court_chart(view), use_container_width=True)
+            cc[1].caption("Your 9 zones shaded by make% (green = higher). Zone "
+                          "positions are schematic — true court coordinates need "
+                          "the calibration clip.")
+
+    # ---- what fades as you tire ----
+    from shotlab.session import fatigue_breakdown
+    fb = fatigue_breakdown(view)
+    if not fb.empty:
+        with st.container(border=True):
+            st.subheader("😮‍💨 What fades as you tire")
+            top = fb.iloc[0]
+            lbl = _METRIC_LABELS.get(top["metric"], top["metric"])
+            st.markdown(f"Biggest fade: **{lbl}** "
+                        f"({top['first_half']} → {top['second_half']}).")
+            show = fb.copy()
+            show["metric"] = show["metric"].map(lambda m: _METRIC_LABELS.get(m, m))
+            st.dataframe(show, hide_index=True, width="stretch")
+
+    # ---- feel tagging (powers the personal-ideal / feel-correlation engine) ----
+    _feel_tagging(df, view, d)
 
     # ---- interactive metric-over-time chart with trend ----
     st.subheader("Metric over the session (fatigue view)")
@@ -455,7 +592,9 @@ def view_compare():
 
 
 def view_progress():
-    from shotlab.session import aggregate_sessions, consistency_progress
+    from shotlab.session import (aggregate_sessions, consistency_progress,
+                                 mean_drift, consistency_stats, prescribe_target,
+                                 drill_effectiveness)
     agg = aggregate_sessions(OUT_DIR)
     st.subheader("Progress across sessions")
     if agg.empty or len(agg) < 1:
@@ -482,6 +621,49 @@ def view_progress():
                        "⚠️ Only meaningful when the camera setup is consistent "
                        "session-to-session — a different angle changes the "
                        "foreshortening and the absolute spread with it.")
+
+    # level drift -- is a metric creeping session to session?
+    md = mean_drift(agg)
+    if not md.empty:
+        drifting = md[md["drifting"]]
+        with st.container(border=True):
+            st.subheader("↕️ Level drift across sessions")
+            if len(drifting):
+                for _, r in drifting.iterrows():
+                    lbl = _METRIC_LABELS.get(r["metric"], r["metric"])
+                    st.markdown(f"- **{lbl}**: {r['first']} → {r['latest']} "
+                                f"({r['delta']:+}) — creeping.")
+            else:
+                st.caption("No metric is drifting much — your levels are holding.")
+
+    # did the thing a session told you to work on actually improve?
+    sessions = []
+    for sd in session_dirs():
+        try:
+            sdf = pd.read_csv(os.path.join(OUT_DIR, sd, "session_shots.csv"))
+        except Exception:
+            continue
+        if sdf.empty:
+            continue
+        cons = consistency_stats(sdf)
+        stds = (dict(zip(cons["metric"], cons["within_zone_std"]))
+                if not cons.empty else {})
+        t = pd.to_datetime(sdf.get("abs_time"), errors="coerce").dropna()
+        sessions.append({"name": sd,
+                         "date": t.min() if len(t) else pd.Timestamp.min,
+                         "target_metric": prescribe_target(sdf).get("target_metric"),
+                         "stds": stds})
+    sessions.sort(key=lambda s: s["date"])
+    de = drill_effectiveness(sessions)
+    if not de.empty:
+        with st.container(border=True):
+            st.subheader("🎯 Did your homework pay off?")
+            show = de.copy()
+            show["worked_on"] = show["worked_on"].map(lambda m: _METRIC_LABELS.get(m, m))
+            show["improved"] = show["improved"].map(lambda b: "✅ tighter" if b else "⚠️ no")
+            st.dataframe(show, hide_index=True, width="stretch")
+            st.caption("Each session flags one metric to groove; this checks whether "
+                       "it got more repeatable the next session.")
 
     num = [c for c in agg.columns if c not in ("session", "date")]
     metric = st.selectbox("Track over time", num)
