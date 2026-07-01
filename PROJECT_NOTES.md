@@ -3,7 +3,30 @@
 > The canonical "everything" doc. README.md is for usage; this is the decision
 > log, filming guide, roadmap, and enhancement backlog. Update it as we go.
 
-Last updated: 2026-06-30 · Location: `C:\Users\jmaku\Desktop\ShotLab`
+Last updated: 2026-07-01 · Location: `C:\Users\jmaku\Desktop\ShotLab`
+
+---
+
+## NEXT SESSION PICKUP (2026-07-01)
+State: phone PWA **live on GitHub Pages** (https://jmakula87.github.io/shotlab/,
+HTTPS so live camera works on the Pixel); 9-feature backlog built + surfaced in the
+dashboard; **tree clean, all committed** (HEAD `adb9eba`). The big accuracy unlock —
+**2-camera 3D** (elbow flare, true release consistency) — is **blocked on the Galaxy
+S8 hardware** (footage-dependent; math foundation already built + synthetic-validated
+in `shotlab/threed.py`).
+
+**Buildable now (no new footage/hardware), by value:**
+1. **⭐ RECOMMENDED — Profile v2 ideal skeletons.** The app's flagship "jump to
+   release → gold ideal skeleton overlay" is still a PLACEHOLDER; `tools/export_profile.py`
+   v1 exports CSV targets only, no skeletons. v2 = re-run pose on the user's
+   feel-good shots → export ideal joint positions → light up the overlay. Makes the
+   core coaching loop real. Fully buildable on existing feel-good shots.
+2. **Jump-height overestimate fix** — known accuracy bug in the rim-based real-feet
+   math (`shotlab/scale.py`); release/jump were already flagged LOW-conf.
+3. **Test the live-camera app on the phone** — now HTTPS-hosted; needs the USER on
+   the Pixel (I can only prep/fix from here).
+4. Smaller: export live feel-tags to CSV; richer per-shot shot-map (needs `rim_dx_px`
+   in records); goal-progress tracking; `build_session` printout for new metrics.
 
 ---
 
