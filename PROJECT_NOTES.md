@@ -244,9 +244,17 @@ metrics, color by make/feel/zone), **shot inspector** (click a row → full metr
 its rendered clip via st.dataframe on_select), **Compare sessions** view (A/B means
 + consistency deltas), and **report.html parity** (new real-feet/tempo cols + KPIs).
 AppTest clean across Session/Compare-sessions/Progress.
-**STILL TODO:** build_session printout for the new metrics (minor). Live app still
-needs HTTPS hosting to test camera on phone. Remaining UI ideas not yet built:
-personal-bests board, data-health panel, goal lines, one-click report button.
+Even more dashboard UI (2026-07-01): **PDF session report** (`tools/export_pdf.py`,
+3 pages via matplotlib PdfPages — no new deps; shared `shotlab/viz.draw_court`;
+"⬇️ PDF report" download + rebuild-HTML buttons), **data-health panel** (pose%,
+make-classifiable%), **personal-bests board** (Progress), **goal lines** (target +
+band from targets.yaml on the metric chart). AppTest clean; PDF builds during test.
+**Volleyball note (user asked):** the concept exists commercially — VolleyVision,
+TechniqueView (pose + skeleton + per-skill scores) + academic 3D-spike/IMU work;
+same recipe maps over if we ever point ShotLab at volleyball.
+**STILL TODO:** build_session printout for new metrics (minor). Live app needs
+HTTPS hosting to test camera on phone. Ideas left: goal-progress tracking, richer
+shot-map (per-shot scatter needs rim_dx_px in records), report emailing.
 
 ## Scope + roadmap (2026-07-01)
 **SCOPE DECISION (user, 2026-07-01): PERSONAL USE ONLY — not a public product.**
