@@ -1,0 +1,12 @@
+# Pinned versions this project is known to work with (Python 3.13.9, Windows,
+# CPU-only). Regenerate deliberately; `requirements.txt` stays the loose spec.
+numpy==2.4.2
+pandas==3.0.0
+opencv-python==4.13.0
+mediapipe==0.10.35
+ultralytics==8.4.80
+scipy==1.17.0
+streamlit==1.57.0
+altair==6.1.0
+matplotlib==3.10.8
+openvino==2026.2.1

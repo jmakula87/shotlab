@@ -9,7 +9,8 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from shotlab.session import (consistency_stats, consistency_progress,
-                             fatigue_breakdown, mean_drift)
+                             fatigue_breakdown, mean_drift,
+                             prescribe_target, drill_effectiveness)
 
 
 def _session_df(spread, n=40, seed=0):
@@ -74,6 +75,35 @@ def test_mean_drift_flags_creep():
     assert bool(md.loc["entry_angle", "drifting"]) is False     # basically flat
     assert md.loc["release_angle", "slope_per_session"] < 0
     assert mean_drift(agg.head(1)).empty                        # need >=2 sessions
+
+
+def test_prescribe_target_picks_least_repeatable():
+    rng = np.random.default_rng(0)
+    n = 30
+    df = pd.DataFrame({
+        "elapsed_min": np.linspace(0, 20, n),
+        "zone": ["center_mid"] * n,
+        "entry_angle_deg": rng.normal(45, 1.0, n),      # tight (low CV)
+        "release_angle_deg": rng.normal(50, 12.0, n),   # very scattered (high CV)
+    })
+    p = prescribe_target(df)
+    assert p["target_metric"] == "release_angle_deg", p
+
+
+def test_drill_effectiveness_tracks_followup():
+    sessions = [
+        {"name": "s1", "target_metric": "release_angle_deg",
+         "stds": {"release_angle_deg": 12.0}},
+        {"name": "s2", "target_metric": "knee_bend_deg",
+         "stds": {"release_angle_deg": 7.0, "knee_bend_deg": 20.0}},   # release improved
+        {"name": "s3", "target_metric": None,
+         "stds": {"knee_bend_deg": 25.0}},                              # knee got worse
+    ]
+    de = drill_effectiveness(sessions)
+    row1 = de[de["worked_on"] == "release_angle_deg"].iloc[0]
+    assert bool(row1["improved"]) is True and row1["std_after"] == 7.0
+    row2 = de[de["worked_on"] == "knee_bend_deg"].iloc[0]
+    assert bool(row2["improved"]) is False        # 20 -> 25
 
 
 if __name__ == "__main__":

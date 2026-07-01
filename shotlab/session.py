@@ -443,6 +443,51 @@ def consistency_progress(agg: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(out)
 
 
+def prescribe_target(df: pd.DataFrame) -> dict:
+    """Pick the ONE thing to work on next: the least-repeatable metric (highest
+    within-zone spread relative to its own level, so metrics of different units
+    compare fairly). Returns {target_metric, within_zone_std, cv, reason} or {}."""
+    cons = consistency_stats(df)
+    if cons.empty:
+        return {}
+    best = None
+    for _, row in cons.iterrows():
+        m = row["metric"]
+        wz = row.get("within_zone_std")
+        if wz is None or wz != wz or m not in df.columns:
+            continue
+        level = float(df[m].abs().mean())
+        cv = wz / level if level > 1e-9 else wz          # spread relative to level
+        if best is None or cv > best["cv"]:
+            best = {"target_metric": m, "within_zone_std": round(float(wz), 2),
+                    "cv": round(float(cv), 3)}
+    if best is None:
+        return {}
+    best["reason"] = f"least repeatable ({best['target_metric']}, within-zone spread {best['within_zone_std']})"
+    return best
+
+
+def drill_effectiveness(sessions: list) -> pd.DataFrame:
+    """Did the metric a session TOLD you to work on actually get more repeatable
+    the NEXT session? `sessions` = date-ordered list of
+    {name, target_metric, stds:{metric: within_zone_std}}. One row per hand-off."""
+    rows = []
+    for prev, cur in zip(sessions, sessions[1:]):
+        tgt = prev.get("target_metric")
+        if not tgt:
+            continue
+        before = prev.get("stds", {}).get(tgt)
+        after = cur.get("stds", {}).get(tgt)
+        if before is None or after is None:
+            continue
+        rows.append({"worked_on": tgt, "from_session": prev.get("name"),
+                     "checked_session": cur.get("name"),
+                     "std_before": round(float(before), 2),
+                     "std_after": round(float(after), 2),
+                     "improved": bool(after < before)})
+    return pd.DataFrame(rows)
+
+
 def consistency_stats(df: pd.DataFrame, metrics=None) -> pd.DataFrame:
     """How REPEATABLE are you? Spread (std dev) of each metric, plus whether you
     get more erratic as you tire.
