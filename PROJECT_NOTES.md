@@ -234,10 +234,13 @@ backlog, each tested (run_tests.py; JS via node). All green.
    NEEDS HTTPS to use the camera on the phone (GitHub Pages, or localhost).
 9. **Hygiene:** `run_tests.py` (one-command runner), `test_regression.py` (locks the
    analytics layer on a fixed fixture), `requirements-lock.txt` (pinned versions).
-**STILL TODO (surfacing):** wire the new metrics/functions into the dashboard +
-report + build_session printout (the DATA is captured in records/CSVs; the UI
-panels for tempo/real-feet/fatigue-breakdown/drill-effectiveness/feel-drivers are
-the remaining batch). Live app still needs HTTPS hosting to test camera on phone.
+**Surfacing (2026-07-01, DONE for dashboard):** dashboard now shows real-feet +
+tempo KPIs, a **shot chart** (half-court 9-zone make% map), a **"what fades as you
+tire"** panel, **feel-tagging** (edit good/off → writes felt_good → live
+feel-drivers), and in Progress: **level-drift** + **"did your homework pay off?"**.
+New metrics also added to the metric-over-time picker. AppTest clean.
+**STILL TODO:** report.html + build_session printout for the new metrics (minor;
+data is in the CSVs). Live app still needs HTTPS hosting to test camera on phone.
 
 ## Scope + roadmap (2026-07-01)
 **SCOPE DECISION (user, 2026-07-01): PERSONAL USE ONLY — not a public product.**
