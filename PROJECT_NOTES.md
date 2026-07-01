@@ -178,6 +178,38 @@ trends already existed; the gap was tracking consistency ACROSS sessions.
 (arc 6, form 7, correlate 5, consistency 3, shottype 8). Dashboard AppTest clean.
 No new footage needed; all validated on existing data + synthetic ground truth.**
 
+## Phone app MVP — PWA (2026-06-30) — user greenlit "build the app now"
+Architecture (settled w/ user): **desktop builds the rich profile → ships small
+`profile.json` to the phone → phone app is lightweight (reads profile, on-device
+pose, overlay + feedback).** The profile (data) is trivially portable; only the
+heavy ML *processing* had to be rebuilt for mobile. Chose **PWA** (installable web
+app) over native Kotlin: fastest to on-phone + testable + $0 + cross-platform,
+wrap native later. Target = Android/Pixel.
+- `app/` — `index.html`, `styles.css`, `js/{pose,analyze,overlay,main}.js`,
+  `profile.json`, `manifest.json`, `sw.js`, `icon.svg`, `README.md`.
+- **On-device pose** via MediaPipe Tasks-Vision (CDN ESM, WASM/WebGL, GPU→CPU
+  fallback) — same BlazePose-33 as desktop. Pick a clip → per-frame pose → **live
+  green skeleton overlay** → detect load/release/follow → elbow-at-release +
+  knee-bend → compare to `profile.json` ideal → deltas + plain feedback. "Jump to
+  release" freezes + overlays the ideal skeleton (gold) ON yours when the profile
+  has one. Angles computed in PIXEL space (normalized coords are aspect-distorted).
+- **v0 scope:** POSE ONLY (ball/arc = heavy on-device model, deferred to v2;
+  elbow flare needs 2-cam 3D). Ideal targets are PLACEHOLDER until
+  `tools/export_profile.py` generates a real profile (ideal metrics + ideal
+  skeletons) from the user's feel-good shots — NEXT STEP, lights up the overlay.
+- **User's feature vision:** ideal per-phase poses in the profile + app overlays
+  actual-vs-ideal skeleton at load/rise/release/follow. Also: "feels good/off"
+  self-labeling = the personalization signal (beats weak make-detection).
+- **Test:** `python -m http.server 8080 --directory app`; open
+  `http://192.168.4.52:8080` on the Pixel (same Wi-Fi). File-upload works over
+  HTTP; live camera + full install need HTTPS (host on GitHub Pages later). JS
+  syntax-checked via node; can't browser-test here → user eyeballs on phone.
+- **Sellable-as-app note (user floated):** single-camera baseline IS viable for
+  the core (in-plane metrics + consistency + deviation + feel-labeling); 2-cam 3D
+  = premium "pro mode". Hard 80% = detector generalization across courts/phones +
+  mobile polish + competition (HomeCourt/DribbleUp exist). Server cost: ~$0
+  self-host+tunnel to ~$5-12/mo tiny VPS.
+
 ## Two-camera 3D core BUILT (footage-independent, 2026-06-30) — backlog #1 foundation
 Priority (user): **elbow flare + release consistency first.** Built the math
 foundation now, synthetic-validated, so real S8 footage plugs straight in later.

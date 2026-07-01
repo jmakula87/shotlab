@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
+  <link rel="manifest" href="manifest.json" />
+  <title>ShotLab — Form Check</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>🏀 ShotLab <span class="tag">form check</span></h1>
+    <div id="status" class="status">loading pose model…</div>
+  </header>
+
+  <main>
+    <section class="pick">
+      <label class="btn" for="file">📹 Pick a shot clip</label>
+      <input id="file" type="file" accept="video/*" capture="environment" hidden />
+      <p class="hint">Record a shot on your phone, then pick it here. Everything
+        runs on your device — nothing is uploaded.</p>
+    </section>
+
+    <section class="stage" id="stage" hidden>
+      <div class="viewport">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+      </div>
+      <div class="controls">
+        <button id="play" class="btn small">▶ Play</button>
+        <button id="release" class="btn small" hidden>⛹ Jump to release</button>
+        <label class="toggle"><input type="checkbox" id="showIdeal" checked /> overlay ideal</label>
+      </div>
+    </section>
+
+    <section id="report" class="report" hidden></section>
+  </main>
+
+  <footer>
+    <span id="profileName">profile: —</span>
+    <span id="engine">engine: —</span>
+  </footer>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

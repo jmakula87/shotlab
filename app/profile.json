@@ -1,0 +1,18 @@
+{
+  "name": "starter (rough)",
+  "handedness": "right",
+  "note": "Placeholder ideal targets. Will be replaced by YOUR feel-good shots via tools/export_profile.py (which also fills in ideal skeletons for the overlay).",
+  "ideal": {
+    "elbow_at_release_deg": 108,
+    "knee_bend_deg": 110
+  },
+  "tolerance": {
+    "elbow_at_release_deg": 10,
+    "knee_bend_deg": 12
+  },
+  "skeletons": {
+    "load": null,
+    "release": null,
+    "follow": null
+  }
+}
