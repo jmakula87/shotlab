@@ -16,6 +16,7 @@ from dataclasses import dataclass, asdict, field
 import numpy as np
 
 from .pose import FramePose, joint_angle, side_keys, L
+from ..scale import release_height_ft, jump_height_ft
 
 
 @dataclass
@@ -252,7 +253,7 @@ def _elbow_angle_at_t(poses, t, keys) -> float | None:
 
 
 def compute_form(shot, ball_track, poses, fps, *, handedness="right",
-                 camera_angle="side_on", rim_xy=None) -> ShotForm:
+                 camera_angle="side_on", rim_xy=None, px_per_foot=None) -> ShotForm:
     keys = side_keys(handedness)
     side_on = camera_angle == "side_on"
     rel = find_release(shot, ball_track, poses, handedness)
@@ -281,20 +282,32 @@ def compute_form(shot, ball_track, poses, fps, *, handedness="right",
                                   "shooting arm not clearly visible at release"))
 
     # ---- 2. knee bend depth (min knee angle in the load) ----------------
-    knee_angs = []
+    knee_angs, load_f, load_min = [], None, float("inf")
     for f in span:
         if f > rel_f:
             break
         fp = poses.get(f)
         if fp and _vis_ok(fp, [keys["hip"], keys["knee"], keys["ankle"]]):
-            knee_angs.append(joint_angle(fp.pt(keys["hip"]), fp.pt(keys["knee"]),
-                                         fp.pt(keys["ankle"])))
+            k = joint_angle(fp.pt(keys["hip"]), fp.pt(keys["knee"]),
+                            fp.pt(keys["ankle"]))
+            knee_angs.append(k)
+            if k < load_min:                 # deepest bend = bottom of the load
+                load_min, load_f = k, f
     if knee_angs:
         conf = "high" if side_on else "low"
         metrics.append(FormMetric("knee_bend_deg", round(min(knee_angs), 1), conf,
                                   "" if side_on else "knee flexion is sagittal; needs side-on"))
     else:
         metrics.append(FormMetric("knee_bend_deg", None, "na", "legs not visible"))
+
+    # ---- 2b. shot tempo: dip bottom -> release (quickness) --------------
+    if load_f is not None and rel_t >= load_f:
+        tempo = (rel_t - load_f) / fps
+        metrics.append(FormMetric("tempo_dip_to_release_s", round(tempo, 3), "high",
+                                  "time from your deepest load to release (lower = quicker)"))
+    else:
+        metrics.append(FormMetric("tempo_dip_to_release_s", None, "na",
+                                  "load/release not both tracked"))
 
     # ---- 3. release vs jump apex (seconds, both sub-frame) --------------
     apex_t = _apex_subframe(poses, span)
@@ -358,5 +371,33 @@ def compute_form(shot, ball_track, poses, fps, *, handedness="right",
         metrics.append(FormMetric("squareness_deg", None, "na",
                                   "needs a front-on session"))
 
+    # ---- 7. real-feet heights (rim-scaled; shooter is off the rim's depth
+    #         plane, so these are LOW confidence) -----------------------------
+    _height_metrics(metrics, poses, ball_track, keys, span, rel_f, px_per_foot)
+
     return ShotForm(shot=shot.index, release_frame=rel_f, movement_dir=move,
                     release_t=rel_t, release_conf=rel.confidence, metrics=metrics)
+
+
+def _height_metrics(metrics, poses, ball_track, keys, span, rel_f, ppf):
+    """Release height (ball above the ankle line) + jump height (body's vertical
+    travel), both in feet via the rim scale. Appended as LOW-confidence metrics
+    because the shooter sits at a different depth than the rim ruler."""
+    note = "rim-scaled; shooter off the rim's depth plane"
+    fp = poses.get(rel_f)
+    rh = None
+    if ppf and fp and _vis_ok(fp, [keys["ankle"]]):
+        bc = ball_track.get(rel_f)
+        ball_y = bc.cy if bc is not None else (
+            fp.pt(keys["wrist"])[1] if _vis_ok(fp, [keys["wrist"]]) else None)
+        rh = release_height_ft(ball_y, fp.pt(keys["ankle"])[1], ppf)
+    metrics.append(FormMetric("release_height_ft",
+                              None if rh is None else round(rh, 2),
+                              "low" if rh is not None else "na", note))
+
+    hip_ys = [_hip_y(poses, f) for f in span]
+    hip_ys = [y for y in hip_ys if y is not None]
+    jh = jump_height_ft(max(hip_ys), min(hip_ys), ppf) if (ppf and len(hip_ys) >= 3) else None
+    metrics.append(FormMetric("jump_height_ft",
+                              None if jh is None else round(jh, 2),
+                              "low" if jh is not None else "na", note))

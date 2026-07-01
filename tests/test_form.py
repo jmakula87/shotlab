@@ -158,6 +158,16 @@ def test_release_vs_apex_and_followthrough():
     assert ft.value is not None and ft.value > 0
 
 
+def test_tempo_dip_to_release():
+    poses, ball, rel = build_shot_sequence()
+    shot = FakeShot(list(range(14, 30)))
+    sf = compute_form(shot, ball, poses, fps=60, camera_angle="side_on")
+    m = {x.name: x for x in sf.metrics}
+    tempo = m["tempo_dip_to_release_s"]
+    # deepest knee ~frame 9, release ~frame 18 @60fps -> ~0.15s, and positive
+    assert tempo.value is not None and 0.05 < tempo.value < 0.4, tempo.value
+
+
 def test_squareness_na_on_sideon():
     poses, ball, rel = build_shot_sequence()
     shot = FakeShot(list(range(14, 30)))

@@ -27,8 +27,13 @@ import pandas as pd
 from .court import Calibration, filter_shots_by_rim, zone_for_release
 from .make import classify_make
 from .shottype import classify_shot_type
+from .scale import px_per_foot_from_rim, apex_above_rim_ft
 
 _TS_RE = re.compile(r"(\d{8})_(\d{6})(\d{0,3})")
+
+
+def _round2(x):
+    return None if x is None else round(float(x), 2)
 
 
 def parse_clip_time(path: str) -> _dt.datetime | None:
@@ -55,6 +60,9 @@ class ShotRecord:
     release_angle_deg: float | None = None
     entry_angle_deg: float | None = None
     apex_height_ft: float | None = None
+    apex_above_rim_ft: float | None = None   # ball arc peak above the rim (rim-scaled)
+    release_height_ft: float | None = None   # ball height at release above the floor
+    jump_height_ft: float | None = None      # vertical body travel (load->peak)
     n_points: int = 0
     rim_dist_px: float | None = None
     zone: str = ""
@@ -65,6 +73,7 @@ class ShotRecord:
     movement_dir: str = "unknown"   # left | right | set | unknown (into the shot)
     knee_bend_deg: float | None = None
     release_vs_apex_s: float | None = None
+    tempo_dip_to_release_s: float | None = None   # quickness: deepest load -> release
     elbow_angle_at_release_deg: float | None = None
     follow_through_hold_s: float | None = None
     balance_drift_px_per_ht: float | None = None
@@ -107,11 +116,14 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
     `shots`/`track` are absolute, so the timestamps come out right either way."""
     from .phase1_ball.pipeline import metrics_for_shot
 
+    ppf_rim = px_per_foot_from_rim(calib.rim_radius_px)   # rim = 18in ruler
+
     forms = {}
     if with_pose and shots:
         from .phase2_pose.pipeline import run_phase2
         p2 = run_phase2(video_path, shots, track, handedness=handedness,
-                        camera_angle="side_on", rim_xy=(calib.rim_x, calib.rim_y))
+                        camera_angle="side_on", rim_xy=(calib.rim_x, calib.rim_y),
+                        px_per_foot=ppf_rim)
         forms = {fm.shot: fm for fm in p2.forms}
 
     records = []
@@ -136,6 +148,10 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
             rim_dist_px=s.meta.get("rim_dist_px"),
             zone=z["zone"], side=z["side"], depth=z["depth"],
         )
+        # ball arc peak above the rim, in feet (rim-scaled; ball is ~at rim depth
+        # here, so this is the most trustworthy real-feet number)
+        rec.apex_above_rim_ft = _round2(
+            apex_above_rim_ft(float(np.min(s.ys)), calib.rim_y, ppf_rim))
         if do_spin:
             from .phase3_spin.spin import estimate_spin
             from .video_io import iter_frames
@@ -151,6 +167,9 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
                 return m.value if m else None
             rec.knee_bend_deg = _mv("knee_bend_deg")
             rec.release_vs_apex_s = _mv("release_vs_apex_s")
+            rec.tempo_dip_to_release_s = _mv("tempo_dip_to_release_s")
+            rec.release_height_ft = _mv("release_height_ft")
+            rec.jump_height_ft = _mv("jump_height_ft")
             rec.elbow_angle_at_release_deg = _mv("elbow_angle_at_release_deg")
             rec.follow_through_hold_s = _mv("follow_through_hold_s")
             rec.balance_drift_px_per_ht = _mv("balance_drift_px_per_ht")
@@ -433,7 +452,8 @@ def consistency_stats(df: pd.DataFrame, metrics=None) -> pd.DataFrame:
     first/second-half within-zone std shows if your shot scatters more when tired.
     """
     metrics = metrics or ["release_angle_deg", "entry_angle_deg",
-                          "apex_height_ft", "knee_bend_deg"]
+                          "apex_height_ft", "apex_above_rim_ft", "knee_bend_deg",
+                          "tempo_dip_to_release_s", "release_height_ft"]
     if df.empty or "elapsed_min" not in df:
         return pd.DataFrame()
     half = df["elapsed_min"].median()
@@ -469,7 +489,9 @@ def fatigue_trends(df: pd.DataFrame, metrics=None) -> pd.DataFrame:
     """Linear fit of each metric vs elapsed_min. Negative slope = declines as the
     session goes on (a fatigue signal)."""
     metrics = metrics or ["release_angle_deg", "entry_angle_deg", "apex_height_ft",
-                          "knee_bend_deg", "backspin_rpm"]
+                          "apex_above_rim_ft", "knee_bend_deg",
+                          "tempo_dip_to_release_s", "release_height_ft",
+                          "jump_height_ft", "backspin_rpm"]
     out = []
     for m in metrics:
         if m not in df.columns:

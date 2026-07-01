@@ -28,7 +28,8 @@ def _needed_frames(shots, n_frames, pre=25, post=8) -> set[int]:
 
 def run_phase2(video_path: str, shots, ball_track, *,
                handedness="right", camera_angle="side_on",
-               variant="full", smooth=True, rim_xy=None) -> Phase2Result:
+               variant="full", smooth=True, rim_xy=None,
+               px_per_foot=None) -> Phase2Result:
     info = probe(video_path)
     if not shots:
         return Phase2Result(poses={}, forms=[], release_frames={})
@@ -51,7 +52,7 @@ def run_phase2(video_path: str, shots, ball_track, *,
     for s in shots:
         sf = compute_form(s, ball_track, poses, info.fps,
                           handedness=handedness, camera_angle=camera_angle,
-                          rim_xy=rim_xy)
+                          rim_xy=rim_xy, px_per_foot=px_per_foot)
         forms.append(sf)
         releases[s.index] = sf.release_frame
     return Phase2Result(poses=poses, forms=forms, release_frames=releases)
