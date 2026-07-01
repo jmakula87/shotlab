@@ -26,6 +26,8 @@ import sys
 
 import pandas as pd
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # (metric column, minimum tolerance so the band never collapses)
 IDEAL_METRICS = [
     ("elbow_angle_at_release_deg", 6.0),
@@ -64,7 +66,8 @@ def select_good(df: pd.DataFrame, session_dir: str, min_good: int = 5):
 
 
 def build_profile(df: pd.DataFrame, session_dir: str, *, name="me",
-                  handedness="right", min_good=5) -> dict:
+                  handedness="right", min_good=5, with_skeletons=True,
+                  raw_dirs=None) -> dict:
     good, method = select_good(df, session_dir, min_good)
     ideal, tol = {}, {}
     for col, floor in IDEAL_METRICS:
@@ -75,16 +78,43 @@ def build_profile(df: pd.DataFrame, session_dir: str, *, name="me",
             continue
         ideal[col] = round(float(vals.mean()), 2)
         tol[col] = round(float(max(vals.std(ddof=0) if len(vals) > 1 else floor, floor)), 2)
-    return {
+
+    skeletons = {"load": None, "release": None, "follow": None}
+    skel_note = ""
+    if with_skeletons and {"clip", "shot_in_clip"}.issubset(good.columns):
+        skeletons, skel_note = build_ideal_skeletons(good, handedness, raw_dirs)
+
+    profile = {
         "name": name,
         "handedness": handedness,
-        "note": f"Ideal learned from {len(good)} {method}.",
+        "note": f"Ideal learned from {len(good)} {method}." + (
+            f" {skel_note}" if skel_note else ""),
         "n_good": int(len(good)),
         "source_method": method,
         "ideal": ideal,
         "tolerance": tol,
-        "skeletons": {"load": None, "release": None, "follow": None},
+        "skeletons": skeletons,
     }
+    return profile
+
+
+def build_ideal_skeletons(good: pd.DataFrame, handedness, raw_dirs):
+    """Build per-phase ideal skeletons from the good shots' raw clips (v2). Falls
+    back to null skeletons + a note if pose can't run (missing raw clips)."""
+    from shotlab.skeleton import build_skeletons
+    if raw_dirs is None:
+        raw_dirs = [os.path.join("data", "raw", "Hoops"), os.path.join("data", "raw")]
+    pairs = list(zip(good["clip"].astype(str), good["shot_in_clip"]))
+    try:
+        skeletons, stats = build_skeletons(pairs, raw_dirs, handedness=handedness)
+    except Exception as e:                       # raw clip gone / pose unavailable
+        return {"load": None, "release": None, "follow": None}, \
+               f"(skeletons skipped: {e})"
+    got = [p for p, v in skeletons.items() if v]
+    if not got:
+        return skeletons, "(no clean poses for skeletons -- raw clips missing?)"
+    n = stats.get("release", 0)
+    return skeletons, f"Ideal skeletons from {n} clean-pose shots ({', '.join(got)})."
 
 
 def main(argv=None):
@@ -93,6 +123,11 @@ def main(argv=None):
     ap.add_argument("--out", default=os.path.join("app", "profile.json"))
     ap.add_argument("--name", default="me")
     ap.add_argument("--handedness", default="right")
+    ap.add_argument("--no-skeletons", action="store_true",
+                    help="skip the v2 ideal-skeleton pose re-run (metrics only)")
+    ap.add_argument("--raw-dir", action="append", default=None,
+                    help="where the raw clips live (repeatable); "
+                         "default data/raw/Hoops then data/raw")
     args = ap.parse_args(argv)
 
     csv = os.path.join(args.session_dir, "session_shots.csv")
@@ -101,13 +136,17 @@ def main(argv=None):
         return 1
     df = pd.read_csv(csv)
     profile = build_profile(df, args.session_dir, name=args.name,
-                            handedness=args.handedness)
+                            handedness=args.handedness,
+                            with_skeletons=not args.no_skeletons,
+                            raw_dirs=args.raw_dir)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(profile, f, indent=2)
     print(f"wrote {args.out}")
     print(f"  {profile['note']}")
     print(f"  ideal: {profile['ideal']}")
+    got = [p for p, v in profile["skeletons"].items() if v]
+    print(f"  skeletons: {got or 'none'}")
     return 0
 
 
