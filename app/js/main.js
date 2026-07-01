@@ -2,9 +2,10 @@
 // -> phase/metric analysis -> compare to profile -> feedback + release overlay.
 
 import { initPose, poseBackend, detect } from "./pose.js";
-import { analyzeShot, compareToProfile, feedbackLines } from "./analyze.js";
+import { analyzeShot, compareToProfile, feedbackLines, METRIC_LABEL } from "./analyze.js";
 import { render, clear } from "./overlay.js";
 import { startCamera, stopCamera, ShotDetector } from "./live.js";
+import { VoiceFeel } from "./voice.js";
 
 const $ = id => document.getElementById(id);
 const statusEl = $("status"), video = $("video"), canvas = $("overlay");
@@ -138,8 +139,9 @@ function renderReport(a, deltas) {
   const rows = deltas.map(d => {
     const cls = d.within ? "good" : "bad";
     const sign = d.delta > 0 ? "+" : "";
-    return `<div class="row"><span class="k">${labelOf(d.key)}</span>
-      <span class="v">${d.measured}° <span class="delta ${cls}">(${sign}${d.delta}° vs ${d.ideal}°)</span></span></div>`;
+    const [lbl, u] = METRIC_LABEL[d.key] || [d.key, ""];
+    return `<div class="row"><span class="k">${lbl}</span>
+      <span class="v">${d.measured}${u} <span class="delta ${cls}">(${sign}${d.delta}${u} vs ${d.ideal}${u})</span></span></div>`;
   }).join("");
   const fb = feedbackLines(deltas).map(l => `<li>${l}</li>`).join("");
   rep.innerHTML = `
@@ -153,6 +155,7 @@ const labelOf = k => ({ elbow_angle_at_release_deg: "Elbow at release",
 
 // ---------------------------------------------------------------- live mode
 let liveOn = false, liveTs = -1, liveDetector = null, liveCount = 0;
+let liveShots = [], voice = null, feelGood = 0, feelOff = 0, sessionId = 0;
 
 $("live").addEventListener("click", startLive);
 $("stopLive").addEventListener("click", stopLive);
@@ -168,17 +171,43 @@ async function startLive() {
   $("play").hidden = true; $("stopLive").hidden = false;
   $("liveFeed").hidden = false; $("liveFeed").innerHTML = "";
   canvas.width = video.videoWidth || 720; canvas.height = video.videoHeight || 1280;
-  liveOn = true; liveTs = -1; liveCount = 0;
+  liveOn = true; liveTs = -1; liveCount = 0; liveShots = [];
+  feelGood = 0; feelOff = 0; sessionId = Date.now();
   liveDetector = new ShotDetector({ handedness: profile.handedness || "right" });
-  setStatus("live — shoot! feedback after each shot");
+  // hands-free feel tagging: say "good" / "off" after a shot
+  voice = new VoiceFeel(onFeel);
+  voice.start();
+  const mic = voice.supported ? " · 🎙 say “good”/“off” after each shot"
+                              : " · (voice tagging needs Chrome + HTTPS)";
+  setStatus("live — shoot!" + mic);
   liveLoop();
 }
 
 function stopLive() {
   liveOn = false;
   stopCamera(video);
+  if (voice) voice.stop();
   $("stopLive").hidden = true; $("play").hidden = false;
-  setStatus("live stopped");
+  setStatus(`live stopped — tagged ${feelGood} good · ${feelOff} off`);
+}
+
+function onFeel(feel, heard) {
+  // tag the most recent shot that isn't tagged yet
+  const shot = [...liveShots].reverse().find(s => !s.feel);
+  if (!shot) return;
+  shot.feel = feel;
+  if (feel === "good") feelGood++; else feelOff++;
+  const badge = feel === "good" ? "👍 good" : "👎 off";
+  shot.card.querySelector("h2").innerHTML += ` <span class="delta ${
+    feel === "good" ? "good" : "bad"}">${badge}</span>`;
+  // persist locally so the labels survive + can be exported later
+  try {
+    const key = "shotlab_feel_" + sessionId;
+    const log = JSON.parse(localStorage.getItem(key) || "[]");
+    log.push({ n: shot.n, feel, heard, t: shot.t });
+    localStorage.setItem(key, JSON.stringify(log));
+  } catch (_) {}
+  setStatus(`heard “${heard}” → shot ${shot.n} ${badge}  (${feelGood} good · ${feelOff} off)`);
 }
 
 function liveLoop() {
@@ -211,6 +240,7 @@ function onLiveShot(shot) {
   card.className = "card feedback";
   card.innerHTML = `<h2>Shot ${liveCount} — ${head}</h2><ul>${fb}</ul>`;
   $("liveFeed").prepend(card);          // newest on top
+  liveShots.push({ n: liveCount, card, feel: null, t: shot.releaseT });
 }
 
 boot();

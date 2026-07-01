@@ -5,6 +5,7 @@ const CACHE = "shotlab-formcheck-v1";
 const SHELL = [
   ".", "index.html", "styles.css", "manifest.json", "icon.svg", "profile.json",
   "js/main.js", "js/pose.js", "js/analyze.js", "js/overlay.js", "js/live.js",
+  "js/voice.js",
 ];
 
 self.addEventListener("install", e => {

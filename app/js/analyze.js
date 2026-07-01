@@ -41,17 +41,19 @@ export function analyzeShot(frames, { hand = "right", W, H, fps = 30 } = {}) {
   const K = sideKeys(hand);
   const series = frames.map(({ t, lm }) => {
     const wrist = px(lm, K.wrist, W, H);
+    const shoulder = px(lm, K.shoulder, W, H);
+    const ankle = px(lm, K.ankle, W, H);
     const hipC = { x: (lm[L.l_hip].x + lm[L.r_hip].x) / 2 * W,
                    y: (lm[L.l_hip].y + lm[L.r_hip].y) / 2 * H };
     let elbow = null;
     if (visOK(lm, W, H, [K.shoulder, K.elbow, K.wrist]))
-      elbow = jointAngle(px(lm, K.shoulder, W, H), px(lm, K.elbow, W, H),
-                         px(lm, K.wrist, W, H));
+      elbow = jointAngle(shoulder, px(lm, K.elbow, W, H), wrist);
     let knee = null;
     if (visOK(lm, W, H, [K.hip, K.knee, K.ankle]))
-      knee = jointAngle(px(lm, K.hip, W, H), px(lm, K.knee, W, H),
-                        px(lm, K.ankle, W, H));
-    return { t, wristY: wrist.y, hipY: hipC.y, elbow, knee };
+      knee = jointAngle(px(lm, K.hip, W, H), px(lm, K.knee, W, H), ankle);
+    const bodyH = Math.abs(ankle.y - shoulder.y) || null;
+    return { t, wristY: wrist.y, hipY: hipC.y, hipX: hipC.x,
+             shoulderY: shoulder.y, bodyH, elbow, knee };
   });
 
   if (!series.length) return null;
@@ -74,12 +76,37 @@ export function analyzeShot(frames, { hand = "right", W, H, fps = 30 } = {}) {
   const elbowAtRelease = _nearestNonNull(series, relIdx, "elbow");
   const kneeBend = (minKnee === Infinity) ? null : minKnee;
 
+  // tempo: deepest load -> release (quickness)
+  const tempo = (loadIdx != null && relIdx >= loadIdx)
+    ? series[relIdx].t - series[loadIdx].t : null;
+
+  // follow-through hold: seconds after release the wrist stays at/above shoulder
+  let hold = 0;
+  for (let i = relIdx; i < series.length - 1; i++) {
+    const s = series[i];
+    if (s.shoulderY != null && s.wristY <= s.shoulderY + 0.15 * (s.bodyH || 1e9))
+      hold = series[i + 1].t - series[relIdx].t;
+    else break;
+  }
+
+  // balance drift: horizontal hip travel over the shot, normalized by body height
+  const hips = series.map(s => s.hipX).filter(v => v != null);
+  const heights = series.map(s => s.bodyH).filter(v => v != null);
+  let drift = null;
+  if (hips.length >= 3 && heights.length) {
+    const medH = heights.slice().sort((a, b) => a - b)[Math.floor(heights.length / 2)];
+    if (medH > 1) drift = (Math.max(...hips) - Math.min(...hips)) / medH;
+  }
+
   return {
     frameCount: series.length,
     phases: { load: loadIdx, release: relIdx, follow: followIdx },
     metrics: {
-      elbow_at_release_deg: round1(elbowAtRelease),
+      elbow_angle_at_release_deg: round1(elbowAtRelease),
       knee_bend_deg: round1(kneeBend),
+      tempo_dip_to_release_s: tempo == null ? null : Math.round(tempo * 1000) / 1000,
+      follow_through_hold_s: Math.round(hold * 1000) / 1000,
+      balance_drift_px_per_ht: drift == null ? null : Math.round(drift * 1000) / 1000,
     },
     series,
   };
@@ -110,18 +137,25 @@ export function compareToProfile(metrics, profile) {
   return out;
 }
 
+export const METRIC_LABEL = {
+  elbow_angle_at_release_deg: ["Elbow at release", "°"],
+  knee_bend_deg: ["Knee bend", "°"],
+  tempo_dip_to_release_s: ["Tempo (dip→release)", "s"],
+  follow_through_hold_s: ["Follow-through hold", "s"],
+  balance_drift_px_per_ht: ["Balance drift", ""],
+  release_angle_deg: ["Release angle", "°"],
+  entry_angle_deg: ["Entry angle", "°"],
+};
+
 export function feedbackLines(deltas) {
-  const label = {
-    elbow_at_release_deg: "Elbow at release",
-    knee_bend_deg: "Knee bend",
-  };
   const off = deltas.filter(d => !d.within);
   if (!deltas.length)
     return ["Couldn't read your form clearly — try filming closer / better light."];
   if (!off.length) return ["✅ Dialed — everything's within your normal range."];
   return off.map(d => {
-    const dir = d.delta > 0 ? "more open / higher" : "more bent / lower";
-    return `⚠️ ${label[d.key] || d.key}: ${Math.abs(d.delta)}° ${dir} than your ideal ` +
-           `(${d.measured}° vs ${d.ideal}°).`;
+    const [lbl, u] = METRIC_LABEL[d.key] || [d.key, ""];
+    const dir = d.delta > 0 ? "higher" : "lower";
+    return `⚠️ ${lbl}: ${Math.abs(d.delta)}${u} ${dir} than your ideal ` +
+           `(${d.measured}${u} vs ${d.ideal}${u}).`;
   });
 }
