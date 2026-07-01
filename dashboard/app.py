@@ -22,8 +22,15 @@ import streamlit as st
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "tools"))   # export_pdf / export_report
 
 from shotlab.config import load_targets, evaluate  # noqa: E402
+
+
+@st.cache_data(show_spinner="building PDF…")
+def _pdf_bytes(d, _mtime):
+    from export_pdf import build_session_pdf
+    return build_session_pdf(d)
 
 st.set_page_config(page_title="ShotLab", layout="wide")
 OUT_DIR = os.path.join(ROOT, "data", "out")
@@ -170,44 +177,13 @@ def _norm_made(v):
 
 
 def court_chart(df):
-    """Schematic half-court: the 9 zones (near/mid/far × left/center/right) shaded
-    by make% (green=high, red=low; grey=no makes classified), annotated with shot
-    counts. Honest to our zone system -- true court coords need calibration."""
+    """Half-court shot chart (delegates to shotlab.viz.draw_court)."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from matplotlib.patches import Rectangle, Circle
-    import numpy as np
-
-    depths, sides = ["near", "mid", "far"], ["left", "center", "right"]
-    cmap = plt.get_cmap("RdYlGn")
+    from shotlab.viz import draw_court
     fig, ax = plt.subplots(figsize=(5.2, 5.6))
-    ax.set_xlim(0, 3); ax.set_ylim(-0.2, 3.6); ax.axis("off")
-    ax.add_patch(Circle((1.5, 3.25), 0.12, color="#e8703a", zorder=5))   # rim
-    ax.text(1.5, 3.45, "RIM", ha="center", va="bottom", fontsize=9, color="#444")
-    for di, depth in enumerate(depths):          # near band nearest the rim (top)
-        for si, side in enumerate(sides):
-            sub = df[(df.get("depth") == depth) & (df.get("side") == side)]
-            n = len(sub)
-            y = 2 - di
-            if n == 0:
-                color, txt = "#e9edf3", ""
-            else:
-                mm = sub["made"].map(_norm_made).dropna() if "made" in sub else []
-                mk = float((mm == True).mean()) if len(mm) else float("nan")
-                color = cmap(mk) if mk == mk else "#c8d0dc"
-                txt = f"{n} shot{'s' if n != 1 else ''}"
-                if mk == mk:
-                    txt += f"\n{mk*100:.0f}% make"
-            ax.add_patch(Rectangle((si, y), 1, 1, facecolor=color,
-                                   edgecolor="white", lw=2))
-            ax.text(si + 0.5, y + 0.5, txt, ha="center", va="center",
-                    fontsize=9, color="#1b2430")
-    for si, side in enumerate(sides):
-        ax.text(si + 0.5, -0.12, side, ha="center", fontsize=8, color="#888")
-    for di, depth in enumerate(depths):
-        ax.text(-0.05, 2 - di + 0.5, depth, ha="right", va="center",
-                fontsize=8, color="#888")
+    draw_court(ax, df)
     fig.tight_layout()
     return fig
 
@@ -313,6 +289,55 @@ def _relationship_explorer(view):
                    "foreshortened — use it to spot patterns, not prove them.")
 
 
+def _metric_target(metric):
+    """Look up a metric's ideal target + band from config/targets.yaml."""
+    tg = load_targets()
+    for sec in ("arc", "form", "spin"):
+        if metric in tg.get(sec, {}):
+            return tg[sec][metric]
+    return None
+
+
+def _data_health(df):
+    """How trustworthy is this session -- pose resolve rate + make classifiable."""
+    total = len(df)
+    if not total:
+        return
+    pose = int(df["elbow_angle_at_release_deg"].notna().sum()) \
+        if "elbow_angle_at_release_deg" in df.columns else 0
+    made = int(df["made"].isin([True, False, "True", "False"]).sum()) \
+        if "made" in df.columns else 0
+    with st.container(border=True):
+        st.subheader("🩺 Data health")
+        c = st.columns(3)
+        c[0].metric("Pose resolved", f"{100*pose/total:.0f}%")
+        c[1].metric("Make classifiable", f"{100*made/total:.0f}%")
+        c[2].metric("Shots", total)
+        st.caption("Higher = more to trust. Low pose% means you're small/occluded "
+                   "in frame — a closer 2nd camera is the fix.")
+
+
+def _export_panel(d, sd):
+    """Download a PDF / regenerate the HTML report for this session."""
+    with st.container(border=True):
+        st.subheader("📄 Export")
+        c = st.columns(2)
+        try:
+            csv = os.path.join(d, "session_shots.csv")
+            pdf = _pdf_bytes(d, os.path.getmtime(csv))
+            c[0].download_button("⬇️ PDF report", pdf, file_name=f"{sd}_report.pdf",
+                                 mime="application/pdf", width="stretch")
+        except Exception as e:                      # keep the page alive on any error
+            c[0].caption(f"PDF unavailable: {e}")
+        if c[1].button("Rebuild HTML report", width="stretch"):
+            try:
+                from export_report import main as export_html
+                export_html([d])
+                c[1].success("wrote report.html in the session folder")
+            except Exception as e:
+                c[1].caption(f"HTML error: {e}")
+
+
 def _feel_tagging(df, view, d):
     """Tag shots good/off by FEEL and persist to felt_good in the session CSV.
     These labels power correlate_feel -> your personal ideal. Shows a live
@@ -413,6 +438,9 @@ def view_session():
         st.caption("Rim-scaled real-world estimates — concrete but low-confidence "
                    "on one wide camera (calibration + the 2nd camera firm them up).")
 
+    _data_health(df)
+    _export_panel(d, sd)
+
     # ---- zone filter ----
     zones = sorted(df["zone"].dropna().unique()) if "zone" in df else []
     with st.sidebar:
@@ -499,10 +527,23 @@ def view_session():
             tooltip=["clip", "elapsed_min", metric, "zone", "made"])
         trend = pts.transform_regression("elapsed_min", metric).mark_line(
             color="#c0392b", strokeDash=[6, 4])
-        st.altair_chart((pts + trend).interactive(), use_container_width=True)
+        layers = [pts, trend]
+        goal = ""
+        tgt = _metric_target(metric)
+        if tgt and tgt.get("target") is not None:
+            band = tgt.get("band") or [None, None]
+            if band[0] is not None and band[1] is not None:
+                layers.insert(0, alt.Chart(pd.DataFrame({"lo": [band[0]], "hi": [band[1]]}))
+                              .mark_rect(opacity=0.08, color="#2e7d32")
+                              .encode(y="lo", y2="hi"))
+            layers.append(alt.Chart(pd.DataFrame({"y": [tgt["target"]]}))
+                          .mark_rule(color="#2e7d32", strokeDash=[2, 2], size=2)
+                          .encode(y="y"))
+            goal = f" Green line = your target ({tgt['target']}); shaded = ideal band."
+        st.altair_chart(alt.layer(*layers).interactive(), use_container_width=True)
         st.caption("Red dashed = linear trend. Points colored by court zone. "
                    "Within a zone the foreshortening is constant, so a zone's "
-                   "trend over time is meaningful even if the absolute ° is off.")
+                   "trend over time is meaningful even if the absolute ° is off." + goal)
 
     # ---- reference-arc overlay: your arc vs the ideal ----
     if {"release_angle_deg", "entry_angle_deg"} <= set(view.columns):
@@ -698,6 +739,32 @@ def view_compare():
                "are foreshortened, so use the visual pose difference, not the exact °.")
 
 
+def _personal_bests(agg):
+    """Best-ever numbers across your built sessions."""
+    if agg.empty:
+        return
+    items = []
+    if "make_pct" in agg.columns and agg["make_pct"].notna().any():
+        i = agg["make_pct"].idxmax()
+        items.append(("🎯 Best make%", f"{agg.loc[i,'make_pct']:.0f}%", agg.loc[i, "session"]))
+    if "longest_streak" in agg.columns and agg["longest_streak"].notna().any():
+        i = agg["longest_streak"].idxmax()
+        items.append(("🔥 Longest make-streak", int(agg.loc[i, "longest_streak"]),
+                      agg.loc[i, "session"]))
+    for col in [c for c in agg.columns if c.startswith("std_")]:
+        sub = agg[col].dropna()
+        if len(sub):
+            i = sub.idxmin()
+            items.append((f"🎯 Tightest {_METRIC_LABELS.get(col[4:], col[4:])}",
+                          round(float(agg.loc[i, col]), 1), agg.loc[i, "session"]))
+    if not items:
+        return
+    with st.container(border=True):
+        st.subheader("🏆 Personal bests")
+        for lbl, val, sess in items:
+            st.markdown(f"- **{lbl}**: {val}  ·  _{sess}_")
+
+
 def view_compare_sessions():
     from shotlab.session import consistency_stats
     st.subheader("Compare two sessions")
@@ -757,6 +824,7 @@ def view_progress():
                    "progress trends. Here's the baseline (avg_ = level, "
                    "std_ = spread/consistency):")
     st.dataframe(agg, hide_index=True, width="stretch")
+    _personal_bests(agg)
 
     # consistency over time -- is your shot getting more repeatable?
     cp = consistency_progress(agg)
