@@ -1,14 +1,26 @@
 {
-  "name": "starter (rough)",
+  "name": "me",
   "handedness": "right",
-  "note": "Placeholder ideal targets. Will be replaced by YOUR feel-good shots via tools/export_profile.py (which also fills in ideal skeletons for the overlay).",
+  "note": "Ideal learned from 10 your best-ranked shots.",
+  "n_good": 10,
+  "source_method": "your best-ranked shots",
   "ideal": {
-    "elbow_at_release_deg": 108,
-    "knee_bend_deg": 110
+    "elbow_angle_at_release_deg": 134.24,
+    "knee_bend_deg": 126.93,
+    "tempo_dip_to_release_s": 0.12,
+    "follow_through_hold_s": 0.38,
+    "balance_drift_px_per_ht": 0.99,
+    "release_angle_deg": 63.01,
+    "entry_angle_deg": 55.35
   },
   "tolerance": {
-    "elbow_at_release_deg": 10,
-    "knee_bend_deg": 12
+    "elbow_angle_at_release_deg": 40.65,
+    "knee_bend_deg": 31.65,
+    "tempo_dip_to_release_s": 0.05,
+    "follow_through_hold_s": 0.59,
+    "balance_drift_px_per_ht": 0.67,
+    "release_angle_deg": 13.86,
+    "entry_angle_deg": 12.39
   },
   "skeletons": {
     "load": null,
