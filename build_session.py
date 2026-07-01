@@ -79,6 +79,8 @@ def main(argv=None):
                     help="auto-chunk: process clips longer than this in frame windows "
                          "(yolo only) so long exercise clips finish + resume within the job cap")
     ap.add_argument("--pose", action="store_true")
+    ap.add_argument("--audio", action="store_true",
+                    help="fuse rim/backboard SOUND with the visual make/miss call")
     ap.add_argument("--no-spin", action="store_true")
     ap.add_argument("--handedness", default="right")
     ap.add_argument("--out", default="data/out/session")
@@ -121,7 +123,7 @@ def main(argv=None):
                             with_pose=args.pose,
                             with_spin=(False if args.no_spin else "auto"),
                             handedness=args.handedness,
-                            use_cache=not args.no_cache)
+                            use_cache=not args.no_cache, with_audio=args.audio)
         print(f"  {os.path.basename(c)}: {len(recs)} shots")
         all_records.extend(recs)
 

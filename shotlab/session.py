@@ -99,19 +99,19 @@ _CACHE_VERSION = 2
 
 
 def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
-                      with_pose, with_spin, handedness) -> str:
+                      with_pose, with_spin, handedness, with_audio=False) -> str:
     """A signature for a clip's cached records. Any change to the record schema
     OR the detection/pose params invalidates the cache, so a re-run after a code
     change recomputes instead of silently returning stale, old-schema rows."""
     schema = ",".join(f.name for f in _dc_fields(ShotRecord))
     raw = "|".join(str(x) for x in [
         _CACHE_VERSION, schema, detector_name, os.path.basename(str(weights)),
-        imgsz, stride, max_frames, with_pose, with_spin, handedness])
+        imgsz, stride, max_frames, with_pose, with_spin, handedness, with_audio])
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
 
 def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
-                        do_spin, with_pose, handedness) -> list[ShotRecord]:
+                        do_spin, with_pose, handedness, audio=None) -> list[ShotRecord]:
     """Build ShotRecords for a set of shots (pose + spin + make + zone). Shared by
     the whole-clip pass and each window of the long-clip chunker; frame indices in
     `shots`/`track` are absolute, so the timestamps come out right either way."""
@@ -186,7 +186,13 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
             rel_frame=st_rel, fps=info.fps)
         rec.shot_form, rec.shot_setup = stype.form, stype.setup
         mk = classify_make(s, track, calib)
-        rec.made, rec.make_conf = mk.made, mk.confidence
+        made, mconf = mk.made, mk.confidence
+        if audio is not None and audio[0] is not None:
+            from .audio import audio_make_hint, fuse_make
+            rim_t = float(s.frames[-1]) / info.fps         # ball reaches rim ~ end of flight
+            hint = audio_make_hint(audio[0], audio[1], rim_t)
+            made, mconf = fuse_make(mk.made, mk.confidence, hint)
+        rec.made, rec.make_conf = made, mconf
         records.append(rec)
     return records
 
@@ -198,7 +204,7 @@ def _chunk_cache_path(video_path: str, start: int) -> str:
 
 def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
                      stride, chunk_frames, do_spin, with_pose, handedness,
-                     use_cache, sig):
+                     use_cache, sig, audio=None):
     """Process a long clip in absolute frame WINDOWS so each window fits the
     background-job time cap and is cached on its own -- a kill resumes at the next
     window instead of re-detecting from frame 0.
@@ -231,7 +237,8 @@ def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
                                          w0, w1, imgsz=imgsz)
             recs = _records_from_shots(shots, track, video_path, calib, info,
                                        clip_start, do_spin=do_spin,
-                                       with_pose=with_pose, handedness=handedness)
+                                       with_pose=with_pose, handedness=handedness,
+                                       audio=audio)
             os.makedirs(os.path.dirname(ccache), exist_ok=True)
             with open(ccache, "w", encoding="utf-8") as f:
                 json.dump({"sig": sig,
@@ -257,7 +264,7 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
                  detector_name="motion", weights=None, imgsz=768, stride=1,
                  max_frames=None, chunk_frames=None, with_pose=False,
                  with_spin="auto", handedness="right",
-                 use_cache=True) -> list[ShotRecord]:
+                 use_cache=True, with_audio=False) -> list[ShotRecord]:
     """Detect rim-anchored shots in one clip and return ShotRecords.
 
     If calib is None the rim is auto-detected for THIS clip (the tripod may move
@@ -270,7 +277,7 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
     sig = _record_cache_sig(detector_name=detector_name, weights=weights,
                             imgsz=imgsz, stride=stride, max_frames=max_frames,
                             with_pose=with_pose, with_spin=with_spin,
-                            handedness=handedness)
+                            handedness=handedness, with_audio=with_audio)
     if use_cache and os.path.exists(cache):
         try:
             with open(cache, encoding="utf-8") as f:
@@ -308,6 +315,10 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
     if stride == "auto":
         stride = max(1, round(info.fps / 40), -(-info.n_frames // 7000))
     do_spin = (with_spin is True) or (with_spin == "auto" and info.is_slowmo)
+    audio = None
+    if with_audio:
+        from .audio import extract_audio
+        audio = extract_audio(video_path)     # (samples, sr) once per clip
 
     # long-clip auto-chunk: window the detection so it fits the cap + resumes
     if (detector_name == "yolo" and chunk_frames
@@ -316,7 +327,7 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
             video_path, calib, info, clip_start,
             weights=weights or "yolo11n.pt", imgsz=imgsz, stride=stride,
             chunk_frames=int(chunk_frames), do_spin=do_spin, with_pose=with_pose,
-            handedness=handedness, use_cache=use_cache, sig=sig)
+            handedness=handedness, use_cache=use_cache, sig=sig, audio=audio)
         os.makedirs(os.path.dirname(cache), exist_ok=True)
         with open(cache, "w", encoding="utf-8") as f:
             json.dump({"sig": sig, "records": [r.row() for r in records]}, f, indent=2)
@@ -336,7 +347,8 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
 
     records = _records_from_shots(shots, track, video_path, calib, info,
                                   clip_start, do_spin=do_spin,
-                                  with_pose=with_pose, handedness=handedness)
+                                  with_pose=with_pose, handedness=handedness,
+                                  audio=audio)
 
     os.makedirs(os.path.dirname(cache), exist_ok=True)
     with open(cache, "w", encoding="utf-8") as f:
