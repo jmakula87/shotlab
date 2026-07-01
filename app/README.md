@@ -1,4 +1,15 @@
-# ShotLab Form Check — on-device PWA (MVP)
+# ShotLab Form Check — on-device PWA
+
+## 🔴 Live app (HTTPS — camera + mic work here)
+**https://jmakula87.github.io/shotlab/**  — open on your phone (Chrome), tap
+**Add to Home Screen** to install. Auto-deploys from `app/` on every push to
+`master` (GitHub Pages, `.github/workflows/pages.yml`).
+
+At the court: tap **🔴 Live**, allow camera + mic, and shoot — you get feedback
+after each shot, and you can just **say "good" / "off"** to tag how it felt
+(hands-free), which trains your personal ideal. All processing is on-device.
+
+
 
 A phone web-app that runs **MediaPipe pose on your device** (no upload, no
 server), overlays your skeleton on a shot clip, detects the shot phases, and
