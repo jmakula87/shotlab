@@ -16,10 +16,12 @@
 
   <main>
     <section class="pick">
+      <button id="live" class="btn">🔴 Live at the court</button>
       <label class="btn" for="file">📹 Pick a shot clip</label>
       <input id="file" type="file" accept="video/*" capture="environment" hidden />
-      <p class="hint">Record a shot on your phone, then pick it here. Everything
-        runs on your device — nothing is uploaded.</p>
+      <p class="hint">Live: point the camera at yourself and shoot — you get
+        feedback after each shot. Or pick a recorded clip. Everything runs on your
+        device — nothing is uploaded. (Live camera needs HTTPS or localhost.)</p>
     </section>
 
     <section class="stage" id="stage" hidden>
@@ -30,9 +32,12 @@
       <div class="controls">
         <button id="play" class="btn small">▶ Play</button>
         <button id="release" class="btn small" hidden>⛹ Jump to release</button>
+        <button id="stopLive" class="btn small" hidden>⏹ Stop live</button>
         <label class="toggle"><input type="checkbox" id="showIdeal" checked /> overlay ideal</label>
       </div>
     </section>
+
+    <section id="liveFeed" class="report" hidden></section>
 
     <section id="report" class="report" hidden></section>
   </main>

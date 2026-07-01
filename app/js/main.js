@@ -4,6 +4,7 @@
 import { initPose, poseBackend, detect } from "./pose.js";
 import { analyzeShot, compareToProfile, feedbackLines } from "./analyze.js";
 import { render, clear } from "./overlay.js";
+import { startCamera, stopCamera, ShotDetector } from "./live.js";
 
 const $ = id => document.getElementById(id);
 const statusEl = $("status"), video = $("video"), canvas = $("overlay");
@@ -146,7 +147,70 @@ function renderReport(a, deltas) {
     <div class="card feedback"><h2>Feedback</h2><ul>${fb}</ul></div>`;
 }
 
-const labelOf = k => ({ elbow_at_release_deg: "Elbow at release",
-                        knee_bend_deg: "Knee bend" }[k] || k);
+const labelOf = k => ({ elbow_angle_at_release_deg: "Elbow at release",
+                        knee_bend_deg: "Knee bend",
+                        tempo_dip_to_release_s: "Tempo (dip→release)" }[k] || k);
+
+// ---------------------------------------------------------------- live mode
+let liveOn = false, liveTs = -1, liveDetector = null, liveCount = 0;
+
+$("live").addEventListener("click", startLive);
+$("stopLive").addEventListener("click", stopLive);
+
+async function startLive() {
+  try {
+    await startCamera(video);
+  } catch (e) {
+    setStatus("⚠️ " + e.message);
+    return;
+  }
+  $("stage").hidden = false; $("report").hidden = true; $("release").hidden = true;
+  $("play").hidden = true; $("stopLive").hidden = false;
+  $("liveFeed").hidden = false; $("liveFeed").innerHTML = "";
+  canvas.width = video.videoWidth || 720; canvas.height = video.videoHeight || 1280;
+  liveOn = true; liveTs = -1; liveCount = 0;
+  liveDetector = new ShotDetector({ handedness: profile.handedness || "right" });
+  setStatus("live — shoot! feedback after each shot");
+  liveLoop();
+}
+
+function stopLive() {
+  liveOn = false;
+  stopCamera(video);
+  $("stopLive").hidden = true; $("play").hidden = false;
+  setStatus("live stopped");
+}
+
+function liveLoop() {
+  if (!liveOn) return;
+  const t = video.currentTime;
+  const ts = Math.max(liveTs + 1, Math.round(t * 1000));
+  liveTs = ts;
+  let lm = null;
+  try { lm = detect(video, ts); } catch (e) { /* keep going */ }
+  render(ctx, lm, null, false);
+  if (lm) {
+    const shot = liveDetector.feed(t, lm, canvas.width, canvas.height);
+    if (shot) onLiveShot(shot);
+  }
+  if ("requestVideoFrameCallback" in HTMLVideoElement.prototype)
+    video.requestVideoFrameCallback(liveLoop);
+  else requestAnimationFrame(liveLoop);
+}
+
+function onLiveShot(shot) {
+  liveCount += 1;
+  const a = analyzeShot(shot.frames, { hand: profile.handedness || "right",
+                                       W: canvas.width, H: canvas.height });
+  if (!a) return;
+  const deltas = compareToProfile(a.metrics, profile);
+  const off = deltas.filter(d => !d.within).length;
+  const head = off === 0 ? "✅ dialed" : `⚠️ ${off} off`;
+  const fb = feedbackLines(deltas).map(l => `<li>${l}</li>`).join("");
+  const card = document.createElement("div");
+  card.className = "card feedback";
+  card.innerHTML = `<h2>Shot ${liveCount} — ${head}</h2><ul>${fb}</ul>`;
+  $("liveFeed").prepend(card);          // newest on top
+}
 
 boot();

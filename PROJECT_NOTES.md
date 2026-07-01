@@ -210,6 +210,35 @@ wrap native later. Target = Android/Pixel.
   mobile polish + competition (HomeCourt/DribbleUp exist). Server cost: ~$0
   self-host+tunnel to ~$5-12/mo tiny VPS.
 
+## Backlog BUILT (2026-07-01) — 9 features, 58 tests
+User: "let's start working on all of that stuff." Built the whole improvement
+backlog, each tested (run_tests.py; JS via node). All green.
+1. **Rim-based real feet** (`scale.py`): px/ft from the 18in rim → apex-above-rim,
+   release-height, jump-height. `apex_above_rim_ft` is the trustworthy one (ball ~
+   at rim depth); release/jump are LOW-conf (shooter off the rim plane).
+2. **Shot tempo** (`tempo_dip_to_release_s`): deepest load → release (quickness),
+   tracked in consistency + fatigue.
+3. **Fatigue breakdown + drift alerts** (`fatigue_breakdown`, `mean_drift`): which
+   part of the shot fades most as you tire (SD-normalized); cross-session level creep.
+4. **Auto-handedness** (`detect_handedness`, `--handedness auto`): shooting wrist
+   rises highest through the shot.
+5. **Feel-correlation** (`correlate_feel`): generalized correlate.py to any binary
+   label → correlate on your "felt good/off" tags; `felt_good` on ShotRecord.
+6. **Drill-effectiveness** (`prescribe_target`, `drill_effectiveness`): the one
+   least-repeatable metric to work on + did it improve next session.
+7. **Audio make/miss** (`audio.py`, `--audio`): rim/backboard loudness → make/miss
+   hint fused with the visual call (loud clang=miss, soft swish=make).
+8. **Live camera + auto-shot-detection** (`app/js/live.js`): getUserMedia + rolling
+   buffer + release-motion trigger (`releaseIndex`/`ShotDetector`) → instant per-shot
+   feedback card. "🔴 Live" button in the PWA. Unit-tested in node (test_live.mjs).
+   NEEDS HTTPS to use the camera on the phone (GitHub Pages, or localhost).
+9. **Hygiene:** `run_tests.py` (one-command runner), `test_regression.py` (locks the
+   analytics layer on a fixed fixture), `requirements-lock.txt` (pinned versions).
+**STILL TODO (surfacing):** wire the new metrics/functions into the dashboard +
+report + build_session printout (the DATA is captured in records/CSVs; the UI
+panels for tempo/real-feet/fatigue-breakdown/drill-effectiveness/feel-drivers are
+the remaining batch). Live app still needs HTTPS hosting to test camera on phone.
+
 ## Scope + roadmap (2026-07-01)
 **SCOPE DECISION (user, 2026-07-01): PERSONAL USE ONLY — not a public product.**
 → Drop detector generalization / cross-court robustness / competition worries.
