@@ -7,26 +7,32 @@ Last updated: 2026-07-01 · Location: `C:\Users\jmaku\Desktop\ShotLab`
 
 ---
 
-## NEXT SESSION PICKUP (2026-07-01)
-State: phone PWA **live on GitHub Pages** (https://jmakula87.github.io/shotlab/,
-HTTPS so live camera works on the Pixel); 9-feature backlog built + surfaced in the
-dashboard; **tree clean, all committed** (HEAD `adb9eba`). The big accuracy unlock —
-**2-camera 3D** (elbow flare, true release consistency) — is **blocked on the Galaxy
-S8 hardware** (footage-dependent; math foundation already built + synthetic-validated
-in `shotlab/threed.py`).
+## NEXT SESSION PICKUP (2026-07-01, evening)
+State: phone PWA **live** (https://jmakula87.github.io/shotlab/). Since the last
+pickup: **fixed the app being dead on load** (MediaPipe version 0.10.22 was never
+published → 404 killed the whole module graph; pinned 0.10.35; commit `e544caf`).
+Processed a **new 7-clip session `data/out/session_0701`** (71 shots/25min, 60fps,
+one camera-angle change = clip 7 only; split into `_wide`/`_moved` sub-sessions).
+Shipped **Profile v2 ideal skeletons** (`shotlab/skeleton.py`; commit `3d0c367`) —
+the gold release-overlay is now REAL. **Tree clean, all committed + deployed.**
 
-**Buildable now (no new footage/hardware), by value:**
-1. **⭐ RECOMMENDED — Profile v2 ideal skeletons.** The app's flagship "jump to
-   release → gold ideal skeleton overlay" is still a PLACEHOLDER; `tools/export_profile.py`
-   v1 exports CSV targets only, no skeletons. v2 = re-run pose on the user's
-   feel-good shots → export ideal joint positions → light up the overlay. Makes the
-   core coaching loop real. Fully buildable on existing feel-good shots.
-2. **Jump-height overestimate fix** — known accuracy bug in the rim-based real-feet
-   math (`shotlab/scale.py`); release/jump were already flagged LOW-conf.
-3. **Test the live-camera app on the phone** — now HTTPS-hosted; needs the USER on
-   the Pixel (I can only prep/fix from here).
-4. Smaller: export live feel-tags to CSV; richer per-shot shot-map (needs `rim_dx_px`
-   in records); goal-progress tracking; `build_session` printout for new metrics.
+**⭐ THE BIG ONE — 2nd camera (Galaxy S8) arrives within a week (~2026-07-08).**
+That's the real form/flare accuracy unlock. The footage-independent 3D core
+(`shotlab/threed.py`: stereo triangulate + elbow_flare + release-point spread) is
+already built + synthetic-validated (6/6). When it lands, per the settled 2-cam
+plan: (1) S8 as close body-cam side → existing form metrics reliable; (2) marker
+clip → stereo calibration + temporal sync; (3) **build ELBOW FLARE + release
+consistency FIRST**. Cam-1 stays wide (arc/rim/makes), Cam-2 = body-cam.
+
+**Buildable now (no hardware):**
+1. **Audit `elbow_angle_at_release_deg`** — Profile v2 exposed that the YOLO ball
+   isn't detected until ~0.4s (24f @60fps) INTO flight, so ball-synced `find_release`
+   lands ~arm-down. Skeletons now use a POSE-based release (wrist apex); the METRIC
+   pipeline (`form.py compute_form`) still uses ball-synced release → the elbow angle
+   is likely measured late/low. Port the wrist-apex release into the metric path.
+2. **Jump-height overestimate fix** (`shotlab/scale.py`), release/jump LOW-conf.
+3. **Test app on the Pixel** (live camera + the new gold ideal-skeleton overlay).
+4. Smaller: live feel-tags → CSV; per-shot shot-map (`rim_dx_px`); goal-progress.
 
 ---
 
