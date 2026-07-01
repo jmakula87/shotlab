@@ -3,9 +3,12 @@
 // desktop pipeline uses, so metrics line up.
 
 import { PoseLandmarker, FilesetResolver }
-  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22";
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35";
 
-const VER = "0.10.22";
+// Keep VER in lock-step with the import URL above (static imports can't use a
+// variable). 0.10.22 was never published to npm -> the import 404'd and took the
+// whole module graph (and the app) down with it. 0.10.35 is the current latest.
+const VER = "0.10.35";
 const MODEL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 

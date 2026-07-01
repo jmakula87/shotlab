@@ -11,7 +11,9 @@ const $ = id => document.getElementById(id);
 const statusEl = $("status"), video = $("video"), canvas = $("overlay");
 const ctx = canvas.getContext("2d");
 
-let profile = null;
+// Safe default so Live / analysis never throw on a null profile if the fetch or
+// pose init fails (profile.handedness was crashing the Live button otherwise).
+let profile = { name: "none", ideal: {}, handedness: "right" };
 let frames = [];          // [{ t, lm }] collected during the analysis pass
 let analysis = null;
 let lastTs = -1;
@@ -19,21 +21,31 @@ let analyzing = false;
 
 function setStatus(t) { statusEl.textContent = t; }
 
+const withTimeout = (p, ms, what) => Promise.race([
+  p, new Promise((_, rej) => setTimeout(
+    () => rej(new Error(`${what} timed out after ${ms / 1000}s`)), ms)),
+]);
+
 async function boot() {
-  try {
-    const backend = await initPose();
-    $("engine").textContent = `engine: pose ${backend}`;
-    setStatus("ready — pick a shot clip");
-  } catch (e) {
-    console.error(e);
-    setStatus("⚠️ pose model failed to load (check connection). " + e.message);
-  }
+  // Load the profile independently of pose init: a pose failure must not leave
+  // the profile (and Live) dead, and vice-versa.
   try {
     profile = await (await fetch("profile.json")).json();
+    if (!profile.handedness) profile.handedness = "right";
     $("profileName").textContent = `profile: ${profile.name || "default"}`;
   } catch {
-    profile = { name: "none", ideal: {} };
     $("profileName").textContent = "profile: none";
+  }
+  try {
+    // Timeout so a stalled GPU/WASM init surfaces as an error instead of the app
+    // hanging forever on "loading pose model…".
+    const backend = await withTimeout(initPose(), 30000, "pose model load");
+    $("engine").textContent = `engine: pose ${backend}`;
+    setStatus("ready — pick a clip or go Live");
+  } catch (e) {
+    console.error(e);
+    $("engine").textContent = "engine: failed";
+    setStatus("⚠️ pose model failed to load (check connection). " + e.message);
   }
   if ("serviceWorker" in navigator)
     navigator.serviceWorker.register("sw.js").catch(() => {});
@@ -161,6 +173,10 @@ $("live").addEventListener("click", startLive);
 $("stopLive").addEventListener("click", stopLive);
 
 async function startLive() {
+  if (poseBackend() === "unknown") {
+    setStatus("⚠️ pose engine isn't ready yet — wait for “ready” or reload.");
+    return;
+  }
   try {
     await startCamera(video);
   } catch (e) {

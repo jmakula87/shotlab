@@ -1,7 +1,9 @@
 // Minimal service worker: cache the local app shell so it installs and opens
 // offline. MediaPipe WASM + the pose model load from their CDNs on first use
 // (then the browser caches them); we don't precache those here.
-const CACHE = "shotlab-formcheck-v1";
+// Bump this on every app-shell change so phones drop the old cached files
+// (cache-first below would otherwise serve a stale/broken main.js forever).
+const CACHE = "shotlab-formcheck-v2";
 const SHELL = [
   ".", "index.html", "styles.css", "manifest.json", "icon.svg", "profile.json",
   "js/main.js", "js/pose.js", "js/analyze.js", "js/overlay.js", "js/live.js",
