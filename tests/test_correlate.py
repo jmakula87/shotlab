@@ -7,7 +7,8 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from shotlab.correlate import correlate_makes, summarize_make_drivers
+from shotlab.correlate import (correlate_makes, summarize_make_drivers,
+                               correlate_feel, summarize_feel_drivers)
 
 
 def _rows(n_made, n_miss, seed=0):
@@ -72,6 +73,22 @@ def test_nan_values_treated_as_missing():
     assert bs.confidence == "insufficient"
     assert bs.n_made == 0 and bs.n_miss == 0
     assert bs.p_perm is None          # no bogus p from NaN comparisons
+
+
+def test_feel_correlation_on_felt_good_labels():
+    # planted: good-FEELING shots have a higher elbow angle than off ones
+    rng = np.random.default_rng(3)
+    rows = []
+    for _ in range(25):
+        rows.append({"felt_good": True, "elbow_angle_at_release_deg": float(rng.normal(115, 4))})
+    for _ in range(25):
+        rows.append({"felt_good": False, "elbow_angle_at_release_deg": float(rng.normal(100, 4))})
+    assocs = {a.metric: a for a in correlate_feel(rows, n_perm=500)}
+    ea = assocs["elbow_angle_at_release_deg"]
+    assert ea.direction == "higher" and ea.confidence == "medium"
+    assert ea.p_perm < 0.05
+    txt = summarize_feel_drivers(correlate_feel(rows, n_perm=300))
+    assert "good-feeling shots" in txt
 
 
 def test_summary_is_honest_when_empty():

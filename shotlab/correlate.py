@@ -72,12 +72,13 @@ def _as_bool(made) -> bool | None:
     return None
 
 
-def _pair_values(rows, field):
-    """(values, made01) for rows where the metric and make/miss are both known."""
+def _pair_values(rows, field, label_field="made"):
+    """(values, label01) for rows where the metric and the binary label are both
+    known. `label_field` is "made" (make/miss) or "felt_good" (subjective feel)."""
     vals, lab = [], []
     for r in rows:
         v = r.get(field) if isinstance(r, dict) else getattr(r, field, None)
-        m = r.get("made") if isinstance(r, dict) else getattr(r, "made", None)
+        m = r.get(label_field) if isinstance(r, dict) else getattr(r, label_field, None)
         m = _as_bool(m)
         if v is None or m is None:
             continue
@@ -115,23 +116,26 @@ def _confidence(n_made, n_miss, p, d, min_n) -> str:
     return "low"
 
 
-def correlate_makes(rows, *, min_n=8, n_perm=2000, seed=0) -> list[MetricMakeAssoc]:
-    """Associate each candidate metric with make/miss across the given shots.
+def correlate_label(rows, *, label_field="made", min_n=8, n_perm=2000,
+                    seed=0) -> list[MetricMakeAssoc]:
+    """Associate each candidate metric with a binary outcome across the shots.
 
-    `rows` is any iterable of ShotRecord or dict rows. Returns one
-    MetricMakeAssoc per candidate, sorted by |Cohen's d| with sufficient-n,
-    significant findings first; insufficient-n metrics sort last.
+    `label_field` = "made" (make/miss) or "felt_good" (your subjective good/off
+    tag). `rows` is any iterable of ShotRecord or dict rows. Returns one
+    association per candidate, sorted by |Cohen's d| with sufficient-n,
+    significant findings first; insufficient-n metrics sort last. (In the
+    result, n_made/mean_made = the positive class, n_miss/mean_miss = negative.)
     """
     rows = list(rows)
     out: list[MetricMakeAssoc] = []
     for field, label, depth in CANDIDATE_METRICS:
-        vals, lab = _pair_values(rows, field)
+        vals, lab = _pair_values(rows, field, label_field)
         n_made, n_miss = int((lab == 1).sum()), int((lab == 0).sum())
         if n_made == 0 or n_miss == 0:
             out.append(MetricMakeAssoc(
                 field, label, n_made, n_miss, None, None, None, None, None,
                 None, "insufficient", "",
-                note="need both makes and misses with this metric"))
+                note="need both outcomes with this metric"))
             continue
         made, miss = vals[lab == 1], vals[lab == 0]
         mean_made, mean_miss = float(made.mean()), float(miss.mean())
@@ -168,28 +172,57 @@ def correlate_makes(rows, *, min_n=8, n_perm=2000, seed=0) -> list[MetricMakeAss
     return out
 
 
-def summarize_make_drivers(assocs: list[MetricMakeAssoc]) -> str:
-    """Plain-English review of what tracks with your makes -- honest about the
-    heuristic make signal and the small samples."""
+def correlate_makes(rows, **kw) -> list[MetricMakeAssoc]:
+    """Which mechanics track with the ball going IN (make/miss heuristic)."""
+    return correlate_label(rows, label_field="made", **kw)
+
+
+def correlate_feel(rows, **kw) -> list[MetricMakeAssoc]:
+    """Which mechanics track with shots that FELT good (your subjective tag) --
+    a personalization signal that sidesteps the weak make/miss detector."""
+    return correlate_label(rows, label_field="felt_good", **kw)
+
+
+# subject -> (positive word, negative word, empty-message, reliability caveat)
+_SUBJECTS = {
+    "makes": ("makes", "misses",
+              "Not enough cleanly-classified makes AND misses yet to correlate "
+              "form with outcomes. Keep filming -- this engine sharpens with volume.",
+              "only as reliable as the make detection"),
+    "feel": ("good-feeling shots", "off-feeling shots",
+             "Not enough good- AND off-tagged shots yet. Tag shots by feel as you "
+             "film -- this learns YOUR ideal as the tags add up.",
+             "based on your own feel tags"),
+}
+
+
+def summarize_drivers(assocs: list[MetricMakeAssoc], subject="makes") -> str:
+    """Plain-English review of what tracks with the outcome, honest about the
+    heuristic signal and small samples. subject = "makes" or "feel"."""
+    pos, neg, empty_msg, caveat = _SUBJECTS.get(subject, _SUBJECTS["makes"])
     real = [a for a in assocs if a.confidence in ("medium", "low")
             and a.cohen_d is not None]
     if not real:
-        return ("Not enough cleanly-classified makes AND misses yet to correlate "
-                "form with outcomes. Keep filming (and a rim/calibration clip will "
-                "make make/miss reliable) -- this engine sharpens with volume.")
-    lines = ["**What tracks with your makes** (advisory -- make/miss is a "
-             "heuristic, samples are small):"]
+        return empty_msg
+    lines = [f"**What tracks with your {pos}** (advisory -- samples are small):"]
     shown = [a for a in real if a.confidence == "medium"] or real[:3]
     for a in shown[:4]:
         unit = _UNITS.get(a.metric, "")
         strength = "stands out" if a.confidence == "medium" else "leans"
         lines.append(
-            f"- **{a.label}** {strength}: makes ~{abs(a.diff):.2f}{unit} "
-            f"{a.direction} than misses "
-            f"(made {a.mean_made}{unit} vs missed {a.mean_miss}{unit}; "
+            f"- **{a.label}** {strength}: {pos} ~{abs(a.diff):.2f}{unit} "
+            f"{a.direction} than {neg} "
+            f"({a.mean_made}{unit} vs {a.mean_miss}{unit}; "
             f"d={a.cohen_d}, p={a.p_perm}, n={a.n_made}/{a.n_miss})."
             + (f" Note: {a.note}." if a.note else ""))
-    lines.append("_Correlation, not proof of cause -- and only as reliable as the "
-                 "make detection. Personalized ideals firm up after a calibration "
-                 "clip + more shots._")
+    lines.append(f"_Correlation, not proof of cause -- and {caveat}. "
+                 "Personalized ideals firm up with more shots._")
     return "\n".join(lines)
+
+
+def summarize_make_drivers(assocs: list[MetricMakeAssoc]) -> str:
+    return summarize_drivers(assocs, subject="makes")
+
+
+def summarize_feel_drivers(assocs: list[MetricMakeAssoc]) -> str:
+    return summarize_drivers(assocs, subject="feel")

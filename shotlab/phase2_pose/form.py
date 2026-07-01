@@ -99,6 +99,26 @@ def _vis_ok(fp: FramePose, names, thr=0.4) -> bool:
     return all(fp.v(n) >= thr for n in names)
 
 
+def detect_handedness(poses, frames, default="right", thr=0.4) -> str:
+    """Which hand shoots, from pose alone: the shooting wrist rises HIGHEST
+    through the shot (releases and follows through above the guide hand), so the
+    wrist with the smaller minimum image-y over the shot window is the shooter's.
+    Falls back to `default` when neither wrist is reliably visible."""
+    lo, hi = int(frames[0]), int(frames[-1])
+    l_min = r_min = float("inf")
+    for f in range(lo, hi + 1):
+        fp = poses.get(f)
+        if fp is None:
+            continue
+        if fp.v("l_wrist") >= thr:
+            l_min = min(l_min, float(fp.pt("l_wrist")[1]))
+        if fp.v("r_wrist") >= thr:
+            r_min = min(r_min, float(fp.pt("r_wrist")[1]))
+    if l_min == float("inf") and r_min == float("inf"):
+        return default
+    return "left" if l_min < r_min else "right"
+
+
 def find_release(shot, ball_track, poses, handedness) -> ReleaseEstimate:
     """Where the ball separates from the shooting hand, to sub-frame precision.
 
@@ -254,6 +274,8 @@ def _elbow_angle_at_t(poses, t, keys) -> float | None:
 
 def compute_form(shot, ball_track, poses, fps, *, handedness="right",
                  camera_angle="side_on", rim_xy=None, px_per_foot=None) -> ShotForm:
+    if handedness == "auto":
+        handedness = detect_handedness(poses, shot.frames)
     keys = side_keys(handedness)
     side_on = camera_angle == "side_on"
     rel = find_release(shot, ball_track, poses, handedness)

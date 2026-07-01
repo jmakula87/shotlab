@@ -158,6 +158,27 @@ def test_release_vs_apex_and_followthrough():
     assert ft.value is not None and ft.value > 0
 
 
+def test_auto_handedness():
+    from shotlab.phase2_pose.form import detect_handedness
+    # right wrist rises higher (smaller y) than left across the window -> "right"
+    poses = {}
+    for f in range(0, 10):
+        poses[f] = make_pose(f, {"r_wrist": (240, 100 - f * 5),   # climbs high
+                                 "l_wrist": (180, 260)})          # stays low
+    assert detect_handedness(poses, list(range(0, 10))) == "right"
+    # mirror it -> "left"
+    poses2 = {}
+    for f in range(0, 10):
+        poses2[f] = make_pose(f, {"l_wrist": (180, 100 - f * 5),
+                                  "r_wrist": (240, 260)})
+    assert detect_handedness(poses2, list(range(0, 10))) == "left"
+    # nothing visible -> default
+    empty = {f: make_pose(f, {}) for f in range(3)}
+    for fp in empty.values():
+        fp.vis[:] = 0.0
+    assert detect_handedness(empty, [0, 1, 2], default="right") == "right"
+
+
 def test_tempo_dip_to_release():
     poses, ball, rel = build_shot_sequence()
     shot = FakeShot(list(range(14, 30)))

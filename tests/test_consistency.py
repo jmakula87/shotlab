@@ -8,7 +8,8 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from shotlab.session import consistency_stats, consistency_progress
+from shotlab.session import (consistency_stats, consistency_progress,
+                             fatigue_breakdown, mean_drift)
 
 
 def _session_df(spread, n=40, seed=0):
@@ -46,6 +47,33 @@ def test_consistency_progress_needs_two_sessions():
     agg = pd.DataFrame([{"session": "s", "date": "2026-06-01",
                          "std_release_angle": 8.0}])
     assert consistency_progress(agg).empty
+
+
+def test_fatigue_breakdown_flags_the_fader():
+    # knee bend degrades hard in the 2nd half; release angle stays put
+    n = 24
+    elapsed = np.linspace(0, 30, n)
+    knee = np.where(elapsed <= 15, 110.0, 135.0) + np.random.default_rng(0).normal(0, 2, n)
+    rel = 52 + np.random.default_rng(1).normal(0, 2, n)
+    df = pd.DataFrame({"elapsed_min": elapsed, "knee_bend_deg": knee,
+                       "release_angle_deg": rel})
+    fb = fatigue_breakdown(df).set_index("metric")
+    assert bool(fb.loc["knee_bend_deg", "fades_most"]) is True
+    assert abs(fb.loc["knee_bend_deg", "change_in_sd"]) > \
+           abs(fb.loc["release_angle_deg", "change_in_sd"])
+
+
+def test_mean_drift_flags_creep():
+    agg = pd.DataFrame([
+        {"session": "a", "avg_release_angle": 52.0, "avg_entry_angle": 46.0},
+        {"session": "b", "avg_release_angle": 49.0, "avg_entry_angle": 46.2},
+        {"session": "c", "avg_release_angle": 45.0, "avg_entry_angle": 45.9},
+    ])
+    md = mean_drift(agg).set_index("metric")
+    assert bool(md.loc["release_angle", "drifting"]) is True    # 52 -> 45 = big creep
+    assert bool(md.loc["entry_angle", "drifting"]) is False     # basically flat
+    assert md.loc["release_angle", "slope_per_session"] < 0
+    assert mean_drift(agg.head(1)).empty                        # need >=2 sessions
 
 
 if __name__ == "__main__":

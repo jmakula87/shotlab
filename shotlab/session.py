@@ -81,6 +81,7 @@ class ShotRecord:
     backspin_rpm: float | None = None
     made: object = None           # True / False / None
     make_conf: str = "na"
+    felt_good: object = None      # True / False / None -- user's subjective tag
 
     def row(self) -> dict:
         return asdict(self)
@@ -482,6 +483,67 @@ def consistency_stats(df: pd.DataFrame, metrics=None) -> pd.DataFrame:
             "second_half_std": round(wz2, 1),
             "more_erratic_when_tired": bool(wz2 > wz1) if wz2 == wz2 and wz1 == wz1 else None,
         })
+    return pd.DataFrame(rows)
+
+
+_FATIGUE_METRICS = ["release_angle_deg", "entry_angle_deg", "apex_height_ft",
+                    "apex_above_rim_ft", "knee_bend_deg", "tempo_dip_to_release_s",
+                    "release_height_ft", "jump_height_ft"]
+
+
+def fatigue_breakdown(df: pd.DataFrame, metrics=None) -> pd.DataFrame:
+    """Which part of your shot degrades MOST as the session wears on -- so you
+    know if it's your legs, your arc, or your release that goes first.
+
+    Ranks metrics by their first-half -> second-half change, standardized by each
+    metric's own spread (so degrees, seconds, and feet compare fairly). The top
+    row is flagged `fades_most`."""
+    metrics = metrics or _FATIGUE_METRICS
+    if df.empty or "elapsed_min" not in df:
+        return pd.DataFrame()
+    half = df["elapsed_min"].median()
+    rows = []
+    for m in metrics:
+        if m not in df.columns:
+            continue
+        sub = df[["elapsed_min", m]].dropna()
+        if len(sub) < 6:
+            continue
+        sd = float(sub[m].std())
+        f1 = float(sub[sub["elapsed_min"] <= half][m].mean())
+        f2 = float(sub[sub["elapsed_min"] > half][m].mean())
+        if not (f1 == f1 and f2 == f2) or sd < 1e-9:
+            continue
+        rows.append({"metric": m, "first_half": round(f1, 2),
+                     "second_half": round(f2, 2), "change": round(f2 - f1, 2),
+                     "change_in_sd": round((f2 - f1) / sd, 2)})
+    out = pd.DataFrame(rows)
+    if out.empty:
+        return out
+    out["_abs"] = out["change_in_sd"].abs()
+    out = out.sort_values("_abs", ascending=False).drop(columns="_abs").reset_index(drop=True)
+    out["fades_most"] = [i == 0 for i in range(len(out))]
+    return out
+
+
+def mean_drift(agg: pd.DataFrame) -> pd.DataFrame:
+    """Across built sessions, is a metric's LEVEL creeping over time (e.g. your
+    release angle getting flatter session to session)? One row per avg_ metric;
+    `drifting` flags a >5% move from the first session."""
+    if agg is None or agg.empty or len(agg) < 2:
+        return pd.DataFrame()
+    rows = []
+    for col in [c for c in agg.columns if c.startswith("avg_")]:
+        sub = agg[col].dropna()
+        if len(sub) < 2:
+            continue
+        y = sub.to_numpy(float)
+        slope = float(np.polyfit(np.arange(len(y), dtype=float), y, 1)[0])
+        base = abs(y[0]) if abs(y[0]) > 1e-9 else 1.0
+        rows.append({"metric": col[len("avg_"):], "first": round(float(y[0]), 2),
+                     "latest": round(float(y[-1]), 2), "delta": round(float(y[-1] - y[0]), 2),
+                     "slope_per_session": round(slope, 3),
+                     "drifting": bool(abs(y[-1] - y[0]) / base > 0.05)})
     return pd.DataFrame(rows)
 
 
