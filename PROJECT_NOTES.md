@@ -210,6 +210,39 @@ wrap native later. Target = Android/Pixel.
   mobile polish + competition (HomeCourt/DribbleUp exist). Server cost: ~$0
   self-host+tunnel to ~$5-12/mo tiny VPS.
 
+## Scope + roadmap (2026-07-01)
+**SCOPE DECISION (user, 2026-07-01): PERSONAL USE ONLY — not a public product.**
+→ Drop detector generalization / cross-court robustness / competition worries.
+We can **hard-tune everything to the user's court, phone, and (orange) ball** — a
+big simplification (the "hard 80%" of productizing is off the table).
+
+**Live-camera app vision (user, 2026-07-01):** the sideloaded app uses the phone
+camera **in-app (live)** and gives **instant feedback after each shot** — no file
+picking. What it takes:
+- **Live camera:** `getUserMedia` needs **HTTPS**. Options: host the PWA on
+  **GitHub Pages (free HTTPS, still 100% on-device)**, or wrap it as a native /
+  **TWA sideloaded APK** (cleanest for "sideloaded + camera", no HTTPS hoop).
+- **Auto shot-detection in the live stream (NEW core piece):** run pose
+  continuously + keep a **rolling frame buffer**; detect the **release motion**
+  (shooting wrist rises above head + arm extends) as a "shot event" → analyze the
+  buffered shot → show feedback → reset for the next. Continuous pose is fine
+  on-device; continuous ball detection is heavier (v2).
+
+**Improvement backlog (curated 2026-07-01) — effort/value:**
+- **Quick wins:** rim-based REAL FEET (release/jump/apex height — we already detect
+  the 10ft rim); shot **tempo/rhythm** + its consistency; **which form breaks
+  first when tired**; multi-session **drift alerts**; auto-handedness.
+- **Coaching loop:** **drill-effectiveness tracking** (did the prescribed metric
+  improve next session?); **feel-correlation** personalization (felt good/off →
+  your ideal); confidence **calibration** (needs 2-cam ground truth).
+- **Reliability (lighter now, personal scope):** **audio make/miss** (swish/rim
+  sound fused with visual — fixes our weakest signal); pick-the-shooter + rim-ROI.
+- **Bigger/research:** warmup→miss-tendency prediction; reference-form overlay;
+  voice / hands-free ("how'd that look?").
+- **Hygiene:** one-command test runner + CI; real-data regression fixtures; pinned env.
+- **Top picks:** rim-based feet · drill-effectiveness loop · audio make/miss ·
+  the live-camera app.
+
 ## Two-camera 3D core BUILT (footage-independent, 2026-06-30) — backlog #1 foundation
 Priority (user): **elbow flare + release consistency first.** Built the math
 foundation now, synthetic-validated, so real S8 footage plugs straight in later.
