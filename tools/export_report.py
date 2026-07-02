@@ -23,6 +23,25 @@ def _img_b64(path):
         return base64.b64encode(f.read()).decode()
 
 
+def _shot_map_b64(df):
+    """Render the per-shot release map to an embeddable PNG; None when the
+    session CSV predates rim_dx_px/rim_dy_px."""
+    if "rim_dx_px" not in df.columns or df["rim_dx_px"].dropna().empty:
+        return None
+    import io
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from shotlab.viz import draw_shot_map
+    fig, ax = plt.subplots(figsize=(5.2, 5.6))
+    draw_shot_map(ax, df)
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=110)
+    plt.close(fig)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
 def _table(path, title):
     if not os.path.exists(path):
         return ""
@@ -113,6 +132,13 @@ def main(argv=None):
     chart_html = (f"<img src='data:image/png;base64,{chart}' style='max-width:100%'>"
                   if chart else "<p>(no chart)</p>")
 
+    smap = _shot_map_b64(df)
+    shot_map_html = ("<h2>🗺️ Shot map (release points vs the rim; dot = make, "
+                     "X = miss — image-space, camera's view)</h2>"
+                     f"<img src='data:image/png;base64,{smap}' "
+                     "style='max-width:520px;display:block;margin:0 auto'>"
+                     if smap else "")
+
     cols = [c for c in ["shot_num", "clip", "elapsed_min", "zone",
                         "shot_form", "shot_setup",
                         "release_angle_deg", "entry_angle_deg", "apex_height_ft",
@@ -143,6 +169,7 @@ table.t tr:nth-child(even){{background:#fafafa}}
 <div class='kpi'><b>{dur:.0f} min</b><span>session</span></div>{make}</div>
 {review_html}
 {make_drivers_html}
+{shot_map_html}
 <h2>Metrics over the session (fatigue view)</h2>{chart_html}
 {_table(os.path.join(d,'fatigue_trends.csv'),'Fatigue trends (slope/min; − = declines)')}
 {_table(os.path.join(d,'consistency.csv'),'Consistency (std dev; within-zone = true repeatability)')}

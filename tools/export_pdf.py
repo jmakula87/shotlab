@@ -79,7 +79,7 @@ def build_session_pdf(session_dir: str) -> bytes:
     import matplotlib.image as mpimg
     from matplotlib.backends.backend_pdf import PdfPages
 
-    from shotlab.viz import draw_court, _norm_made
+    from shotlab.viz import draw_court, draw_shot_map, _norm_made
     from shotlab.session import consistency_stats, fatigue_breakdown, volume_stats
     from shotlab.correlate import (correlate_makes, summarize_make_drivers,
                                    correlate_feel, summarize_feel_drivers)
@@ -101,6 +101,11 @@ def build_session_pdf(session_dir: str) -> bytes:
         ax = fig.add_axes([0.06, 0.44, 0.44, 0.42])
         draw_court(ax, df)
         ax.set_title("Shot chart (make% by zone)", fontsize=11, weight="bold")
+        if "rim_dx_px" in df.columns and df["rim_dx_px"].notna().any():
+            axm = fig.add_axes([0.08, 0.07, 0.42, 0.32])
+            draw_shot_map(axm, df)
+            axm.set_title("Shot map (dot = make, X = miss)",
+                          fontsize=11, weight="bold")
         rp = os.path.join(session_dir, "review.md")
         review = open(rp, encoding="utf-8").read() if os.path.exists(rp) else ""
         fig.text(0.54, 0.86, "Coach review", fontsize=11, weight="bold")
