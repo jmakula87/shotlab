@@ -48,3 +48,55 @@ def draw_court(ax, df):
     for di, depth in enumerate(depths):
         ax.text(-0.05, 2 - di + 0.5, depth, ha="right", va="center",
                 fontsize=8, color="#888")
+
+
+def draw_shot_map(ax, df):
+    """Per-shot release points relative to the rim -- an image-space proxy
+    (x = pixels beside the rim, y = pixels below it; the camera's view, not
+    court feet, and the left/right sign depends on which side the camera sat).
+    Make = filled dot, miss = X: the marker SHAPE carries make/miss too, so the
+    map still reads for colorblind viewers and in print."""
+    if not {"rim_dx_px", "rim_dy_px"}.issubset(df.columns):
+        ax.text(0.5, 0.5, "rebuild the session to add per-shot positions",
+                ha="center", va="center", transform=ax.transAxes,
+                fontsize=9, color="#888")
+        ax.axis("off")
+        return
+    sub = df.dropna(subset=["rim_dx_px", "rim_dy_px"])
+    if not len(sub):
+        ax.text(0.5, 0.5, "no shot positions in this session",
+                ha="center", va="center", transform=ax.transAxes,
+                fontsize=9, color="#888")
+        ax.axis("off")
+        return
+    made = sub["made"].map(_norm_made) if "made" in sub.columns else None
+    groups = [("make", made == True, dict(marker="o", s=55, facecolor="#2e7d32",
+                                          edgecolor="white", linewidth=1.2)),
+              ("miss", made == False, dict(marker="X", s=65, color="#c62828",
+                                           edgecolor="white", linewidth=0.6)),
+              ("unknown", made.isna(), dict(marker="o", s=45, facecolor="#c8d0dc",
+                                            edgecolor="white", linewidth=1.2))] \
+        if made is not None else \
+        [("shot", sub["rim_dx_px"].notna(), dict(marker="o", s=55,
+                                                 facecolor="#5b7fa6",
+                                                 edgecolor="white", linewidth=1.2))]
+    shown = 0
+    for label, mask, style in groups:
+        g = sub[mask]
+        if len(g):
+            ax.scatter(g["rim_dx_px"], g["rim_dy_px"], label=label,
+                       zorder=3, **style)
+            shown += 1
+    ax.scatter([0], [0], s=110, color="#e8703a", zorder=5)
+    ax.annotate("RIM", (0, 0), xytext=(0, 12), textcoords="offset points",
+                ha="center", fontsize=9, color="#444")
+    ax.invert_yaxis()                      # image y grows down: rim on top
+    ax.set_aspect("equal", adjustable="datalim")
+    ax.grid(True, color="#e9edf3", linewidth=0.8, zorder=0)
+    for s in ax.spines.values():
+        s.set_visible(False)
+    ax.tick_params(colors="#888", labelsize=8)
+    ax.set_xlabel("px beside rim (sign = camera side)", fontsize=8, color="#888")
+    ax.set_ylabel("px below rim", fontsize=8, color="#888")
+    if shown >= 2:
+        ax.legend(loc="lower right", fontsize=8, frameon=False)

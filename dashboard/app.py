@@ -188,6 +188,18 @@ def court_chart(df):
     return fig
 
 
+def shot_map_chart(df):
+    """Per-shot release-point map (delegates to shotlab.viz.draw_shot_map)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from shotlab.viz import draw_shot_map
+    fig, ax = plt.subplots(figsize=(5.2, 5.6))
+    draw_shot_map(ax, df)
+    fig.tight_layout()
+    return fig
+
+
 def _clean(v):
     try:
         import numpy as _np
@@ -479,15 +491,18 @@ def view_session():
                 st.dataframe(pd.DataFrame(shown)[cols], hide_index=True,
                              width="stretch")
 
-    # ---- shot chart (half-court zones by make%) ----
+    # ---- shot chart (half-court zones by make% + per-shot map) ----
     if {"depth", "side"}.issubset(df.columns):
         with st.container(border=True):
             st.subheader("🗺️ Shot chart")
-            cc = st.columns([3, 2])
+            cc = st.columns(2)
             cc[0].pyplot(court_chart(view), use_container_width=True)
-            cc[1].caption("Your 9 zones shaded by make% (green = higher). Zone "
-                          "positions are schematic — true court coordinates need "
-                          "the calibration clip.")
+            cc[1].pyplot(shot_map_chart(view), use_container_width=True)
+            st.caption("Left: your 9 zones shaded by make% (green = higher). "
+                       "Right: every shot's release point relative to the rim "
+                       "(dot = make, X = miss) — image-space, so it's the "
+                       "camera's view, not court feet. True court coordinates "
+                       "need the calibration clip.")
 
     # ---- what fades as you tire ----
     from shotlab.session import fatigue_breakdown
