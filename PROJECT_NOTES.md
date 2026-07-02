@@ -49,7 +49,17 @@ consistency FIRST**. Cam-1 stays wide (arc/rim/makes), Cam-2 = body-cam.
    jump_height_ft (upgrades them from rim-scaled LOW conf ~2.5× hot to honest),
    and real-feet shot distances for zones. Script: scratchpad court_from_height
    (rewrite properly into shotlab/scale.py + a tools/ diag).
-6. Smaller ideas left: goal-progress tracking, report emailing, ingest the app's
+6. **ORANGE-BALL RETRAIN (diagnosed 2026-07-02) — the top tracking lever.** The
+   orange ball did NOT help 0701: wide-cam YOLO hit rate DROPPED 35%→20% per
+   sampled flight frame vs 0629, because the fine-tune dataset was auto-labeled
+   on the OLD ball (red/blue filters) — orange is out-of-distribution. Likely
+   also the cause of the 0.4s late-lock. Meanwhile the HSV color detector (dead
+   on the old dark ball) now locks the orange ball in-hand at 30+ ft (verified
+   on rendered frames; false positives in grass/trees → needs the existing
+   motion gate). FIX: make_dataset on 0701 clips with ORANGE HSV auto-label,
+   merge with the old 982 frames, retrain yolo11n, re-measure hit rate +
+   late-lock. Orange ball stays right for the S8 close-cam color path.
+7. Smaller ideas left: goal-progress tracking, report emailing, ingest the app's
    feel-CSV into the desktop records (join on session/shot time).
 
 ---
