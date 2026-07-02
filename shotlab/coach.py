@@ -19,9 +19,13 @@ import pandas as pd
 
 from .session import fatigue_trends, consistency_stats
 
-# Research-backed "aim for" reference (the gold standard to work toward).
+# Research-backed "aim for" reference (the gold standard to work toward). The
+# entry-angle universal is shared with shotlab.textbook so the number can't
+# drift between the coach and the profile's textbook block.
+from .textbook import TEXTBOOK as _TB
 IDEAL = {
-    "entry_angle_deg": (45.0, "≈45° entry maximizes the rim opening"),
+    "entry_angle_deg": (_TB["entry_angle_deg"]["target"],
+                        "≈45° entry maximizes the rim opening"),
     "release_angle_deg": (52.0, "~50–55° release for a typical jumper"),
 }
 

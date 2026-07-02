@@ -56,6 +56,19 @@ def test_build_profile_ideal_is_mean_of_good():
     assert prof["n_good"] == 10
 
 
+def test_profile_has_separate_textbook_block():
+    """Universal ideals ship in a SEPARATE `textbook` block, never blended into
+    the personal `ideal` (so a pro number can't override your own norm)."""
+    df = _df()
+    df["felt_good"] = [True] * 10 + [None] * 10
+    prof = build_profile(df, session_dir="/nope")
+    assert "textbook" in prof and "entry_angle_deg" in prof["textbook"]
+    assert prof["textbook"]["entry_angle_deg"]["target"] == 45.0
+    # the personal ideal must NOT contain the textbook entry-angle target
+    # unless it came from the user's own shots (this df has no entry angle)
+    assert "entry_angle_deg" not in prof["ideal"]
+
+
 def test_form_ideals_survive_when_best_arc_shots_lack_pose():
     """The 2026-07-02 regression: the arc-ranked 'best' pool is far/clean-arc
     shots with NO pose, so elbow/knee were dropped. Form ideals must instead

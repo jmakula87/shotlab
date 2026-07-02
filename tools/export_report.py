@@ -132,6 +132,28 @@ def main(argv=None):
     chart_html = (f"<img src='data:image/png;base64,{chart}' style='max-width:100%'>"
                   if chart else "<p>(no chart)</p>")
 
+    from shotlab.textbook import TEXTBOOK, grade
+    tb_rows = []
+    for metric, spec in TEXTBOOK.items():
+        label = metric.replace("_deg", "").replace("_", " ")
+        if spec["measurable_now"] and metric in df.columns and df[metric].notna().any():
+            avg = float(df[metric].mean())
+            g = grade(metric, avg)
+            verdict = ("✅ on target" if g and g[0]
+                       else f"{'+' if g and g[1] > 0 else ''}{g[1]}° off" if g else "—")
+            tb_rows.append(f"<tr><td>{label}</td><td>{avg:.0f}°</td>"
+                           f"<td>{spec['target']:.0f}°</td><td>{verdict}</td>"
+                           f"<td class='why'>{spec['why']}</td></tr>")
+        else:
+            need = spec.get("needs", "not measured this session")
+            tb_rows.append(f"<tr><td>{label}</td><td>—</td>"
+                           f"<td>{spec['target']:.0f}°</td><td>needs 2nd camera</td>"
+                           f"<td class='why'>{need}</td></tr>")
+    textbook_html = (
+        "<h2>📐 Textbook targets (universal — separate from your own norm)</h2>"
+        "<table class='t'><tr><th>Metric</th><th>Your avg</th><th>Target</th>"
+        "<th></th><th>Why it's universal</th></tr>" + "".join(tb_rows) + "</table>")
+
     smap = _shot_map_b64(df)
     shot_map_html = ("<h2>🗺️ Shot map (release points vs the rim; dot = make, "
                      "X = miss — image-space, camera's view)</h2>"
@@ -169,6 +191,7 @@ table.t tr:nth-child(even){{background:#fafafa}}
 <div class='kpi'><b>{dur:.0f} min</b><span>session</span></div>{make}</div>
 {review_html}
 {make_drivers_html}
+{textbook_html}
 {shot_map_html}
 <h2>Metrics over the session (fatigue view)</h2>{chart_html}
 {_table(os.path.join(d,'fatigue_trends.csv'),'Fatigue trends (slope/min; − = declines)')}

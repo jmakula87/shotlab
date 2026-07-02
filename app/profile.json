@@ -24,6 +24,21 @@
     "follow_through_hold_s": 0.5,
     "balance_drift_px_per_ht": 1.15
   },
+  "textbook": {
+    "entry_angle_deg": {
+      "target": 45.0,
+      "tolerance": 5.0,
+      "measurable_now": true,
+      "why": "~45 deg entry maximizes the rim opening -- true for every shooter."
+    },
+    "elbow_flare_deg": {
+      "target": 0.0,
+      "tolerance": 5.0,
+      "measurable_now": false,
+      "why": "a tucked elbow keeps the ball on line; flaring it out pushes shots off-line -- bad for everyone.",
+      "needs": "2-camera 3D (flare is out-of-plane; twocam.elbow_flare measures it once the second camera is calibrated)."
+    }
+  },
   "skeletons": {
     "load": [
       {

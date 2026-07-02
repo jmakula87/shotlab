@@ -137,6 +137,7 @@ def build_profile(df: pd.DataFrame, session_dir: str, *, name="me",
             f"form ideals from {len(form_good)} {form_method}.")
     if skel_note:
         note += f" {skel_note}"
+    from shotlab.textbook import profile_block
     profile = {
         "name": name,
         "handedness": handedness,
@@ -145,8 +146,9 @@ def build_profile(df: pd.DataFrame, session_dir: str, *, name="me",
         "n_form": int(len(form_good)),
         "source_method": arc_method,
         "form_method": form_method,
-        "ideal": ideal,
+        "ideal": ideal,            # YOUR own norm (mean of your good shots)
         "tolerance": tol,
+        "textbook": profile_block(),  # universal targets, SEPARATE from `ideal`
         "skeletons": skeletons,
     }
     return profile
