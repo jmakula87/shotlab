@@ -146,6 +146,32 @@ def test_clean_ball_still_wins_over_apex():
     assert "apex" not in est.note
 
 
+def test_jump_height_is_ankle_based_not_squat():
+    """The load squat drops the hips ~a foot; that must NOT count as jump.
+    Jump = how far the (lower) ankle line rises when both feet are airborne."""
+    from shotlab.phase2_pose.form import _jump_height
+    poses = {}
+    for f in range(0, 30):
+        ankle_y = 470.0 - (20.0 if 18 <= f <= 22 else 0.0)   # 20px flight
+        hip_y = 300.0 + (40.0 if 5 <= f <= 12 else 0.0)      # 40px squat
+        poses[f] = make_pose(f, {"l_ankle": (190, ankle_y), "r_ankle": (200, ankle_y),
+                                 "l_hip": (195, hip_y), "r_hip": (205, hip_y)})
+    jh = _jump_height(poses, range(0, 30), ppf=40.0)
+    assert abs(jh - 0.5) < 0.05, jh          # 20px / 40ppf = 0.5 ft, squat excluded
+
+
+def test_jump_height_ignores_single_foot_step():
+    """A step into the shot lifts ONE foot; the lower-ankle series stays on the
+    ground line, so no phantom jump."""
+    from shotlab.phase2_pose.form import _jump_height
+    poses = {}
+    for f in range(0, 30):
+        r_y = 470.0 - (30.0 if 5 <= f <= 10 else 0.0)        # stepping foot
+        poses[f] = make_pose(f, {"l_ankle": (190, 470.0), "r_ankle": (200, r_y)})
+    jh = _jump_height(poses, range(0, 30), ppf=40.0)
+    assert abs(jh) < 0.05, jh
+
+
 def test_release_subframe_no_divergence_is_low_conf():
     """A ball that never leaves the hand (no shot) -> low-confidence fallback."""
     from shotlab.phase2_pose.form import find_release

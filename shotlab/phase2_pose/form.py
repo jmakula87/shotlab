@@ -470,9 +470,33 @@ def _height_metrics(metrics, poses, ball_track, keys, span, rel_f, ppf):
                               None if rh is None else round(rh, 2),
                               "low" if rh is not None else "na", note))
 
-    hip_ys = [_hip_y(poses, f) for f in span]
-    hip_ys = [y for y in hip_ys if y is not None]
-    jh = jump_height_ft(max(hip_ys), min(hip_ys), ppf) if (ppf and len(hip_ys) >= 3) else None
+    jh = _jump_height(poses, span, ppf)
     metrics.append(FormMetric("jump_height_ft",
                               None if jh is None else round(jh, 2),
-                              "low" if jh is not None else "na", note))
+                              "low" if jh is not None else "na",
+                              note + "; ankle-based (squat excluded)"))
+
+
+def _lower_ankle_y(poses, f) -> float | None:
+    """Per-frame image-y of the LOWER (larger-y) visible ankle. This only rises
+    when BOTH feet are airborne: a step lifts one foot, a squat lifts neither,
+    so the series isolates true flight."""
+    fp = poses.get(f)
+    if fp is None:
+        return None
+    ys = [float(fp.pt(n)[1]) for n in ("l_ankle", "r_ankle") if fp.v(n) >= 0.4]
+    return max(ys) if ys else None
+
+
+def _jump_height(poses, span, ppf):
+    """Jump height in feet from ankle flight, not hip travel. The old hip-based
+    max-minus-min counted the load SQUAT as jump (hips drop ~a foot in the
+    load); ankles sit on the ground line through the squat and rise by exactly
+    the jump, so: ground = high percentile of the lower-ankle series (grounded
+    frames dominate the span), peak = its minimum during flight."""
+    ys = [y for y in (_lower_ankle_y(poses, f) for f in span) if y is not None]
+    if not ppf or len(ys) < 5:
+        return None
+    ground = float(np.percentile(ys, 80))     # grounded ground-line, squat-proof
+    peak = float(min(ys))
+    return jump_height_ft(ground, peak, ppf)
