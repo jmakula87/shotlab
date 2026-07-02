@@ -16,12 +16,23 @@ exports **feel logs as CSV**. Session 0701 (+`_wide`/`_moved`) rebuilt on the fi
 pipeline; app profile re-exported (elbow ideal now 118.9°); SW cache v4.
 
 **⭐ THE BIG ONE — 2nd camera (Galaxy S8) arrives within a week (~2026-07-08).**
-That's the real form/flare accuracy unlock. The footage-independent 3D core
-(`shotlab/threed.py`: stereo triangulate + elbow_flare + release-point spread) is
-already built + synthetic-validated (6/6). When it lands, per the settled 2-cam
-plan: (1) S8 as close body-cam side → existing form metrics reliable; (2) marker
-clip → stereo calibration + temporal sync; (3) **build ELBOW FLARE + release
-consistency FIRST**. Cam-1 stays wide (arc/rim/makes), Cam-2 = body-cam.
+**ALL PRE-ARRIVAL SOFTWARE IS NOW BUILT + SYNTHETIC-VALIDATED (2026-07-02):**
+`threed.py` (6/6) + `sync.py` audio sync (6/6, <20ms across mixed rates/gains) +
+`stereo.py` checkerboard solver (5/5, triangulation <0.6in vs truth) +
+`twocam.py` fusion scaffold (5/5, 12° known flare recovered to 0.5°) +
+`tools/make_checkerboard.py` (printable board, regenerate any time) +
+`tools/calibrate_rig.py` (mono + stereo CLI). **Day-one S8 runbook:**
+(0) BEFORE it arrives — print the checkerboard (verify the 6.000in ruler),
+    optionally film it with the Pixel → `calibrate_rig.py --mono` pins the wide
+    cam's true focal TODAY; get a 2nd mount; S8 set to 1080p30 + storage +
+    transfer path. (1) Both cams rolling, ONE loud clap, wave the board through
+    varied tilts visible to BOTH → `calibrate_rig.py A.mp4 B.mp4` →
+    `data/calibration/stereo_rig.json` (want rms ≲1px). (2) Film a session
+    (same clap ritual) → pose both cams → `twocam.fuse_pose_tracks` →
+    `shot_3d_metrics` = ELBOW FLARE + release-point spread, in real feet.
+    Remaining to write when real footage exists: the session-level glue
+    (build_session-style CLI over fuse_pose_tracks) + LEFT_RIGHT-style flare
+    sign pinning. Cam-1 stays wide (arc/rim/makes), Cam-2 = close body-cam.
 
 **Buildable now (no hardware):**
 1. **USER: test the app on the Pixel** — live camera, gold ideal-skeleton overlay,
