@@ -81,8 +81,22 @@ pipeline; app profile re-exported (elbow ideal now 118.9°); SW cache v4.
    same change: weights identity now includes the run name (both models' export
    dirs are literally named best_openvino_model; basename-keyed caches would
    have silently reused the old model's detections). Old model kept at
-   runs/detect/ball_finetune for provenance. Full 0701 re-detect+rebuild on the
-   new model = next (fresh shots/arcs; expect more shots + earlier locks).
+   runs/detect/ball_finetune for provenance.
+   **Re-detect+rebuild VALIDATED + ADOPTED (same day): 88 shots (was 71),
+   100% make-classifiable, n_points/shot 14→25 median, make% 33%.** Eyeball
+   verification: ALL 18 shots in 183225 (was 4) and ALL 21 in 183742 (was 9)
+   are clean dense arcs into the rim; several old-only "shots" were dribbles /
+   ball-in-hand junk from sparse tracks. Release-angle median 43→56° = arcs now
+   include the true early flight (the late-lock fix, visible in data). Splits +
+   reports regenerated. ⚠️ Session metrics NOT comparable to the old-build
+   numbers (different detector = different shots); make-driver signals persist
+   (knee bend still #1).
+   **⚠️ PROFILE-EXPORT RANKING ISSUE (open):** on the new data export_profile's
+   10 best-ranked shots favor far/clean-arc shots with NO usable pose → ideal
+   lost elbow/follow-through + skeletons fell to 1 shot. Kept the previous
+   richer profile.json (elbow 118.9). FIX: rank ideal-metric candidates by
+   pose-visibility too (arc quality for arc ideals, pose quality for form
+   ideals — split the ranking).
 7. Smaller ideas left: goal-progress tracking, report emailing, ingest the app's
    feel-CSV into the desktop records (join on session/shot time).
 
