@@ -28,16 +28,28 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# (metric column, minimum tolerance so the band never collapses)
-IDEAL_METRICS = [
+# Arc/ball ideals: measured off the ball flight, present on every tracked shot.
+# Rank the pool for these by ARC quality (clean-arc / made shots).
+ARC_METRICS = [
+    ("release_angle_deg", 5.0),
+    ("entry_angle_deg", 5.0),
+]
+# Form/pose ideals: only present when pose ran cleanly. Rank the pool for these
+# by POSE quality -- ranking them by arc quality (as the arc pool does) lands on
+# far, clean-arc shots with no usable pose, which is the 2026-07-02 regression
+# where the ideal lost its elbow/follow-through targets.
+FORM_METRICS = [
     ("elbow_angle_at_release_deg", 6.0),
     ("knee_bend_deg", 8.0),
     ("tempo_dip_to_release_s", 0.05),
     ("follow_through_hold_s", 0.10),
     ("balance_drift_px_per_ht", 0.05),
-    ("release_angle_deg", 5.0),
-    ("entry_angle_deg", 5.0),
 ]
+# The most-available reliable form metric (knee side-on is in-plane, so
+# high-confidence); its presence means pose ran on the shot.
+_POSE_ANCHOR = "knee_bend_deg"
+# (kept for back-compat: some callers import the combined list)
+IDEAL_METRICS = FORM_METRICS + ARC_METRICS
 
 
 def _truthy(s):
@@ -45,7 +57,8 @@ def _truthy(s):
 
 
 def select_good(df: pd.DataFrame, session_dir: str, min_good: int = 5):
-    """Return (good_df, method) using the priority above."""
+    """Outcome/arc 'good shots' (feel > best-ranked > made > all). These have
+    clean arcs, so they anchor the ARC ideals (release/entry angle)."""
     if "felt_good" in df.columns:
         good = df[_truthy(df["felt_good"])]
         if len(good) >= min_good:
@@ -65,32 +78,73 @@ def select_good(df: pd.DataFrame, session_dir: str, min_good: int = 5):
     return df, "all shots (not enough good ones tagged/made — tag shots by feel!)"
 
 
+def select_form_good(df: pd.DataFrame, min_good: int = 5):
+    """Pose-reliable good shots for the FORM ideals + skeletons.
+
+    Anchors on a present pose metric (knee bend), then walks the same
+    feel > made > all ladder -- so the elbow/knee/follow-through ideals come
+    from shots where pose actually ran, not from clean-arc shots the pose model
+    couldn't read. Within each tier, higher release-confidence sorts first
+    (elbow-at-release trusts the release frame)."""
+    pose = df[df[_POSE_ANCHOR].notna()] if _POSE_ANCHOR in df.columns else df.iloc[0:0]
+    if len(pose) == 0:
+        return df, "all shots (no pose-reliable shots)"
+    if "release_conf" in pose.columns:
+        order = {"high": 0, "medium": 1, "low": 2}
+        pose = (pose.assign(_c=pose["release_conf"].map(order).fillna(3))
+                    .sort_values("_c", kind="stable").drop(columns="_c"))
+    if "felt_good" in pose.columns:
+        g = pose[_truthy(pose["felt_good"])]
+        if len(g) >= min_good:
+            return g, "your felt-good shots (pose-reliable)"
+    if "made" in pose.columns:
+        g = pose[_truthy(pose["made"])]
+        if len(g) >= min_good:
+            return g, "your made shots (pose-reliable)"
+    return pose, "pose-reliable shots"
+
+
+def _add_ideal(ideal: dict, tol: dict, pool: pd.DataFrame, col: str, floor: float):
+    """Set ideal[col] = mean and tol[col] = spread (floored) if the pool has
+    >=3 non-null values for the metric; otherwise leave it out."""
+    if col not in pool.columns:
+        return
+    vals = pool[col].dropna()
+    if len(vals) < 3:
+        return
+    ideal[col] = round(float(vals.mean()), 2)
+    tol[col] = round(float(max(vals.std(ddof=0) if len(vals) > 1 else floor, floor)), 2)
+
+
 def build_profile(df: pd.DataFrame, session_dir: str, *, name="me",
                   handedness="right", min_good=5, with_skeletons=True,
                   raw_dirs=None) -> dict:
-    good, method = select_good(df, session_dir, min_good)
+    arc_good, arc_method = select_good(df, session_dir, min_good)
+    form_good, form_method = select_form_good(df, min_good)
+
     ideal, tol = {}, {}
-    for col, floor in IDEAL_METRICS:
-        if col not in good.columns:
-            continue
-        vals = good[col].dropna()
-        if len(vals) < 3:
-            continue
-        ideal[col] = round(float(vals.mean()), 2)
-        tol[col] = round(float(max(vals.std(ddof=0) if len(vals) > 1 else floor, floor)), 2)
+    for col, floor in ARC_METRICS:
+        _add_ideal(ideal, tol, arc_good, col, floor)
+    for col, floor in FORM_METRICS:
+        _add_ideal(ideal, tol, form_good, col, floor)
 
     skeletons = {"load": None, "release": None, "follow": None}
     skel_note = ""
-    if with_skeletons and {"clip", "shot_in_clip"}.issubset(good.columns):
-        skeletons, skel_note = build_ideal_skeletons(good, handedness, raw_dirs)
+    if with_skeletons and {"clip", "shot_in_clip"}.issubset(form_good.columns):
+        skeletons, skel_note = build_ideal_skeletons(form_good, handedness, raw_dirs)
 
+    note = (f"Arc ideals from {len(arc_good)} {arc_method}; "
+            f"form ideals from {len(form_good)} {form_method}.")
+    if skel_note:
+        note += f" {skel_note}"
     profile = {
         "name": name,
         "handedness": handedness,
-        "note": f"Ideal learned from {len(good)} {method}." + (
-            f" {skel_note}" if skel_note else ""),
-        "n_good": int(len(good)),
-        "source_method": method,
+        "note": note,
+        "n_good": int(len(arc_good)),
+        "n_form": int(len(form_good)),
+        "source_method": arc_method,
+        "form_method": form_method,
         "ideal": ideal,
         "tolerance": tol,
         "skeletons": skeletons,

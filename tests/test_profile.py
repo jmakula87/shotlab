@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "tools"))
 
-from export_profile import select_good, build_profile
+from export_profile import select_good, select_form_good, build_profile
 
 
 def _df(n=20, seed=0):
@@ -54,6 +54,49 @@ def test_build_profile_ideal_is_mean_of_good():
     # tolerance respects the floor (>= 6 for elbow)
     assert prof["tolerance"]["elbow_angle_at_release_deg"] >= 6.0
     assert prof["n_good"] == 10
+
+
+def test_form_ideals_survive_when_best_arc_shots_lack_pose():
+    """The 2026-07-02 regression: the arc-ranked 'best' pool is far/clean-arc
+    shots with NO pose, so elbow/knee were dropped. Form ideals must instead
+    come from the pose-reliable pool."""
+    rng = np.random.default_rng(3)
+    n = 40
+    df = pd.DataFrame({
+        "shot_num": range(1, n + 1),
+        "made": [True] * 20 + [False] * 20,
+        "release_angle_deg": rng.normal(50, 5, n),
+        "entry_angle_deg": rng.normal(45, 5, n),
+        # pose present on only the FIRST 15 shots (the close, pose-readable ones)
+        "elbow_angle_at_release_deg": [rng.normal(110, 6) for _ in range(15)]
+                                      + [np.nan] * 25,
+        "knee_bend_deg": [rng.normal(115, 8) for _ in range(15)] + [np.nan] * 25,
+    })
+    # best_shots.csv = 10 far shots with NO pose (shots 26..35)
+    prof = build_profile(df, session_dir="/nope")
+    # arc ideals always populate; form ideals populate from the pose pool
+    assert "release_angle_deg" in prof["ideal"]
+    assert "elbow_angle_at_release_deg" in prof["ideal"], prof["ideal"]
+    assert "knee_bend_deg" in prof["ideal"]
+    assert prof["n_form"] >= 5
+
+
+def test_form_good_prefers_pose_present_made_shots():
+    df = _df(n=30, seed=4)
+    df["made"] = [True] * 12 + [False] * 18
+    df.loc[df.index[:6], "knee_bend_deg"] = np.nan   # 6 made shots lack pose
+    good, method = select_form_good(df, min_good=5)
+    assert good["knee_bend_deg"].notna().all()       # only pose-present shots
+    assert "pose-reliable" in method
+
+
+def test_form_good_conf_orders_pool():
+    df = _df(n=20, seed=5)
+    df["made"] = [True] * 20
+    df["release_conf"] = (["low"] * 10 + ["high"] * 10)
+    good, _ = select_form_good(df, min_good=5)
+    # high-confidence shots should sort to the front
+    assert good.iloc[0]["release_conf"] == "high"
 
 
 if __name__ == "__main__":

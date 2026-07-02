@@ -91,12 +91,16 @@ pipeline; app profile re-exported (elbow ideal now 118.9°); SW cache v4.
    reports regenerated. ⚠️ Session metrics NOT comparable to the old-build
    numbers (different detector = different shots); make-driver signals persist
    (knee bend still #1).
-   **⚠️ PROFILE-EXPORT RANKING ISSUE (open):** on the new data export_profile's
-   10 best-ranked shots favor far/clean-arc shots with NO usable pose → ideal
-   lost elbow/follow-through + skeletons fell to 1 shot. Kept the previous
-   richer profile.json (elbow 118.9). FIX: rank ideal-metric candidates by
-   pose-visibility too (arc quality for arc ideals, pose quality for form
-   ideals — split the ranking).
+   **✅ PROFILE-EXPORT RANKING FIXED (2026-07-02):** export_profile now splits
+   the pool — ARC ideals (release/entry angle) from the outcome/arc-good pool
+   (select_good, clean arcs on all 88 shots), FORM ideals + skeletons from a
+   pose-anchored pool (select_form_good: knee-bend present, feel>made>all
+   ladder, release-conf sorted). On the 88-shot data: form ideals now from 18
+   pose-reliable made shots (was 2/10 with elbow → dropped); elbow back at
+   117.0° (cross-validates the prior 118.9°), all 5 form metrics present,
+   skeletons 1→2. Deployed app/profile.json + SW cache v4→v5. Note arc angles
+   are steeper now (release 54→64, entry 44→55) — the late-lock fix capturing
+   true early flight, not a regression. tests/test_profile 7/7.
 7. Smaller ideas left: goal-progress tracking, report emailing, ingest the app's
    feel-CSV into the desktop records (join on session/shot time).
 
