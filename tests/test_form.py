@@ -172,9 +172,10 @@ def test_jump_height_ignores_single_foot_step():
     assert abs(jh) < 0.05, jh
 
 
-def test_shooter_height_gives_body_scaled_heights():
-    """With a known shooter height, release/jump heights use the body ruler
-    (MEDIUM conf, 'body-scaled' note) instead of the rim ruler (LOW)."""
+def test_shooter_height_gives_body_scaled_jump():
+    """With a known shooter height, JUMP height uses the body ruler (MEDIUM,
+    'body-scaled') instead of the rim ruler (LOW). Release height stays LOW
+    either way (its depth differs from the body plane)."""
     poses, ball, rel = build_shot_sequence()
     shot = FakeShot(list(range(14, 30)))
     # add a visible nose so the body ruler can measure nose->ankle
@@ -186,28 +187,42 @@ def test_shooter_height_gives_body_scaled_heights():
                           px_per_foot=rim_ppf)
     sf_body = compute_form(shot, ball, poses, fps=60, camera_angle="side_on",
                            px_per_foot=rim_ppf, shooter_height_ft=70 / 12.0)
-    rim_rh = next(m for m in sf_rim.metrics if m.name == "release_height_ft")
-    body_rh = next(m for m in sf_body.metrics if m.name == "release_height_ft")
-    assert rim_rh.confidence == "low"
-    assert body_rh.confidence == "medium"
-    assert "body-scaled" in body_rh.note
-    # both non-null and DIFFERENT (the body ruler rescales the same pixels)
-    assert rim_rh.value is not None and body_rh.value is not None
-    assert abs(body_rh.value - rim_rh.value) > 0.1
+    rim_jh = next(m for m in sf_rim.metrics if m.name == "jump_height_ft")
+    body_jh = next(m for m in sf_body.metrics if m.name == "jump_height_ft")
+    assert rim_jh.confidence == "low"
+    assert body_jh.confidence == "medium"
+    assert "body-scaled" in body_jh.note
+    # release height is LOW in both (depth-limited) and floor-referenced
+    for sf in (sf_rim, sf_body):
+        rh = next(m for m in sf.metrics if m.name == "release_height_ft")
+        if rh.value is not None:
+            assert rh.confidence == "low"
+            assert "floor" in rh.note and "2-cam" in rh.note
 
 
-def test_no_nose_falls_back_to_rim_scale():
-    """No visible nose -> body ruler can't measure -> rim-scaled (LOW), so a
-    height flag never silently produces a garbage body scale."""
+def test_no_nose_jump_falls_back_to_rim_scale():
+    """No visible nose -> body ruler can't measure -> jump is rim-scaled (LOW),
+    so a height flag never silently produces a garbage body scale."""
     poses, ball, rel = build_shot_sequence()
     for fp in poses.values():                     # nose not detected
         fp.vis[L["nose"]] = 0.0
     shot = FakeShot(list(range(14, 30)))
     sf = compute_form(shot, ball, poses, fps=60, camera_angle="side_on",
                       px_per_foot=20.0, shooter_height_ft=70 / 12.0)
-    rh = next(m for m in sf.metrics if m.name == "release_height_ft")
-    assert rh.confidence in ("low", "na")
-    assert "rim-scaled" in rh.note
+    jh = next(m for m in sf.metrics if m.name == "jump_height_ft")
+    assert jh.confidence in ("low", "na")
+    assert "rim-scaled" in jh.note
+
+
+def test_release_height_referenced_to_floor_not_airborne_ankle():
+    """Release height must use the planted floor, not the (raised) ankle at a
+    jump -- otherwise an airborne release reads too low by the jump height."""
+    from shotlab.phase2_pose.form import _ground_line
+    poses, ball, rel = build_shot_sequence()
+    span = range(0, 32)
+    ground = _ground_line(poses, span)
+    # the synthetic ankles sit at y=470 the whole clip -> floor at 470
+    assert ground is not None and abs(ground - 470) < 5
 
 
 def test_jump_height_physics_gate():

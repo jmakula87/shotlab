@@ -79,11 +79,22 @@ pipeline; app profile re-exported (elbow ideal now 118.9°); SW cache v4.
    tightening — release-height p90 10.7→4.6 ft, max 19→10; jump p90 1.9→1.2, max
    4.0→2.4 (the absurd wrong-depth outliers are gone). Ruler measured over the
    planted gather→release window (cache v8) so a long flight's rebound-drift
-   doesn't inflate it. **SEPARATE PRE-EXISTING FOLLOW-UP:** absolute release_height
-   reads low (~3.2 ft median above the ankle vs an expected ~6-7 ft for an
-   overhead release) under BOTH rulers — a release_height MEASUREMENT issue (which
-   frame / ball-vs-wrist / raised-ankle at a jump), independent of the scaling.
-   Recommended usage: always pass `--shooter-height 5'10"` on his builds.
+   doesn't inflate it.
+   **RELEASE-HEIGHT FOLLOW-UP RESOLVED (2026-07-02, honestly):** diagnosed by
+   rendering the release motion — the footage is REAR/oblique (shooter shoots
+   AWAY from the camera), so the release point moves up AND deeper; its image-y
+   barely rises through release (depth cancels height in projection). That's
+   foreshortening: the release point sits off the body's depth plane, so a
+   vertical-image estimate reads low and NO single-camera scaling fixes it.
+   Two-part fix: (a) real correctness bug — release height now referenced to the
+   FLOOR (`_ground_line`, p80 of the lower-ankle series) not the instantaneous
+   (airborne) ankle, so an airborne release no longer loses the jump height;
+   (b) release_height is now honestly LOW confidence always (even body-scaled)
+   with a note that the true value needs the 2-cam 3D release point
+   (`twocam.Shot3D.release_point`). After the fix real shots read 3.6–6.3 ft
+   (floor-referenced, internally consistent); JUMP height stays MEDIUM
+   body-scaled (feet don't change depth in a vertical jump — that one IS clean).
+   Cache v9. tests: form 18/18. Recommended usage: always `--shooter-height 5'10"`.
 6. **ORANGE-BALL RETRAIN ✅ DONE + PROMOTED (2026-07-02).** Diagnosis: hit rate
    dropped 35%→20% on 0701 because the old fine-tune only knew the old red/blue
    ball. Retrained yolo11n on 0701 orange-ball frames (old 982 frames + 0629

@@ -97,7 +97,7 @@ def _cache_path(video_path: str) -> str:
 # Bump when the record-building LOGIC changes in a way the schema/params don't
 # capture (e.g. a metric formula). The ShotRecord field set is folded in
 # automatically, so adding/removing a record field invalidates caches on its own.
-_CACHE_VERSION = 8    # v8: shooter-height ruler measured over the planted release window
+_CACHE_VERSION = 9    # v9: release height floor-referenced + honest LOW depth label
 
 
 def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,

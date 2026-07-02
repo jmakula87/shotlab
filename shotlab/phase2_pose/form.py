@@ -498,31 +498,55 @@ def compute_form(shot, ball_track, poses, fps, *, handedness="right",
                     release_t=rel_t, release_conf=rel.confidence, metrics=metrics)
 
 
+def _ground_line(poses, span):
+    """The planted floor's image-y: the high percentile of the lower-ankle
+    series over the window (the shooter is grounded on most frames, so the feet
+    sit at the floor there). This is the fixed reference for release height --
+    NOT the instantaneous ankle, which is raised when the shooter is airborne at
+    release and would shrink the reading."""
+    ys = [y for y in (_lower_ankle_y(poses, f) for f in span) if y is not None]
+    if len(ys) < 3:
+        return None
+    return float(np.percentile(ys, 80))
+
+
 def _height_metrics(metrics, poses, ball_track, keys, span, rel_f, rim_ppf,
                     body_ppf=None):
-    """Release height (ball above the ankle line) + jump height (body's vertical
-    travel), both in feet.
+    """Release height (ball above the floor at release) + jump height (body's
+    vertical travel), both in feet.
 
-    Prefers the SHOOTER-height ruler (`body_ppf`) when available: it's measured
-    at the shooter's own depth, so these vertical distances come out honest
-    (MEDIUM confidence). Without it, falls back to the rim ruler -- exact only
-    at the rim's depth, so ~2.5x too large for the nearer shooter (LOW)."""
+    JUMP height is honest with the shooter-height ruler (`body_ppf`): the feet
+    stay at the shooter's own depth through a vertical jump, so it's MEDIUM
+    confidence there (LOW on the rim ruler -- exact only at the rim's depth).
+
+    RELEASE height stays LOW even body-scaled: the release point is overhead AND
+    (unless the camera is perfectly side-on) at a different DEPTH than the
+    shooter's body -- it's thrown up and toward the rim. On the rear/oblique
+    single-camera views this footage actually has, that depth shift foreshortens
+    the release point downward, so the vertical-image estimate reads low. The
+    trustworthy release height is the 2-camera 3D release point
+    (shotlab.twocam.Shot3D.release_point). We still report a best-effort number,
+    referenced to the FLOOR (planted ground line), so it's at least internally
+    consistent shot-to-shot."""
     ppf = body_ppf or rim_ppf
+    ground_y = _ground_line(poses, span)
+    fp = poses.get(rel_f)
+    rh = None
+    if ppf and fp and ground_y is not None:
+        bc = ball_track.get(rel_f)
+        ball_y = bc.cy if bc is not None else (
+            fp.pt(keys["wrist"])[1] if _vis_ok(fp, [keys["wrist"]]) else None)
+        rh = release_height_ft(ball_y, ground_y, ppf)
+    metrics.append(FormMetric(
+        "release_height_ft", None if rh is None else round(rh, 2),
+        "low" if rh is not None else "na",
+        "above the floor; release point is off the body's depth plane on an "
+        "oblique camera (reads low) -- 2-cam 3D gives the true value"))
+
     if body_ppf:
         note, conf = "body-scaled from your height", "medium"
     else:
         note, conf = "rim-scaled; shooter off the rim's depth plane", "low"
-    fp = poses.get(rel_f)
-    rh = None
-    if ppf and fp and _vis_ok(fp, [keys["ankle"]]):
-        bc = ball_track.get(rel_f)
-        ball_y = bc.cy if bc is not None else (
-            fp.pt(keys["wrist"])[1] if _vis_ok(fp, [keys["wrist"]]) else None)
-        rh = release_height_ft(ball_y, fp.pt(keys["ankle"])[1], ppf)
-    metrics.append(FormMetric("release_height_ft",
-                              None if rh is None else round(rh, 2),
-                              conf if rh is not None else "na", note))
-
     jh = _jump_height(poses, span, ppf)
     metrics.append(FormMetric("jump_height_ft",
                               None if jh is None else round(jh, 2),
