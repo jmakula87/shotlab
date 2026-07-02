@@ -33,6 +33,26 @@ def ball_colors(crop) -> tuple[float, float]:
     return float((red > 0).sum()) / n, float((blue > 0).sum()) / n
 
 
+def orange_fraction(crop, sat_min: int = 90) -> float:
+    """Fraction of a crop that is saturated basketball-orange (the 2026-07
+    ball measures hue ~9, sat ~135 on this footage). Single-color QA is weaker
+    than the old red-AND-blue rule, so the caller uses a higher threshold --
+    the padded label box is ~30% ball by area when the label is right."""
+    if crop.size == 0:
+        return 0.0
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    orange = cv2.inRange(hsv, (3, sat_min, 60), (24, 255, 255))
+    return float((orange > 0).sum()) / (crop.shape[0] * crop.shape[1])
+
+
+def crop_ok(crop, ball: str, red=0.05, blue=0.03, orange=0.18) -> bool:
+    """Does this crop actually contain the ball we're training for?"""
+    if ball == "redblue":
+        rf, bf = ball_colors(crop)
+        return rf >= red and bf >= blue
+    return orange_fraction(crop) >= orange
+
+
 def box_from_label(line, w, h):
     cls, cx, cy, bw, bh = (float(v) for v in line.split())
     x0 = int((cx - bw / 2) * w); x1 = int((cx + bw / 2) * w)
@@ -43,8 +63,10 @@ def box_from_label(line, w, h):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="dataset_ball")
+    ap.add_argument("--ball", choices=("redblue", "orange"), default="orange")
     ap.add_argument("--red", type=float, default=0.05)
     ap.add_argument("--blue", type=float, default=0.03)
+    ap.add_argument("--orange", type=float, default=0.18)
     args = ap.parse_args(argv)
 
     kept_crops, removed = [], 0
@@ -64,8 +86,8 @@ def main(argv=None):
                 if line:
                     x0, y0, x1, y1 = box_from_label(line, w, h)
                     crop = img[y0:y1, x0:x1]
-                    rf, bf = ball_colors(crop)
-                    ok = rf >= args.red and bf >= args.blue
+                    ok = crop_ok(crop, args.ball, args.red, args.blue,
+                                 args.orange)
                     if ok and len(kept_crops) < 48 and crop.size:
                         kept_crops.append(cv2.resize(crop, (96, 96)))
             if ok:

@@ -31,7 +31,7 @@ from shotlab.phase1_ball.detect import MotionBallDetector
 from shotlab.phase1_ball.pipeline import run_phase1
 from shotlab.court import auto_calibrate, filter_shots_by_rim
 from shotlab.video_io import iter_frames
-from tools.clean_dataset import ball_colors   # red/blue label QA filter
+from tools.clean_dataset import crop_ok   # label QA filter (ball-color aware)
 
 
 def _yolo_line(cx, cy, r, w, h, pad=1.6, cls=0):
@@ -41,7 +41,7 @@ def _yolo_line(cx, cy, r, w, h, pad=1.6, cls=0):
             f"{min(bw, w) / w:.6f} {min(bh, h) / h:.6f}")
 
 
-def process(clip, calib, out_dir, split, stride, contact):
+def process(clip, calib, out_dir, split, stride, contact, ball="orange"):
     base = os.path.splitext(os.path.basename(clip))[0]
     res = run_phase1(clip, detector=MotionBallDetector())
     shots, _ = filter_shots_by_rim(res.shots, calib)
@@ -66,10 +66,9 @@ def process(clip, calib, out_dir, split, stride, contact):
             continue
         h, w = frame.shape[:2]
         x, y, r = want[idx]
-        # label QA: keep only boxes that actually contain the red/blue ball
+        # label QA: keep only boxes that actually contain OUR ball
         crop = frame[max(0, int(y-r)):int(y+r), max(0, int(x-r)):int(x+r)]
-        rf, bf = ball_colors(crop)
-        if rf < 0.05 or bf < 0.03:
+        if not crop_ok(crop, ball):
             continue
         stem = f"{base}_{idx:06d}"
         cv2.imwrite(os.path.join(img_dir, stem + ".jpg"), frame,
@@ -92,6 +91,7 @@ def main(argv=None):
                     help="filename substring of the clip to hold out for val")
     ap.add_argument("--stride", type=int, default=2,
                     help="keep every Nth in-shot frame (reduce near-duplicates)")
+    ap.add_argument("--ball", choices=("redblue", "orange"), default="orange")
     ap.add_argument("--out", default="dataset_ball")
     args = ap.parse_args(argv)
 
@@ -109,7 +109,8 @@ def main(argv=None):
             print(f"  {os.path.basename(c)}: no rim, skipped")
             continue
         split = "val" if (args.val_clip and args.val_clip in os.path.basename(c)) else "train"
-        n = process(c, calib, args.out, split, args.stride, contact)
+        n = process(c, calib, args.out, split, args.stride, contact,
+                    ball=args.ball)
         total[split] += n
         print(f"  {os.path.basename(c)} -> {split}: {n} labeled frames")
 
