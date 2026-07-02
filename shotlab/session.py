@@ -97,11 +97,12 @@ def _cache_path(video_path: str) -> str:
 # Bump when the record-building LOGIC changes in a way the schema/params don't
 # capture (e.g. a metric formula). The ShotRecord field set is folded in
 # automatically, so adding/removing a record field invalidates caches on its own.
-_CACHE_VERSION = 6    # v6: jump physics gate (>4 ft = tracking failure -> None)
+_CACHE_VERSION = 7    # v7: shooter-height body-scaled release/jump heights
 
 
 def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
-                      with_pose, with_spin, handedness, with_audio=False) -> str:
+                      with_pose, with_spin, handedness, with_audio=False,
+                      shooter_height_ft=None) -> str:
     """A signature for a clip's cached records. Any change to the record schema
     OR the detection/pose params invalidates the cache, so a re-run after a code
     change recomputes instead of silently returning stale, old-schema rows."""
@@ -109,12 +110,14 @@ def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
     schema = ",".join(f.name for f in _dc_fields(ShotRecord))
     raw = "|".join(str(x) for x in [
         _CACHE_VERSION, schema, detector_name, _weights_id(weights),
-        imgsz, stride, max_frames, with_pose, with_spin, handedness, with_audio])
+        imgsz, stride, max_frames, with_pose, with_spin, handedness, with_audio,
+        shooter_height_ft])
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
 
 def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
-                        do_spin, with_pose, handedness, audio=None) -> list[ShotRecord]:
+                        do_spin, with_pose, handedness, audio=None,
+                        shooter_height_ft=None) -> list[ShotRecord]:
     """Build ShotRecords for a set of shots (pose + spin + make + zone). Shared by
     the whole-clip pass and each window of the long-clip chunker; frame indices in
     `shots`/`track` are absolute, so the timestamps come out right either way."""
@@ -127,7 +130,7 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
         from .phase2_pose.pipeline import run_phase2
         p2 = run_phase2(video_path, shots, track, handedness=handedness,
                         camera_angle="side_on", rim_xy=(calib.rim_x, calib.rim_y),
-                        px_per_foot=ppf_rim)
+                        px_per_foot=ppf_rim, shooter_height_ft=shooter_height_ft)
         forms = {fm.shot: fm for fm in p2.forms}
 
     records = []
@@ -208,7 +211,7 @@ def _chunk_cache_path(video_path: str, start: int) -> str:
 
 def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
                      stride, chunk_frames, do_spin, with_pose, handedness,
-                     use_cache, sig, audio=None):
+                     use_cache, sig, audio=None, shooter_height_ft=None):
     """Process a long clip in absolute frame WINDOWS so each window fits the
     background-job time cap and is cached on its own -- a kill resumes at the next
     window instead of re-detecting from frame 0.
@@ -242,7 +245,8 @@ def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
             recs = _records_from_shots(shots, track, video_path, calib, info,
                                        clip_start, do_spin=do_spin,
                                        with_pose=with_pose, handedness=handedness,
-                                       audio=audio)
+                                       audio=audio,
+                                       shooter_height_ft=shooter_height_ft)
             os.makedirs(os.path.dirname(ccache), exist_ok=True)
             with open(ccache, "w", encoding="utf-8") as f:
                 json.dump({"sig": sig,
@@ -268,7 +272,8 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
                  detector_name="motion", weights=None, imgsz=768, stride=1,
                  max_frames=None, chunk_frames=None, with_pose=False,
                  with_spin="auto", handedness="right",
-                 use_cache=True, with_audio=False) -> list[ShotRecord]:
+                 use_cache=True, with_audio=False,
+                 shooter_height_ft=None) -> list[ShotRecord]:
     """Detect rim-anchored shots in one clip and return ShotRecords.
 
     If calib is None the rim is auto-detected for THIS clip (the tripod may move
@@ -281,7 +286,8 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
     sig = _record_cache_sig(detector_name=detector_name, weights=weights,
                             imgsz=imgsz, stride=stride, max_frames=max_frames,
                             with_pose=with_pose, with_spin=with_spin,
-                            handedness=handedness, with_audio=with_audio)
+                            handedness=handedness, with_audio=with_audio,
+                            shooter_height_ft=shooter_height_ft)
     if use_cache and os.path.exists(cache):
         try:
             with open(cache, encoding="utf-8") as f:
@@ -331,7 +337,8 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
             video_path, calib, info, clip_start,
             weights=weights or "yolo11n.pt", imgsz=imgsz, stride=stride,
             chunk_frames=int(chunk_frames), do_spin=do_spin, with_pose=with_pose,
-            handedness=handedness, use_cache=use_cache, sig=sig, audio=audio)
+            handedness=handedness, use_cache=use_cache, sig=sig, audio=audio,
+            shooter_height_ft=shooter_height_ft)
         os.makedirs(os.path.dirname(cache), exist_ok=True)
         with open(cache, "w", encoding="utf-8") as f:
             json.dump({"sig": sig, "records": [r.row() for r in records]}, f, indent=2)
@@ -352,7 +359,7 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
     records = _records_from_shots(shots, track, video_path, calib, info,
                                   clip_start, do_spin=do_spin,
                                   with_pose=with_pose, handedness=handedness,
-                                  audio=audio)
+                                  audio=audio, shooter_height_ft=shooter_height_ft)
 
     os.makedirs(os.path.dirname(cache), exist_ok=True)
     with open(cache, "w", encoding="utf-8") as f:

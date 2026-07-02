@@ -172,6 +172,44 @@ def test_jump_height_ignores_single_foot_step():
     assert abs(jh) < 0.05, jh
 
 
+def test_shooter_height_gives_body_scaled_heights():
+    """With a known shooter height, release/jump heights use the body ruler
+    (MEDIUM conf, 'body-scaled' note) instead of the rim ruler (LOW)."""
+    poses, ball, rel = build_shot_sequence()
+    shot = FakeShot(list(range(14, 30)))
+    # add a visible nose so the body ruler can measure nose->ankle
+    for f, fp in poses.items():
+        fp.xy[L["nose"]] = [212, fp.pt("r_shoulder")[1] - 20]  # above shoulders
+        fp.vis[L["nose"]] = 1.0
+    rim_ppf = 20.0
+    sf_rim = compute_form(shot, ball, poses, fps=60, camera_angle="side_on",
+                          px_per_foot=rim_ppf)
+    sf_body = compute_form(shot, ball, poses, fps=60, camera_angle="side_on",
+                           px_per_foot=rim_ppf, shooter_height_ft=70 / 12.0)
+    rim_rh = next(m for m in sf_rim.metrics if m.name == "release_height_ft")
+    body_rh = next(m for m in sf_body.metrics if m.name == "release_height_ft")
+    assert rim_rh.confidence == "low"
+    assert body_rh.confidence == "medium"
+    assert "body-scaled" in body_rh.note
+    # both non-null and DIFFERENT (the body ruler rescales the same pixels)
+    assert rim_rh.value is not None and body_rh.value is not None
+    assert abs(body_rh.value - rim_rh.value) > 0.1
+
+
+def test_no_nose_falls_back_to_rim_scale():
+    """No visible nose -> body ruler can't measure -> rim-scaled (LOW), so a
+    height flag never silently produces a garbage body scale."""
+    poses, ball, rel = build_shot_sequence()
+    for fp in poses.values():                     # nose not detected
+        fp.vis[L["nose"]] = 0.0
+    shot = FakeShot(list(range(14, 30)))
+    sf = compute_form(shot, ball, poses, fps=60, camera_angle="side_on",
+                      px_per_foot=20.0, shooter_height_ft=70 / 12.0)
+    rh = next(m for m in sf.metrics if m.name == "release_height_ft")
+    assert rh.confidence in ("low", "na")
+    assert "rim-scaled" in rh.note
+
+
 def test_jump_height_physics_gate():
     """An impossible jump (ankles rise 8 ft worth of px) is a tracking failure
     and must come back None, not a number."""

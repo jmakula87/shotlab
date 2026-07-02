@@ -16,7 +16,7 @@ from dataclasses import dataclass, asdict, field
 import numpy as np
 
 from .pose import FramePose, joint_angle, side_keys, L
-from ..scale import release_height_ft, jump_height_ft
+from ..scale import release_height_ft, jump_height_ft, px_per_foot_from_body
 
 
 @dataclass
@@ -268,6 +268,32 @@ def _body_height_px(fp: FramePose, keys) -> float:
     return h if h > 1 else float("nan")
 
 
+def _shooter_ppf(poses, span, shooter_height_ft):
+    """Pixels-per-foot at the SHOOTER's depth from their known height.
+
+    Measures the nose->(lower ankle) pixel span across the shot window and takes
+    the 90th percentile -- the most-upright/extended frames (release, follow),
+    not the crouched load -- so it reflects the true standing body length. Needs
+    nose + at least one ankle visible on >=3 frames. Returns None otherwise (the
+    caller falls back to the rim ruler)."""
+    if not shooter_height_ft:
+        return None
+    spans = []
+    for f in span:
+        fp = poses.get(f)
+        if fp is None or fp.v("nose") < 0.5:
+            continue
+        anks = [float(fp.pt(n)[1]) for n in ("l_ankle", "r_ankle") if fp.v(n) >= 0.5]
+        if not anks:
+            continue
+        d = max(anks) - float(fp.pt("nose")[1])       # lower ankle below the nose
+        if d > 1:
+            spans.append(d)
+    if len(spans) < 3:
+        return None
+    return px_per_foot_from_body(float(np.percentile(spans, 90)), shooter_height_ft)
+
+
 def _apex_frame(poses, frames) -> int | None:
     """Frame of highest body position (hip midpoint y minimal)."""
     best_f, best_y = None, float("inf")
@@ -326,7 +352,8 @@ def _elbow_angle_at_t(poses, t, keys) -> float | None:
 
 
 def compute_form(shot, ball_track, poses, fps, *, handedness="right",
-                 camera_angle="side_on", rim_xy=None, px_per_foot=None) -> ShotForm:
+                 camera_angle="side_on", rim_xy=None, px_per_foot=None,
+                 shooter_height_ft=None) -> ShotForm:
     if handedness == "auto":
         handedness = detect_handedness(poses, shot.frames)
     keys = side_keys(handedness)
@@ -337,6 +364,8 @@ def compute_form(shot, ball_track, poses, fps, *, handedness="right",
     frames = [int(f) for f in shot.frames]
     span = range(max(min(poses) if poses else frames[0], frames[0] - 20),
                  frames[-1] + 1)
+    # depth-correct ruler from the shooter's known height (falls back to rim)
+    body_ppf = _shooter_ppf(poses, span, shooter_height_ft)
 
     metrics: list[FormMetric] = []
 
@@ -448,17 +477,27 @@ def compute_form(shot, ball_track, poses, fps, *, handedness="right",
 
     # ---- 7. real-feet heights (rim-scaled; shooter is off the rim's depth
     #         plane, so these are LOW confidence) -----------------------------
-    _height_metrics(metrics, poses, ball_track, keys, span, rel_f, px_per_foot)
+    _height_metrics(metrics, poses, ball_track, keys, span, rel_f, px_per_foot,
+                    body_ppf=body_ppf)
 
     return ShotForm(shot=shot.index, release_frame=rel_f, movement_dir=move,
                     release_t=rel_t, release_conf=rel.confidence, metrics=metrics)
 
 
-def _height_metrics(metrics, poses, ball_track, keys, span, rel_f, ppf):
+def _height_metrics(metrics, poses, ball_track, keys, span, rel_f, rim_ppf,
+                    body_ppf=None):
     """Release height (ball above the ankle line) + jump height (body's vertical
-    travel), both in feet via the rim scale. Appended as LOW-confidence metrics
-    because the shooter sits at a different depth than the rim ruler."""
-    note = "rim-scaled; shooter off the rim's depth plane"
+    travel), both in feet.
+
+    Prefers the SHOOTER-height ruler (`body_ppf`) when available: it's measured
+    at the shooter's own depth, so these vertical distances come out honest
+    (MEDIUM confidence). Without it, falls back to the rim ruler -- exact only
+    at the rim's depth, so ~2.5x too large for the nearer shooter (LOW)."""
+    ppf = body_ppf or rim_ppf
+    if body_ppf:
+        note, conf = "body-scaled from your height", "medium"
+    else:
+        note, conf = "rim-scaled; shooter off the rim's depth plane", "low"
     fp = poses.get(rel_f)
     rh = None
     if ppf and fp and _vis_ok(fp, [keys["ankle"]]):
@@ -468,12 +507,12 @@ def _height_metrics(metrics, poses, ball_track, keys, span, rel_f, ppf):
         rh = release_height_ft(ball_y, fp.pt(keys["ankle"])[1], ppf)
     metrics.append(FormMetric("release_height_ft",
                               None if rh is None else round(rh, 2),
-                              "low" if rh is not None else "na", note))
+                              conf if rh is not None else "na", note))
 
     jh = _jump_height(poses, span, ppf)
     metrics.append(FormMetric("jump_height_ft",
                               None if jh is None else round(jh, 2),
-                              "low" if jh is not None else "na",
+                              conf if jh is not None else "na",
                               note + "; ankle-based (squat excluded)"))
 
 

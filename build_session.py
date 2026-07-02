@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from shotlab.court import Calibration
+from shotlab.scale import parse_height
 from shotlab.session import (process_clip, build_session, fatigue_trends,
                              consistency_stats)
 
@@ -88,7 +89,13 @@ def main(argv=None):
     ap.add_argument("--handedness", default="right")
     ap.add_argument("--out", default="data/out/session")
     ap.add_argument("--no-cache", action="store_true")
+    ap.add_argument("--shooter-height", default=None,
+                    help="your height (e.g. 5'10\" or 5.83) -> body-scaled, "
+                         "honest release/jump heights instead of ~2.5x-hot "
+                         "rim-scaled ones")
     args = ap.parse_args(argv)
+
+    shooter_ft = parse_height(args.shooter_height)
 
     fixed_calib = Calibration.load(args.calib) if args.calib else None
 
@@ -126,7 +133,8 @@ def main(argv=None):
                             with_pose=args.pose,
                             with_spin=(False if args.no_spin else "auto"),
                             handedness=args.handedness,
-                            use_cache=not args.no_cache, with_audio=args.audio)
+                            use_cache=not args.no_cache, with_audio=args.audio,
+                            shooter_height_ft=shooter_ft)
         print(f"  {os.path.basename(c)}: {len(recs)} shots")
         all_records.extend(recs)
 

@@ -57,15 +57,19 @@ pipeline; app profile re-exported (elbow ideal now 118.9°); SW cache v4.
    arc 1.14 ft HIGHER (p=0.045). `--audio` is now DEFAULT-ON in build_session
    (`--no-audio` to disable). Caveat: audio agreeing with visual isn't ground
    truth — a session where the user calls out makes would truly validate it.
-5. **Shooter-height ruler (user is 5'10" in shoes) — promote into the pipeline.**
-   Diagnosed 2026-07-02: nose-to-ankle px per shot = a depth-plane ruler at the
-   SHOOTER's depth (median 51 px/ft vs the rim plane's 20 — shooter ~2.5× closer
-   to camera). Measured his court with it: camera ~33-42 ft from hoop, shots
-   median ~13-15 ft / max ~26-32 ft from rim, ~26 ft of width used. Build a
-   `--shooter-height` flag: use body-scaled px/ft for release_height_ft /
-   jump_height_ft (upgrades them from rim-scaled LOW conf ~2.5× hot to honest),
-   and real-feet shot distances for zones. Script: scratchpad court_from_height
-   (rewrite properly into shotlab/scale.py + a tools/ diag).
+5. **Shooter-height ruler ✅ BUILT (2026-07-02, user is 5'10").** `--shooter-height`
+   flag (build_session), accepts 5'10" / 5.83 / 70in (`scale.parse_height`). When
+   set, release_height_ft + jump_height_ft use a BODY ruler measured per-shot from
+   the pose (nose→ankle p90 over the shot window = most-upright stance;
+   `scale.px_per_foot_from_body`, NOSE_TO_ANKLE_FRAC 0.875), upgraded to MEDIUM
+   conf "body-scaled from your height". Falls back to rim-scale (LOW) when the
+   nose isn't visible — never a silent garbage scale. Cache v7 + shooter_height in
+   the record sig. tests: scale 7/7 (incl parse + body-not-rim-hot), form 17/17.
+   **⚠️ NOT-DONE part:** real-feet SHOT DISTANCE for zones is genuinely ambiguous
+   with one camera (release point is at the shooter's depth, rim at its own — the
+   depth component needs the pinhole model). Deferred to the calibrated-focal path
+   (film the checkerboard → mono intrinsics → true positions). Heights are clean
+   because they're vertical distances at the shooter's own plane.
 6. **ORANGE-BALL RETRAIN ✅ DONE + PROMOTED (2026-07-02).** Diagnosis: hit rate
    dropped 35%→20% on 0701 because the old fine-tune only knew the old red/blue
    ball. Retrained yolo11n on 0701 orange-ball frames (old 982 frames + 0629
