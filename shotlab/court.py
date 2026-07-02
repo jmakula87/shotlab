@@ -291,4 +291,5 @@ def zone_for_release(release_xy, calib: Calibration) -> dict:
     else:
         depth = "far"
     return {"side": side, "depth": depth, "zone": f"{depth}-{side}",
-            "rim_dx_px": round(dx, 1), "rim_dist_px": round(dist, 1)}
+            "rim_dx_px": round(dx, 1), "rim_dy_px": round(float(ry - calib.rim_y), 1),
+            "rim_dist_px": round(dist, 1)}

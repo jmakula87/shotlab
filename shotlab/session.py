@@ -65,6 +65,8 @@ class ShotRecord:
     jump_height_ft: float | None = None      # vertical body travel (load->peak)
     n_points: int = 0
     rim_dist_px: float | None = None
+    rim_dx_px: float | None = None    # release point vs rim, image px (sign = camera-dependent)
+    rim_dy_px: float | None = None    # release point below rim = positive (image y)
     zone: str = ""
     side: str = ""
     depth: str = ""
@@ -147,6 +149,7 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
             apex_height_ft=mm.apex_height_ft,
             n_points=mm.n_points,
             rim_dist_px=s.meta.get("rim_dist_px"),
+            rim_dx_px=z.get("rim_dx_px"), rim_dy_px=z.get("rim_dy_px"),
             zone=z["zone"], side=z["side"], depth=z["depth"],
         )
         # ball arc peak above the rim, in feet (rim-scaled; ball is ~at rim depth
