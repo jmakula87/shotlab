@@ -70,6 +70,20 @@ pipeline; app profile re-exported (elbow ideal now 118.9°); SW cache v4.
    depth component needs the pinhole model). Deferred to the calibrated-focal path
    (film the checkerboard → mono intrinsics → true positions). Heights are clean
    because they're vertical distances at the shooter's own plane.
+   **VERIFIED ON REAL DATA (2026-07-02):** the per-shot body/rim correction varies
+   0.74×–4.5× BY GEOMETRY and that's correct, not noise — on a wide clip the
+   shooter stands ~4× closer to the camera than the far rim (rim_radius 15px →
+   rim_ppf 20 vs body_ppf ~88), so rim-scaled heights are ~4× hot there; on the
+   moved-in clip (rim_radius 47) rim & shooter sit at similar depths so the rulers
+   agree (~1×). Aggregate median correction 1.22×; the real win is the DISTRIBUTION
+   tightening — release-height p90 10.7→4.6 ft, max 19→10; jump p90 1.9→1.2, max
+   4.0→2.4 (the absurd wrong-depth outliers are gone). Ruler measured over the
+   planted gather→release window (cache v8) so a long flight's rebound-drift
+   doesn't inflate it. **SEPARATE PRE-EXISTING FOLLOW-UP:** absolute release_height
+   reads low (~3.2 ft median above the ankle vs an expected ~6-7 ft for an
+   overhead release) under BOTH rulers — a release_height MEASUREMENT issue (which
+   frame / ball-vs-wrist / raised-ankle at a jump), independent of the scaling.
+   Recommended usage: always pass `--shooter-height 5'10"` on his builds.
 6. **ORANGE-BALL RETRAIN ✅ DONE + PROMOTED (2026-07-02).** Diagnosis: hit rate
    dropped 35%→20% on 0701 because the old fine-tune only knew the old red/blue
    ball. Retrained yolo11n on 0701 orange-ball frames (old 982 frames + 0629

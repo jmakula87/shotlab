@@ -268,18 +268,30 @@ def _body_height_px(fp: FramePose, keys) -> float:
     return h if h > 1 else float("nan")
 
 
-def _shooter_ppf(poses, span, shooter_height_ft):
+def _shooter_ppf(poses, frames, rel_f, shooter_height_ft):
     """Pixels-per-foot at the SHOOTER's depth from their known height.
 
-    Measures the nose->(lower ankle) pixel span across the shot window and takes
-    the 90th percentile -- the most-upright/extended frames (release, follow),
-    not the crouched load -- so it reflects the true standing body length. Needs
-    nose + at least one ankle visible on >=3 frames. Returns None otherwise (the
-    caller falls back to the rim ruler)."""
+    Measured over the GATHER-through-release window only ([load .. just after
+    release]), which is depth-stable -- the shooter is planted at their spot.
+    Restricting to this window keeps the ruler honest if the ball flight is long
+    and the shooter starts drifting in to rebound while the ball is still up
+    (later frames would be at a different, nearer depth). Within the window, p90
+    of the nose->(lower ankle) span picks the most-extended frame (release/rise,
+    not the crouched load) = the true body length. Needs nose + an ankle visible
+    on >=3 frames, else None (rim fallback).
+
+    NB: the per-shot correction vs the rim ruler is genuinely large and variable
+    (measured 0.7x-4.5x on real footage) -- on a wide clip the shooter stands
+    several times closer to the camera than the far rim, so rim-scaled heights
+    are that many times too big; on a moved-in camera where rim and shooter sit
+    at similar depths the two rulers roughly agree. That spread is correct, not
+    noise."""
     if not shooter_height_ft:
         return None
+    lo = min(frames[0] - 20, rel_f - 20)
+    hi = rel_f + 8                                    # through release, before rebound
     spans = []
-    for f in span:
+    for f in range(int(lo), int(hi) + 1):
         fp = poses.get(f)
         if fp is None or fp.v("nose") < 0.5:
             continue
@@ -364,8 +376,10 @@ def compute_form(shot, ball_track, poses, fps, *, handedness="right",
     frames = [int(f) for f in shot.frames]
     span = range(max(min(poses) if poses else frames[0], frames[0] - 20),
                  frames[-1] + 1)
-    # depth-correct ruler from the shooter's known height (falls back to rim)
-    body_ppf = _shooter_ppf(poses, span, shooter_height_ft)
+    # depth-correct ruler from the shooter's known height (falls back to rim).
+    # Measured over the planted gather->release window, NOT the full flight
+    # (the shooter drifts toward the camera to rebound during flight).
+    body_ppf = _shooter_ppf(poses, frames, rel_f, shooter_height_ft)
 
     metrics: list[FormMetric] = []
 
