@@ -172,6 +172,18 @@ def test_jump_height_ignores_single_foot_step():
     assert abs(jh) < 0.05, jh
 
 
+def test_jump_height_ignores_single_frame_glitch():
+    """One bad pose frame (both ankles jump 60px for a single frame) must not
+    read as flight -- the median-3 smoothing kills it."""
+    from shotlab.phase2_pose.form import _jump_height
+    poses = {}
+    for f in range(0, 30):
+        y = 410.0 if f == 12 else 470.0                      # 1-frame glitch
+        poses[f] = make_pose(f, {"l_ankle": (190, y), "r_ankle": (200, y)})
+    jh = _jump_height(poses, range(0, 30), ppf=40.0)
+    assert abs(jh) < 0.05, jh
+
+
 def test_release_subframe_no_divergence_is_low_conf():
     """A ball that never leaves the hand (no shot) -> low-confidence fallback."""
     from shotlab.phase2_pose.form import find_release

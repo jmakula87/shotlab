@@ -478,14 +478,15 @@ def _height_metrics(metrics, poses, ball_track, keys, span, rel_f, ppf):
 
 
 def _lower_ankle_y(poses, f) -> float | None:
-    """Per-frame image-y of the LOWER (larger-y) visible ankle. This only rises
-    when BOTH feet are airborne: a step lifts one foot, a squat lifts neither,
-    so the series isolates true flight."""
+    """Per-frame image-y of the LOWER (larger-y) ankle. This only rises when
+    BOTH feet are airborne: a step lifts one foot, a squat lifts neither, so the
+    series isolates true flight. Needs BOTH ankles visible -- with one occluded
+    the lower-of-two logic degenerates to whichever leg the model kept, which on
+    far/small footage is exactly the unreliable one."""
     fp = poses.get(f)
-    if fp is None:
+    if fp is None or fp.v("l_ankle") < 0.4 or fp.v("r_ankle") < 0.4:
         return None
-    ys = [float(fp.pt(n)[1]) for n in ("l_ankle", "r_ankle") if fp.v(n) >= 0.4]
-    return max(ys) if ys else None
+    return max(float(fp.pt("l_ankle")[1]), float(fp.pt("r_ankle")[1]))
 
 
 def _jump_height(poses, span, ppf):
@@ -493,10 +494,13 @@ def _jump_height(poses, span, ppf):
     max-minus-min counted the load SQUAT as jump (hips drop ~a foot in the
     load); ankles sit on the ground line through the squat and rise by exactly
     the jump, so: ground = high percentile of the lower-ankle series (grounded
-    frames dominate the span), peak = its minimum during flight."""
+    frames dominate the span), peak = its minimum during flight. The peak is
+    taken on a median-3 smoothed series so a single-frame pose glitch can't
+    fake a flight."""
     ys = [y for y in (_lower_ankle_y(poses, f) for f in span) if y is not None]
-    if not ppf or len(ys) < 5:
+    if not ppf or len(ys) < 7:
         return None
-    ground = float(np.percentile(ys, 80))     # grounded ground-line, squat-proof
-    peak = float(min(ys))
+    sm = [float(np.median(ys[max(0, i - 1):i + 2])) for i in range(len(ys))]
+    ground = float(np.percentile(sm, 80))     # grounded ground-line, squat-proof
+    peak = float(min(sm))
     return jump_height_ft(ground, peak, ppf)
