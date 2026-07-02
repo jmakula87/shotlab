@@ -38,8 +38,14 @@ consistency FIRST**. Cam-1 stays wide (arc/rim/makes), Cam-2 = body-cam.
    so the rendered clips of "ideal going left" are one click; (c) same split in
    the app profile eventually (profile.json per-context ideals). The "By
    movement" dashboard panel is the seed; this is the full version.
-4. **Audio make/miss A/B on real footage** — running 2026-07-02 into
-   `data/out/session_0701_audio`; compare classifiable% + make% vs visual-only.
+4. **Audio make/miss PROMOTED to default (A/B 2026-07-02).** On session 0701:
+   ZERO contradictions with confident visual calls (16 makes/43 misses all
+   agree), resolved 9/12 visual-unknowns (all → miss, consistent with a 27%
+   session), classifiable 83%→96%, 37 shots low→medium conf. Corrected make%
+   23.5%. Sharpened the drivers: knee bend p=0.0115; NEW second driver — makes
+   arc 1.14 ft HIGHER (p=0.045). `--audio` is now DEFAULT-ON in build_session
+   (`--no-audio` to disable). Caveat: audio agreeing with visual isn't ground
+   truth — a session where the user calls out makes would truly validate it.
 5. **Shooter-height ruler (user is 5'10" in shoes) — promote into the pipeline.**
    Diagnosed 2026-07-02: nose-to-ankle px per shot = a depth-plane ruler at the
    SHOOTER's depth (median 51 px/ft vs the rim plane's 20 — shooter ~2.5× closer

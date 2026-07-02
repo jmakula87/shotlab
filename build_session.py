@@ -79,8 +79,11 @@ def main(argv=None):
                     help="auto-chunk: process clips longer than this in frame windows "
                          "(yolo only) so long exercise clips finish + resume within the job cap")
     ap.add_argument("--pose", action="store_true")
-    ap.add_argument("--audio", action="store_true",
-                    help="fuse rim/backboard SOUND with the visual make/miss call")
+    # default ON since the 2026-07-02 A/B: zero contradictions with the visual
+    # call, resolved 9/12 unknowns, classifiable 83%->96% on session 0701
+    ap.add_argument("--audio", action=argparse.BooleanOptionalAction, default=True,
+                    help="fuse rim/backboard SOUND with the visual make/miss call "
+                         "(--no-audio to disable)")
     ap.add_argument("--no-spin", action="store_true")
     ap.add_argument("--handedness", default="right")
     ap.add_argument("--out", default="data/out/session")
