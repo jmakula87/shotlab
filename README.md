@@ -1,137 +1,127 @@
 # 🏀 ShotLab — basketball shot-analysis tool
 
-Upload phone videos of your shooting workouts → get per-shot arc metrics, form
-feedback, and a local dashboard with a tracked-overlay video next to the stats.
+Film your shooting workouts → get per-shot arc + form metrics, make/miss, a
+local dashboard, and (on the phone) **spoken coaching after every shot**.
+Personal-use tool, hard-tuned to one court / phone / orange ball. Honest about
+what a single camera can and can't measure.
 
-Built in phases:
+There are two front doors:
 
-| Phase | What | Status |
-|---|---|---|
-| **1** | Ball tracking + arc (release angle, apex, entry angle) + overlay | ✅ working |
-| **2** | Form analysis via pose (elbow, knee, release-vs-apex, follow-through, balance) | ✅ working* |
-| **3** | Spin rate (slow-mo only) | ✅ working* |
+- **📱 Phone app** (live, on-device): point the camera at yourself, shoot, and
+  *hear* what to fix — no upload, no rim needed. → [`app/README.md`](app/README.md)
+- **💻 Desktop pipeline**: full arc + form + session analytics from recorded
+  clips, a Streamlit dashboard, and shareable HTML/PDF reports.
 
-\* Phases 2 & 3 are validated on synthetic data + unit tests; final accuracy
-needs a real clip (Phase 2: any clip with a person; Phase 3: a ≥120fps slow-mo
-clip with a marked ball). Drop a clip in `data/raw/` to validate on your footage.
+---
 
-## Filming assumptions
-Stationary tripod, consistent angle, decent light, one angle per session:
-**side-on** for arc + knee/release, **front-on** for elbow alignment.
-Shoot **1080p at 120–240 fps** with a fast shutter if you can — it materially
-tightens apex/entry-angle estimates and is *required* for Phase 3 spin.
+## Phone app (live form feedback)
+
+**https://jmakula87.github.io/shotlab/** — open in Chrome on the phone, **Add to
+Home Screen** to install. Set the camera **close, side-on, no rim needed**, tap
+**🔴 Live**, and shoot. After each shot it speaks a short cue ("bend your knees a
+bit more", "hold your follow-through"). Everything runs on-device.
+
+It compares each shot to **your own profile** (see below), plus a small set of
+**universal targets** (`shotlab/textbook.py`) kept separate from it. Pose-only
+today (elbow bend, knee, tempo, follow-through, balance); elbow flare needs the
+2-camera rig.
+
+## Desktop pipeline (recorded clips)
+
+```bash
+pip install -r requirements.txt
+
+# one clip, quick look
+python analyze.py data/raw/clip.mp4 --detector yolo \
+    --weights runs/detect/ball_orange/weights/best_openvino_model --imgsz 640 --pose
+
+# a whole session (many clips -> one timeline: fatigue, zones, make%, shot map)
+python build_session.py --clips "data/raw/Hoops/PXL_*.mp4" \
+    --detector yolo --weights runs/detect/ball_orange/weights/best_openvino_model \
+    --imgsz 640 --stride 2 --chunk-frames 7000 --pose \
+    --shooter-height 5'10" --out data/out/session
+
+# dashboard (overlay video + analytics) and a shareable report
+streamlit run dashboard/app.py
+python tools/export_report.py data/out/session      # report.html
+python tools/export_pdf.py    data/out/session      # report.pdf
+```
+
+Key flags: `--shooter-height` gives honest body-scaled jump/release heights;
+`--audio` (default on) fuses rim sound into make/miss; `--chunk-frames` makes
+long clips resumable within a job time cap.
+
+---
+
+## Your shooting profile — what it's built on
+
+`tools/export_profile.py` builds `app/profile.json` from **your own shots**: the
+`ideal` is the mean of your *good* ones (your **felt-good** tags first, then
+best-ranked, then **made** shots), split so arc ideals come from clean-arc shots
+and form ideals from pose-reliable shots. It is NOT textbook/pro form — it's
+"match your own best", which is what a single camera can measure reliably and
+what correlates with your makes.
+
+Separately, a `textbook` block carries the few **universal** ideals that are the
+same for everyone (`shotlab/textbook.py`): ~45° **entry angle** (rim geometry)
+and ~0° **elbow flare** (a tucked elbow stays on line — but flare is
+out-of-plane, so it only comes online with the 2nd camera). Body-form angles
+stay personal on purpose — copying a pro's numbers can hurt a shot that works.
 
 ---
 
 ## Model choices (and why)
 
-You asked me to check current best-in-class rather than default to the familiar.
-I ran a 2026 survey of both problems. Summary:
+- **Ball:** per-frame detection → **RANSAC + degree-2 polyfit** (not a
+  multi-object tracker — those break on a small, fast, blurred ball). Detectors
+  behind one `BaseDetector` interface: `color` (HSV orange, clean footage),
+  `motion` / `motion+color` (cluttered outdoor), and `yolo` (a **yolo11n
+  fine-tuned on this court's orange ball**, exported to OpenVINO for a ~6.6×
+  CPU speedup — the production path). `ultralytics` is AGPL-3.0 (fine for
+  personal use).
+- **Pose:** MediaPipe **BlazePose-33** (Apache-2.0, real-time on CPU), One-Euro
+  smoothed. **Honesty rule:** in-plane angles (knee side-on, release-vs-apex) are
+  high-confidence; depth-dependent ones (elbow flare, squareness, release height)
+  are low-confidence on one camera and labeled so.
+- **Environment:** CPU-only, Python 3.13, ffmpeg. Every choice is the
+  CPU-friendly option.
 
-### Ball detection — fine-tuned detector + RANSAC, **not** a tracker
-- **Key finding:** for a *single* ball, multi-object trackers (ByteTrack/BoT-SORT)
-  actively hurt — their constant-velocity Kalman assumption breaks on a small,
-  fast, blurred ball. The right tool is per-frame detection → **RANSAC + degree-2
-  polynomial fit**. Blur/occlusion become outliers RANSAC discards; brief
-  disappearances are interpolated by the parabola itself. That's exactly how
-  `shotlab/arc.py` works.
-- **Detector:** stock COCO "sports ball" is documented as unreliable (and indeed
-  whiffs on most frames even in our clean test clip). So:
-  - `--detector color` — classical HSV-orange + circularity. Zero ML deps, fast
-    on CPU, excellent on clean/well-lit footage. Good for quick iteration.
-  - `--detector motion` — MOG2 background subtraction. For cluttered OUTDOOR
-    footage where the ball is small/dark against trees+houses; isolates the fast
-    ball from the static scene. (Residual movers = wind-swayed leaves.)
-  - `--detector motion+color` — **recommended for outdoor leafy backgrounds**:
-    requires a blob to be BOTH moving AND orange. Kills swaying-leaf and
-    tan-ground false positives at once. Needs the ball FRONT-LIT (sun behind the
-    camera) so it reads orange, not silhouette.
-  - `--detector yolo` — Ultralytics YOLO (default `yolo11n`, the survey's safe,
-    battle-tested fallback). For real accuracy on messy footage, pass a
-    **fine-tuned basketball model** (e.g. a Roboflow Universe basketball model,
-    ~96% mAP@50) via `--weights basketball.pt --ball-class 0`.
-  - *License:* `ultralytics` is **AGPL-3.0** — fine for personal/local use. If you
-    ever distribute this closed-source, swap to an Apache-2.0 detector (RT-DETR /
-    D-FINE / RF-DETR) behind the same `BaseDetector` interface.
+## The 2-camera unlock (in progress)
 
-### Pose estimation (Phase 2) — MediaPipe default, honest about depth
-- **#1 MediaPipe Pose (BlazePose-33):** Apache-2.0, real-time on CPU (you have no
-  GPU), 33 keypoints covering every joint we need + feet, actively maintained.
-- **Upgrade path:** RTMPose/RTMW (133 kp incl. fingers) via `rtmlib` if you want
-  follow-through finger detail and have a GPU.
-- **Honesty rule baked in:** single-camera video is 2D. In-plane angles on a
-  square camera (knee bend side-on, release-vs-apex) are **high confidence**;
-  anything depth-dependent — **elbow flare, squareness** — is **low confidence**
-  (14–27% perspective error, independent of model). The output labels these.
-
-Hardware detected here: **CPU-only** (no NVIDIA GPU), Python 3.13, ffmpeg present.
-All choices above are the CPU-friendly options for that reason.
+The real form/flare accuracy needs a 2nd camera. The footage-independent 3D
+core is built + synthetic-validated: `shotlab/threed.py` (triangulation,
+elbow flare, release-point spread), `shotlab/sync.py` (audio sync),
+`shotlab/stereo.py` (checkerboard calibration → metric rig),
+`shotlab/twocam.py` (fusion), plus `tools/make_checkerboard.py` and
+`tools/calibrate_rig.py`. Day-one plan lives in `PROJECT_NOTES.md`.
 
 ---
 
-## Install
-```bash
-pip install -r requirements.txt          # core + YOLO
-# the classical color detector needs only the core (no ultralytics)
+## Component map
+
 ```
-
-## Use
-```bash
-# generate a synthetic test clip (no real footage needed)
-python scripts/make_synthetic_clip.py --fps 60 --shots 5
-
-# analyze it (classical detector)
-python analyze.py data/raw/synthetic_side.mp4 --detector color
-
-# add form analysis (Phase 2) and spin (Phase 3)
-python analyze.py data/raw/sideon.mp4 --detector color --pose --spin \
-    --camera-angle side_on --handedness right
-
-# real footage with a fine-tuned basketball model
-python analyze.py data/raw/myworkout.mp4 --detector yolo \
-    --weights basketball.pt --ball-class 0 --imgsz 960 --pose
-
-# dashboard: overlay video (ball + skeleton) next to the stats, live-tunable targets
-streamlit run dashboard/app.py
-```
-
-Outputs land in `data/out/<clip>/`:
-`*_overlay_h264.mp4` (tracked arc), `*_shots.csv`, `*_shots.json`.
-
-## Configurable targets
-Edit `config/targets.yaml` to tune what counts as "clean" — e.g. set
-`arc.entry_angle_deg.target: 45` and its band. Metrics outside their band raise a
-flag in the table. The dashboard also lets you retune entry/release targets live.
-
-## Project layout
-```
-analyze.py                 CLI entry point
-config/targets.yaml        shot targets + deviation bands (yours to tune)
+analyze.py                 single-clip CLI
+build_session.py           multi-clip session -> timeline + analytics
+dashboard/app.py           Streamlit dashboard (per-clip, session, review, progress)
 shotlab/
-  arc.py                   parabola fit + angle geometry (pure math, tested)
-  video_io.py              frame access, fps/slow-mo probe, H.264 transcode
-  config.py  report.py     targets loading, flagging, session table
-  phase1_ball/
-    detect.py              ColorBallDetector
-    detect_yolo.py         YoloBallDetector (production)
-    track.py               gap-aware single-ball association + shot segmentation
-    overlay.py             trajectory/arc/metrics + skeleton overlay renderer
-    pipeline.py            Phase-1 orchestration
-  phase2_pose/
-    pose.py                MediaPipe PoseLandmarker wrapper + One-Euro smoothing
-    form.py                elbow/knee/release-vs-apex/follow-through/balance metrics
-    pipeline.py            Phase-2 orchestration
-  phase3_spin/
-    spin.py                fps-gated backspin via log-polar phase correlation
-    pipeline.py            Phase-3 orchestration
-models/                    auto-downloaded pose .task model
-dashboard/app.py           Streamlit dashboard (Arc/Form/All views)
-scripts/make_synthetic_clip.py
-tests/test_arc.py          geometry unit tests (6)
-tests/test_form.py         form-metric unit tests (5)
+  arc.py                   parabola fit + angle geometry
+  court.py  scale.py       rim detect / zones / shooter-height ruler
+  session.py               per-clip records, caching, session stitch
+  make.py  audio.py        make/miss (visual + rim-sound fusion)
+  correlate.py             what-tracks-with-your-makes engine
+  coach.py  textbook.py    written review + universal ideals
+  viz.py                   shared plots (court + shot map)
+  skeleton.py              ideal per-phase skeletons for the app overlay
+  phase1_ball/             detection (color/motion/yolo) + track + overlay
+  phase2_pose/             pose + form metrics (form.py)
+  phase3_spin/             fps-gated backspin (off by default on this footage)
+  threed/sync/stereo/twocam  the 2-camera 3D core (synthetic-validated)
+app/                       the on-device PWA (pose, analyze, spoken feedback)
+tools/                     dataset build/train, profile export, reports, calibration
 ```
 
 ## Tests
 ```bash
-python tests/test_arc.py        # geometry validated to <1° on clean arcs
+python run_tests.py                 # 16 Python test files
+node tests/test_say.mjs             # (+ analyze / voice / live / feelcsv JS suites)
 ```

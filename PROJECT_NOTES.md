@@ -8,12 +8,17 @@ Last updated: 2026-07-02 · Location: `C:\Users\jmaku\Desktop\ShotLab`
 ---
 
 ## NEXT SESSION PICKUP (2026-07-02)
-State: pickup items 1/2/4 from 07-01 are DONE + pushed (see the 2026-07-02 session
-log below): wrist-apex release is in the METRIC path (elbow bias fixed, −7.3°
-mean), jump height is ankle-based + physics-gated (median 2.18→1.56 ft, impossible
-tails now None), per-shot **shot map** ships in dashboard/report/PDF, and the app
-exports **feel logs as CSV**. Session 0701 (+`_wide`/`_moved`) rebuilt on the fixed
-pipeline; app profile re-exported (elbow ideal now 118.9°); SW cache v4.
+State (end of a big 07-02 session, all pushed): wrist-apex release in the metric
+path; jump height ankle-based + physics-gated; **orange-ball detector retrained**
+(hit rate 37→83% on held-out clip, new canonical weights
+`runs/detect/ball_orange/weights/best_openvino_model`); **profile-ranking split**
+(arc vs pose pools) so form ideals survive; **shooter-height ruler**
+(`--shooter-height`, body-scaled jump; release honestly floor-referenced + LOW,
+depth-limited → needs 2-cam); **audio make/miss default-on**; **shot map** in
+dashboard/report/PDF; app ships **spoken feedback** (`say.js`, TTS coaching) +
+**feel-CSV export**; **textbook/universal ideals** (`textbook.py`: entry 45°,
+flare 0°-needs-2cam) as a SEPARATE profile block. App SW cache v7, profile
+re-exported (personal elbow ideal 117°). Full suite 16/16 + JS green.
 
 **⭐ THE BIG ONE — 2nd camera (Galaxy S8) arrives within a week (~2026-07-08).**
 **ALL PRE-ARRIVAL SOFTWARE IS NOW BUILT + SYNTHETIC-VALIDATED (2026-07-02):**
@@ -40,15 +45,27 @@ pipeline; app profile re-exported (elbow ideal now 118.9°); SW cache v4.
 2. **Headline finding to chase with filming:** makes come with much deeper knee
    bend (full 0701: 107° vs 137°, d=−0.77, p=0.035; camera-consistent wide subset:
    99° vs 137°, d=−0.97, p=0.017). First make-driver to clear significance.
-3. **USER FEATURE REQUEST (2026-07-02) — movement-context form breakdowns, build
-   once form is trusted (post-S8):** he wants to slice by shot context — all
-   clips where form was "ideal" going LEFT vs going RIGHT vs SET — because the
-   ideal form differs per context. Pieces: (a) per-context ideal profiles
-   (condition the ideal/correlation engines on `movement_dir`, which is already
-   in records, min-n gated); (b) Shot-review filter = movement_dir × form-grade
-   so the rendered clips of "ideal going left" are one click; (c) same split in
-   the app profile eventually (profile.json per-context ideals). The "By
-   movement" dashboard panel is the seed; this is the full version.
+3. **USER FEATURE REQUEST — situational/context profiles (build once form is
+   trusted, post-S8).** Slice the profile by shot CONTEXT because ideal form
+   differs per context. Two flavors the user raised:
+   (a) **movement** — going LEFT vs RIGHT vs SET;
+   (b) **high-arc / shooting-over-a-defender** (2026-07-02 spitball) — a workout
+   of deliberately high-arc shots (pretend a tall blocker); the arc rises and
+   the mechanics likely shift (deeper legs, higher/softer release, maybe elbow).
+   ASSESSMENT: YES the system can learn a per-context ideal — feed it those
+   shots, tag the good ones, and export_profile means them into a context
+   profile; the arc/knee/elbow/tempo metrics WILL capture the shifts. Caveats:
+   needs a SEPARATE context profile (don't blend into the normal average); it's a
+   DESKTOP thing (arc/release/entry need the ball+rim; the app is pose-only); and
+   there's no universal "ideal high-arc number" beyond entry-angle physics (past
+   ~45-50° entry you trade accuracy for clearance) — the value is CONSISTENCY
+   within the context + make-correlation per context.
+   Pieces (shared by both flavors): (a) per-context ideal profiles (condition
+   ideal/correlation engines on a context key — `movement_dir` exists; add an
+   arc-band / session-tag key for high-arc); (b) Shot-review filter context ×
+   form-grade → one-click "ideal going left" / "ideal high-arc" clips; (c)
+   per-context ideals in profile.json eventually. "By movement" dashboard panel
+   is the seed.
 4. **Audio make/miss PROMOTED to default (A/B 2026-07-02).** On session 0701:
    ZERO contradictions with confident visual calls (16 makes/43 misses all
    agree), resolved 9/12 visual-unknowns (all → miss, consistent with a 27%
