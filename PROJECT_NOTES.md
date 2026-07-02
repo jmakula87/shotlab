@@ -3,18 +3,17 @@
 > The canonical "everything" doc. README.md is for usage; this is the decision
 > log, filming guide, roadmap, and enhancement backlog. Update it as we go.
 
-Last updated: 2026-07-01 · Location: `C:\Users\jmaku\Desktop\ShotLab`
+Last updated: 2026-07-02 · Location: `C:\Users\jmaku\Desktop\ShotLab`
 
 ---
 
-## NEXT SESSION PICKUP (2026-07-01, evening)
-State: phone PWA **live** (https://jmakula87.github.io/shotlab/). Since the last
-pickup: **fixed the app being dead on load** (MediaPipe version 0.10.22 was never
-published → 404 killed the whole module graph; pinned 0.10.35; commit `e544caf`).
-Processed a **new 7-clip session `data/out/session_0701`** (71 shots/25min, 60fps,
-one camera-angle change = clip 7 only; split into `_wide`/`_moved` sub-sessions).
-Shipped **Profile v2 ideal skeletons** (`shotlab/skeleton.py`; commit `3d0c367`) —
-the gold release-overlay is now REAL. **Tree clean, all committed + deployed.**
+## NEXT SESSION PICKUP (2026-07-02)
+State: pickup items 1/2/4 from 07-01 are DONE + pushed (see the 2026-07-02 session
+log below): wrist-apex release is in the METRIC path (elbow bias fixed, −7.3°
+mean), jump height is ankle-based + physics-gated (median 2.18→1.56 ft, impossible
+tails now None), per-shot **shot map** ships in dashboard/report/PDF, and the app
+exports **feel logs as CSV**. Session 0701 (+`_wide`/`_moved`) rebuilt on the fixed
+pipeline; app profile re-exported (elbow ideal now 118.9°); SW cache v4.
 
 **⭐ THE BIG ONE — 2nd camera (Galaxy S8) arrives within a week (~2026-07-08).**
 That's the real form/flare accuracy unlock. The footage-independent 3D core
@@ -25,14 +24,40 @@ clip → stereo calibration + temporal sync; (3) **build ELBOW FLARE + release
 consistency FIRST**. Cam-1 stays wide (arc/rim/makes), Cam-2 = body-cam.
 
 **Buildable now (no hardware):**
-1. **Audit `elbow_angle_at_release_deg`** — Profile v2 exposed that the YOLO ball
-   isn't detected until ~0.4s (24f @60fps) INTO flight, so ball-synced `find_release`
-   lands ~arm-down. Skeletons now use a POSE-based release (wrist apex); the METRIC
-   pipeline (`form.py compute_form`) still uses ball-synced release → the elbow angle
-   is likely measured late/low. Port the wrist-apex release into the metric path.
-2. **Jump-height overestimate fix** (`shotlab/scale.py`), release/jump LOW-conf.
-3. **Test app on the Pixel** (live camera + the new gold ideal-skeleton overlay).
-4. Smaller: live feel-tags → CSV; per-shot shot-map (`rim_dx_px`); goal-progress.
+1. **USER: test the app on the Pixel** — live camera, gold ideal-skeleton overlay,
+   new Feel log (CSV) button (visible once any live shots are tagged).
+2. **Headline finding to chase with filming:** makes come with much deeper knee
+   bend (full 0701: 107° vs 137°, d=−0.77, p=0.035; camera-consistent wide subset:
+   99° vs 137°, d=−0.97, p=0.017). First make-driver to clear significance.
+3. Smaller ideas left: goal-progress tracking, report emailing, ingest the app's
+   feel-CSV into the desktop records (join on session/shot time).
+
+---
+
+## Session log 2026-07-02 — release-sync + jump fixes land in the pipeline; shot map; feel CSV
+- **Wrist-apex release in the metric path** (`form.py find_release`; cache v3):
+  pose-only wrist-apex estimate alongside ball divergence; when the ball
+  "release" lags the wrist snap >0.12s (far/small-ball late detection) the apex
+  wins (medium conf, noted). Clean footage keeps the sharper ball estimate.
+  **Real-footage audit (71 shots): 24% of elbow readings were biased ~−30° each
+  (mean −7.3°); 9 shots upgraded from low release-conf.**
+- **Jump height rebuilt honest** (3 commits, cache v4→v6): ankle-based (squat no
+  longer counts as jump) → + both-ankles gate + median-3 (v5; real footage showed
+  the naive ankle version was WORSE than hip: one-ankle-occluded frames + 1-frame
+  glitches faked flight) → + physics gate >4 ft = None (v6). Final: median
+  2.18→1.56 ft, max 13.8→3.9, 11/65 honestly nulled. Lesson: a synthetic-clean
+  estimator can still lose to noise on real footage — audit BEFORE/AFTER on real
+  data every time.
+- **Shot map**: `rim_dx_px`/`rim_dy_px` now in ShotRecord (zone_for_release
+  already computed them); `viz.draw_shot_map` (dot=make, X=miss, shape carries
+  identity) in dashboard Session view + report.html + PDF page 1.
+- **App: feel-log CSV export** (`app/js/feelcsv.js`, node-tested 11/11): live
+  feel tags now persist per-shot METRICS with the label; ⬇️ button downloads all
+  stored sessions as one mergeable CSV. SW cache v3→v4.
+- Session 0701 + `_wide`/`_moved` rebuilt (3× full pose passes for the cache
+  bumps; detection always from `_track.json` cache); reports regenerated;
+  profile re-exported (ideal elbow 118.9°, skeletons from 2 clean shots).
+- Tests: 12/12 py files (15 form tests) + 4 node suites green.
 
 ---
 
