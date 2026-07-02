@@ -6,6 +6,7 @@ import { analyzeShot, compareToProfile, feedbackLines, METRIC_LABEL } from "./an
 import { render, clear } from "./overlay.js";
 import { startCamera, stopCamera, ShotDetector } from "./live.js";
 import { VoiceFeel } from "./voice.js";
+import { collectFeelLogs, feelLogsToCsv, hasFeelLogs } from "./feelcsv.js";
 
 const $ = id => document.getElementById(id);
 const statusEl = $("status"), video = $("video"), canvas = $("overlay");
@@ -49,6 +50,7 @@ async function boot() {
   }
   if ("serviceWorker" in navigator)
     navigator.serviceWorker.register("sw.js").catch(() => {});
+  updateExportButton();
 }
 
 $("file").addEventListener("change", e => {
@@ -220,11 +222,27 @@ function onFeel(feel, heard) {
   try {
     const key = "shotlab_feel_" + sessionId;
     const log = JSON.parse(localStorage.getItem(key) || "[]");
-    log.push({ n: shot.n, feel, heard, t: shot.t });
+    log.push({ n: shot.n, feel, heard, t: shot.t, metrics: shot.metrics || {} });
     localStorage.setItem(key, JSON.stringify(log));
+    updateExportButton();
   } catch (_) {}
   setStatus(`heard “${heard}” → shot ${shot.n} ${badge}  (${feelGood} good · ${feelOff} off)`);
 }
+
+// ------------------------------------------------- feel-log export (CSV)
+function updateExportButton() {
+  try { $("exportFeel").hidden = !hasFeelLogs(localStorage); } catch (_) {}
+}
+
+$("exportFeel").addEventListener("click", () => {
+  const csv = feelLogsToCsv(collectFeelLogs(localStorage));
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "shotlab_feel_log.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
 
 function liveLoop() {
   if (!liveOn) return;
@@ -256,7 +274,8 @@ function onLiveShot(shot) {
   card.className = "card feedback";
   card.innerHTML = `<h2>Shot ${liveCount} — ${head}</h2><ul>${fb}</ul>`;
   $("liveFeed").prepend(card);          // newest on top
-  liveShots.push({ n: liveCount, card, feel: null, t: shot.releaseT });
+  liveShots.push({ n: liveCount, card, feel: null, t: shot.releaseT,
+                   metrics: a.metrics });
 }
 
 boot();

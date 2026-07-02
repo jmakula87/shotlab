@@ -3,11 +3,11 @@
 // (then the browser caches them); we don't precache those here.
 // Bump this on every app-shell change so phones drop the old cached files
 // (cache-first below would otherwise serve a stale/broken main.js forever).
-const CACHE = "shotlab-formcheck-v3";
+const CACHE = "shotlab-formcheck-v4";
 const SHELL = [
   ".", "index.html", "styles.css", "manifest.json", "icon.svg", "profile.json",
   "js/main.js", "js/pose.js", "js/analyze.js", "js/overlay.js", "js/live.js",
-  "js/voice.js",
+  "js/voice.js", "js/feelcsv.js",
 ];
 
 self.addEventListener("install", e => {
