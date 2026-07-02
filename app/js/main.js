@@ -7,6 +7,10 @@ import { render, clear } from "./overlay.js";
 import { startCamera, stopCamera, ShotDetector } from "./live.js";
 import { VoiceFeel } from "./voice.js";
 import { collectFeelLogs, feelLogsToCsv, hasFeelLogs } from "./feelcsv.js";
+import { speak, spokenFeedback, stopSpeaking } from "./say.js";
+
+// spoken feedback on unless the toggle is unchecked (headphones-in flow)
+const ttsOn = () => { const el = $("speakFeedback"); return !el || el.checked; };
 
 const $ = id => document.getElementById(id);
 const statusEl = $("status"), video = $("video"), canvas = $("overlay");
@@ -161,6 +165,7 @@ function renderReport(a, deltas) {
   rep.innerHTML = `
     <div class="card"><h2>Your form vs your ideal</h2>${rows || "<p class='k'>no metrics read</p>"}</div>
     <div class="card feedback"><h2>Feedback</h2><ul>${fb}</ul></div>`;
+  if (ttsOn()) speak(spokenFeedback(deltas));
 }
 
 const labelOf = k => ({ elbow_angle_at_release_deg: "Elbow at release",
@@ -205,6 +210,7 @@ function stopLive() {
   liveOn = false;
   stopCamera(video);
   if (voice) voice.stop();
+  stopSpeaking();
   $("stopLive").hidden = true; $("play").hidden = false;
   setStatus(`live stopped — tagged ${feelGood} good · ${feelOff} off`);
 }
@@ -274,6 +280,7 @@ function onLiveShot(shot) {
   card.className = "card feedback";
   card.innerHTML = `<h2>Shot ${liveCount} — ${head}</h2><ul>${fb}</ul>`;
   $("liveFeed").prepend(card);          // newest on top
+  if (ttsOn()) speak(spokenFeedback(deltas));   // hear the fix, hands-free
   liveShots.push({ n: liveCount, card, feel: null, t: shot.releaseT,
                    metrics: a.metrics });
 }
