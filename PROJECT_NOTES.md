@@ -29,7 +29,27 @@ consistency FIRST**. Cam-1 stays wide (arc/rim/makes), Cam-2 = body-cam.
 2. **Headline finding to chase with filming:** makes come with much deeper knee
    bend (full 0701: 107° vs 137°, d=−0.77, p=0.035; camera-consistent wide subset:
    99° vs 137°, d=−0.97, p=0.017). First make-driver to clear significance.
-3. Smaller ideas left: goal-progress tracking, report emailing, ingest the app's
+3. **USER FEATURE REQUEST (2026-07-02) — movement-context form breakdowns, build
+   once form is trusted (post-S8):** he wants to slice by shot context — all
+   clips where form was "ideal" going LEFT vs going RIGHT vs SET — because the
+   ideal form differs per context. Pieces: (a) per-context ideal profiles
+   (condition the ideal/correlation engines on `movement_dir`, which is already
+   in records, min-n gated); (b) Shot-review filter = movement_dir × form-grade
+   so the rendered clips of "ideal going left" are one click; (c) same split in
+   the app profile eventually (profile.json per-context ideals). The "By
+   movement" dashboard panel is the seed; this is the full version.
+4. **Audio make/miss A/B on real footage** — running 2026-07-02 into
+   `data/out/session_0701_audio`; compare classifiable% + make% vs visual-only.
+5. **Shooter-height ruler (user is 5'10" in shoes) — promote into the pipeline.**
+   Diagnosed 2026-07-02: nose-to-ankle px per shot = a depth-plane ruler at the
+   SHOOTER's depth (median 51 px/ft vs the rim plane's 20 — shooter ~2.5× closer
+   to camera). Measured his court with it: camera ~33-42 ft from hoop, shots
+   median ~13-15 ft / max ~26-32 ft from rim, ~26 ft of width used. Build a
+   `--shooter-height` flag: use body-scaled px/ft for release_height_ft /
+   jump_height_ft (upgrades them from rim-scaled LOW conf ~2.5× hot to honest),
+   and real-feet shot distances for zones. Script: scratchpad court_from_height
+   (rewrite properly into shotlab/scale.py + a tools/ diag).
+6. Smaller ideas left: goal-progress tracking, report emailing, ingest the app's
    feel-CSV into the desktop records (join on session/shot time).
 
 ---
