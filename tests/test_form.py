@@ -120,6 +120,32 @@ def test_release_subframe_and_confidence():
     assert abs(sf.release_t - est.t) < 1e-6
 
 
+def test_late_ball_falls_back_to_wrist_apex():
+    """Far/small ball the detector only locks onto ~0.4s into flight: the ball
+    'release' would land late (arm already down). find_release should instead use
+    the pose wrist-apex and recover the true release."""
+    from shotlab.phase2_pose.form import find_release
+    poses, _ball, rel = build_shot_sequence()      # true release / wrist apex = 18
+    # ball tracked ONLY late, already flying up-and-away from the lowered wrist
+    late_ball = {f: FakeBall(300 + 8 * (f - 28), 100 - 6 * (f - 28))
+                 for f in range(28, 32)}
+    shot = FakeShot(list(range(28, 32)))           # flight detected late
+    est = find_release(shot, late_ball, poses, handedness="right", fps=60)
+    assert abs(est.frame - rel) <= 2, est.frame    # NOT the late ball frame (28)
+    assert "apex" in est.note, est.note
+
+
+def test_clean_ball_still_wins_over_apex():
+    """When the ball IS tracked through the release, keep the sharper ball
+    estimate (the apex must not hijack clean footage)."""
+    from shotlab.phase2_pose.form import find_release
+    poses, ball, rel = build_shot_sequence()
+    shot = FakeShot(list(range(14, 30)))
+    est = find_release(shot, ball, poses, handedness="right", fps=60)
+    assert abs(est.frame - rel) <= 1, est.frame
+    assert "apex" not in est.note
+
+
 def test_release_subframe_no_divergence_is_low_conf():
     """A ball that never leaves the hand (no shot) -> low-confidence fallback."""
     from shotlab.phase2_pose.form import find_release

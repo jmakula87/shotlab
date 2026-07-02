@@ -119,23 +119,76 @@ def detect_handedness(poses, frames, default="right", thr=0.4) -> str:
     return "left" if l_min < r_min else "right"
 
 
-def find_release(shot, ball_track, poses, handedness) -> ReleaseEstimate:
-    """Where the ball separates from the shooting hand, to sub-frame precision.
+def find_release(shot, ball_track, poses, handedness, fps=30.0) -> ReleaseEstimate:
+    """Where the ball leaves the shooting hand, to sub-frame precision.
 
-    While the ball is loaded it sits at ~minimum distance from the shooting
-    wrist; at release that distance starts to grow and keeps growing as the ball
-    flies. We locate the END of the in-hand minimum cluster -- the *onset of
-    divergence* -- which is sharper and earlier than a fixed distance threshold
-    (which only trips once the ball has already travelled a few radii). Then we
-    interpolate the sub-frame moment the ball clears the hand (separation passes
-    half a ball radius).
+    Two signals, combined so neither footage type breaks:
+      - BALL divergence (`_ball_release`): the ball sits at the wrist until
+        release, then separates -- the onset of that divergence is a sharp,
+        accurate release. Great when the ball is tracked THROUGH the release.
+      - POSE wrist-apex (`_wrist_apex`): the shooting wrist peaks at the snap.
+        This needs no ball, so it survives when the detector picks the ball up
+        late.
 
-    Sub-frame timing matters: at 30 fps the ball moves ~a foot per frame, so a
-    whole-frame release quantizes both the release-vs-apex timing and the
-    elbow-at-release angle. Returns a confidence and a `diverging` flag; falls
-    back to the global minimum-distance frame (low confidence) when the hand-off
-    is never clean (noisy/sparse keypoints)."""
+    On far/small-ball footage the detector doesn't lock the ball until it's
+    ~0.4s into flight, so the ball-divergence "release" lands well after the true
+    snap (on an arm-already-down frame). We detect that case -- the wrist apex
+    sits clearly BEFORE the ball release -- and use the apex instead. When the
+    ball is tracked cleanly the two coincide (apex not earlier), so we keep the
+    sharper ball estimate; the synthetic hand-off test still lands on it."""
     keys = side_keys(handedness)
+    ball_est = _ball_release(shot, ball_track, poses, keys)
+    apex = _wrist_apex(shot, poses, keys, fps)
+    if apex is not None:
+        af, at = apex
+        # ball release lagging the wrist snap by >~0.12s == detected-late ball
+        if ball_est.frame - af > 0.12 * max(fps, 1.0):
+            return ReleaseEstimate(frame=af, t=at, confidence="medium",
+                                   diverging=True,
+                                   note="pose wrist-apex (ball detected late in flight)")
+    return ball_est
+
+
+def _wrist_apex(shot, poses, keys, fps):
+    """The frame + sub-frame time of peak shooting-wrist extension (the snap),
+    from pose alone. Searches a pre-window before flight start (the true release
+    precedes the ball's first tracked flight frame). Returns (frame, t) or None."""
+    start = int(shot.frames[0])
+    pre = int(round(0.6 * max(fps, 1.0)))
+    post = max(4, int(round(0.15 * max(fps, 1.0))))
+    lo = max(min(poses) if poses else start, start - pre)
+    best_f, best_y = None, float("inf")
+    for f in range(lo, start + post + 1):
+        fp = poses.get(f)
+        if fp is None:
+            continue
+        if fp.v(keys["wrist"]) >= 0.4 and fp.v(keys["shoulder"]) >= 0.4:
+            y = float(fp.pt(keys["wrist"])[1])       # image y: smaller = higher
+            if y < best_y:
+                best_y, best_f = y, f
+    if best_f is None:
+        return None
+    # only trust it as a release if the wrist is actually up (above the shoulder)
+    fp = poses[best_f]
+    if float(fp.pt(keys["wrist"])[1]) >= float(fp.pt(keys["shoulder"])[1]):
+        return None
+    # sub-frame apex via a parabolic vertex fit on wrist-y at the peak +/- 1
+    y0 = best_y
+    ym = float(poses[best_f - 1].pt(keys["wrist"])[1]) if poses.get(best_f - 1) else None
+    yp = float(poses[best_f + 1].pt(keys["wrist"])[1]) if poses.get(best_f + 1) else None
+    t = float(best_f)
+    if ym is not None and yp is not None:
+        denom = ym - 2 * y0 + yp
+        if abs(denom) > 1e-6:
+            t = best_f + max(-1.0, min(1.0, 0.5 * (ym - yp) / denom))
+    return best_f, t
+
+
+def _ball_release(shot, ball_track, poses, keys) -> ReleaseEstimate:
+    """Ball-divergence release: the END of the in-hand minimum-distance cluster
+    (onset of divergence), with sub-frame interpolation across the half-radius
+    separation crossing. Low-confidence min-distance fallback when the hand-off
+    is never clean."""
     start = int(shot.frames[0])
     lo = max(min(poses) if poses else start, start - 12)
     window = range(lo, start + 8)
@@ -202,10 +255,10 @@ def find_release(shot, ball_track, poses, handedness) -> ReleaseEstimate:
     return ReleaseEstimate(frame=rel_f, t=rel_t, confidence=conf, diverging=True)
 
 
-def find_release_frame(shot, ball_track, poses, handedness) -> int:
+def find_release_frame(shot, ball_track, poses, handedness, fps=30.0) -> int:
     """Back-compat shim: the integer release frame. See find_release for the full
     sub-frame estimate and confidence."""
-    return find_release(shot, ball_track, poses, handedness).frame
+    return find_release(shot, ball_track, poses, handedness, fps=fps).frame
 
 
 def _body_height_px(fp: FramePose, keys) -> float:
@@ -278,7 +331,7 @@ def compute_form(shot, ball_track, poses, fps, *, handedness="right",
         handedness = detect_handedness(poses, shot.frames)
     keys = side_keys(handedness)
     side_on = camera_angle == "side_on"
-    rel = find_release(shot, ball_track, poses, handedness)
+    rel = find_release(shot, ball_track, poses, handedness, fps=fps)
     rel_f, rel_t = rel.frame, rel.t
     move = movement_direction(rel_f, poses, keys, rim_xy, fps)
     frames = [int(f) for f in shot.frames]
