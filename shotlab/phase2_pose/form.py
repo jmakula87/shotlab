@@ -503,4 +503,9 @@ def _jump_height(poses, span, ppf):
     sm = [float(np.median(ys[max(0, i - 1):i + 2])) for i in range(len(ys))]
     ground = float(np.percentile(sm, 80))     # grounded ground-line, squat-proof
     peak = float(min(sm))
-    return jump_height_ft(ground, peak, ppf)
+    jh = jump_height_ft(ground, peak, ppf)
+    # physics gate: past a world-class vertical it's a tracking failure, not a
+    # jump -- report nothing rather than a garbage number
+    if jh is not None and jh > 4.0:
+        return None
+    return jh

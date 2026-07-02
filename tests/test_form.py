@@ -172,6 +172,17 @@ def test_jump_height_ignores_single_foot_step():
     assert abs(jh) < 0.05, jh
 
 
+def test_jump_height_physics_gate():
+    """An impossible jump (ankles rise 8 ft worth of px) is a tracking failure
+    and must come back None, not a number."""
+    from shotlab.phase2_pose.form import _jump_height
+    poses = {}
+    for f in range(0, 30):
+        y = 470.0 - (320.0 if 15 <= f <= 20 else 0.0)   # 320px @ 40ppf = 8 ft
+        poses[f] = make_pose(f, {"l_ankle": (190, y), "r_ankle": (200, y)})
+    assert _jump_height(poses, range(0, 30), ppf=40.0) is None
+
+
 def test_jump_height_ignores_single_frame_glitch():
     """One bad pose frame (both ankles jump 60px for a single frame) must not
     read as flight -- the median-3 smoothing kills it."""

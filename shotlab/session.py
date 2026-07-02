@@ -97,7 +97,7 @@ def _cache_path(video_path: str) -> str:
 # Bump when the record-building LOGIC changes in a way the schema/params don't
 # capture (e.g. a metric formula). The ShotRecord field set is folded in
 # automatically, so adding/removing a record field invalidates caches on its own.
-_CACHE_VERSION = 5    # v5: ankle jump needs both ankles + median-3 (pose-glitch guard)
+_CACHE_VERSION = 6    # v6: jump physics gate (>4 ft = tracking failure -> None)
 
 
 def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
