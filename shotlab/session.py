@@ -105,9 +105,10 @@ def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
     """A signature for a clip's cached records. Any change to the record schema
     OR the detection/pose params invalidates the cache, so a re-run after a code
     change recomputes instead of silently returning stale, old-schema rows."""
+    from .detect_cache import _weights_id
     schema = ",".join(f.name for f in _dc_fields(ShotRecord))
     raw = "|".join(str(x) for x in [
-        _CACHE_VERSION, schema, detector_name, os.path.basename(str(weights)),
+        _CACHE_VERSION, schema, detector_name, _weights_id(weights),
         imgsz, stride, max_frames, with_pose, with_spin, handedness, with_audio])
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
 

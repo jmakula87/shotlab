@@ -27,8 +27,18 @@ def _path(video_path: str) -> str:
     return os.path.join("data", "out", stem, f"{stem}_track.json")
 
 
+def _weights_id(weights) -> str:
+    """Identity for a weights path in cache signatures. The BASENAME alone is
+    ambiguous -- every training run exports a dir literally named
+    best_openvino_model, so switching models would silently reuse the old
+    model's cached detections. The last three path parts disambiguate
+    (e.g. ball_orange/weights/best_openvino_model)."""
+    parts = os.path.normpath(str(weights)).split(os.sep)
+    return "/".join(parts[-3:])
+
+
 def _params(weights, imgsz, stride, max_frames, calib) -> dict:
-    return {"weights": os.path.basename(str(weights)), "imgsz": int(imgsz),
+    return {"weights": _weights_id(weights), "imgsz": int(imgsz),
             "stride": int(stride), "max_frames": max_frames,
             "rim": [round(calib.rim_x, 1), round(calib.rim_y, 1)]}
 

@@ -66,16 +66,23 @@ pipeline; app profile re-exported (elbow ideal now 118.9°); SW cache v4.
    jump_height_ft (upgrades them from rim-scaled LOW conf ~2.5× hot to honest),
    and real-feet shot distances for zones. Script: scratchpad court_from_height
    (rewrite properly into shotlab/scale.py + a tools/ diag).
-6. **ORANGE-BALL RETRAIN (diagnosed 2026-07-02) — the top tracking lever.** The
-   orange ball did NOT help 0701: wide-cam YOLO hit rate DROPPED 35%→20% per
-   sampled flight frame vs 0629, because the fine-tune dataset was auto-labeled
-   on the OLD ball (red/blue filters) — orange is out-of-distribution. Likely
-   also the cause of the 0.4s late-lock. Meanwhile the HSV color detector (dead
-   on the old dark ball) now locks the orange ball in-hand at 30+ ft (verified
-   on rendered frames; false positives in grass/trees → needs the existing
-   motion gate). FIX: make_dataset on 0701 clips with ORANGE HSV auto-label,
-   merge with the old 982 frames, retrain yolo11n, re-measure hit rate +
-   late-lock. Orange ball stays right for the S8 close-cam color path.
+6. **ORANGE-BALL RETRAIN ✅ DONE + PROMOTED (2026-07-02).** Diagnosis: hit rate
+   dropped 35%→20% on 0701 because the old fine-tune only knew the old red/blue
+   ball. Retrained yolo11n on 0701 orange-ball frames (old 982 frames + 0629
+   raws were purged → orange-only set, fits the personal-use scope):
+   make_dataset --ball orange (656 clean labels after a strict sat≥130
+   orange≥0.05 skin/leaf sweep — junk/ball separate cleanly at 0.04/0.05),
+   52 epochs (early-stop, best @42), val on held-out clip 182946: mAP50 0.995.
+   **Head-to-head on the held-out clip: hit rate/sampled flight frame 37%→83%
+   median (every shot better; worst 5%→65%) — >2× the old model and above its
+   35% on its own old-ball footage.**
+   **NEW CANONICAL WEIGHTS: `runs/detect/ball_orange/weights/best_openvino_model`
+   (imgsz 640)** — use in all build commands. Cache-sig footgun fixed in the
+   same change: weights identity now includes the run name (both models' export
+   dirs are literally named best_openvino_model; basename-keyed caches would
+   have silently reused the old model's detections). Old model kept at
+   runs/detect/ball_finetune for provenance. Full 0701 re-detect+rebuild on the
+   new model = next (fresh shots/arcs; expect more shots + earlier locks).
 7. Smaller ideas left: goal-progress tracking, report emailing, ingest the app's
    feel-CSV into the desktop records (join on session/shot time).
 

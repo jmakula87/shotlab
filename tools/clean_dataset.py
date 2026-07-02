@@ -45,12 +45,13 @@ def orange_fraction(crop, sat_min: int = 90) -> float:
     return float((orange > 0).sum()) / (crop.shape[0] * crop.shape[1])
 
 
-def crop_ok(crop, ball: str, red=0.05, blue=0.03, orange=0.18) -> bool:
+def crop_ok(crop, ball: str, red=0.05, blue=0.03, orange=0.18,
+            sat_min=90) -> bool:
     """Does this crop actually contain the ball we're training for?"""
     if ball == "redblue":
         rf, bf = ball_colors(crop)
         return rf >= red and bf >= blue
-    return orange_fraction(crop) >= orange
+    return orange_fraction(crop, sat_min) >= orange
 
 
 def box_from_label(line, w, h):
@@ -67,6 +68,9 @@ def main(argv=None):
     ap.add_argument("--red", type=float, default=0.05)
     ap.add_argument("--blue", type=float, default=0.03)
     ap.add_argument("--orange", type=float, default=0.18)
+    ap.add_argument("--sat-min", type=int, default=90,
+                    help="min saturation for 'orange' (130 kills skin/leaves; "
+                         "pair with a lower --orange like 0.05)")
     args = ap.parse_args(argv)
 
     kept_crops, removed = [], 0
@@ -87,7 +91,7 @@ def main(argv=None):
                     x0, y0, x1, y1 = box_from_label(line, w, h)
                     crop = img[y0:y1, x0:x1]
                     ok = crop_ok(crop, args.ball, args.red, args.blue,
-                                 args.orange)
+                                 args.orange, args.sat_min)
                     if ok and len(kept_crops) < 48 and crop.size:
                         kept_crops.append(cv2.resize(crop, (96, 96)))
             if ok:
