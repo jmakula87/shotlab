@@ -964,14 +964,38 @@ def view_progress():
         st.altair_chart(ch, use_container_width=True)
 
 
+def view_film_room():
+    st.subheader("🎬 Film room — study your reps")
+    st.caption("Tight closeups of each shot's load / release / follow-through, "
+               "skeleton drawn, the phase's key joint in gold. ← / → (or the "
+               "buttons) to move between shots.")
+    sds = session_dirs()
+    if not sds:
+        st.info("No sessions built yet."); return
+    sd = st.selectbox("Session", sds, key="fr_sess")
+    which = st.radio("Show", ["makes", "misses", "all"], horizontal=True, key="fr_which")
+    only = {"makes": True, "misses": False, "all": None}[which]
+    from shotlab.closeups import build_shot_closeups, film_room_html
+    with st.spinner("Building closeups (first time per session re-runs pose per "
+                    "shot — slow; cached after)…"):
+        cl = build_shot_closeups(os.path.join(OUT_DIR, sd), only_made=only)
+    if not cl:
+        st.info("No shots for that filter yet."); return
+    import streamlit.components.v1 as components
+    components.html(film_room_html(cl), height=760, scrolling=True)
+
+
 # ---------------------------------------------------------------- main
 st.title("🏀 ShotLab")
-mode = st.sidebar.radio("View", ["Per-clip", "Session analytics", "Shot review",
-                                 "Compare shots", "Compare sessions", "Progress"])
+mode = st.sidebar.radio("View", ["Per-clip", "Session analytics", "Film room",
+                                 "Shot review", "Compare shots",
+                                 "Compare sessions", "Progress"])
 if mode == "Per-clip":
     view_clip()
 elif mode == "Session analytics":
     view_session()
+elif mode == "Film room":
+    view_film_room()
 elif mode == "Shot review":
     view_shot_review()
 elif mode == "Compare shots":
