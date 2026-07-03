@@ -7,6 +7,24 @@ Last updated: 2026-07-02 · Location: `C:\Users\jmaku\Desktop\ShotLab`
 
 ---
 
+## 🎥 FILMING CHECKLIST — read before every session (lessons through 2026-07-03)
+1. **Get bigger in frame.** Far shots are where pose fails (skeleton lands on the
+   court) — set the camera closer / more side-on so you fill more of the frame.
+2. **Clean shoot → reset cycle.** Running back into frame chaotically causes false
+   shot detections + confuses the app. Shoot, let the ball go, retrieve calmly,
+   RESET at your spot, then shoot. A clear pause between reps = far less junk.
+3. **Jumper sessions = jumpers.** Layups/dribbling near the rim trip the
+   rim-anchored detector (false "makes") — do them in a separate block or expect
+   to curate them out.
+4. **Keep others out of frame** when you can (kids/rebounders confuse pose).
+5. **Sun behind the camera** (front-lit) so the orange ball reads.
+6. **Voice tags need a CLOSE mic** — the tripod phone mic is too far. Use Open
+   Camera w/ a BT-headset mic, or a 2nd recorder you carry (synced by sync.py).
+7. **In the app: tap 🔍 Scan me first**, stand at your spot whole-body-in-frame
+   ~3s, THEN Live — so it locks onto you, not passers-by/objects/you rebounding.
+8. Same camera position session-to-session (metrics aren't cross-comparable
+   otherwise). The close 2nd camera (S8) is the real form-detail fix.
+
 ## NEXT SESSION PICKUP (2026-07-02)
 State (end of a big 07-02 session, all pushed): wrist-apex release in the metric
 path; jump height ankle-based + physics-gated; **orange-ball detector retrained**
