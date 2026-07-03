@@ -102,9 +102,11 @@ def _phase_frames(shot, track, poses, fps, handedness):
 
     lo = int(shot.frames[0]) - _PRE
     hi = int(shot.frames[-1]) + _POST
-    # search release only up to just after flight starts, so a later arm-raise
-    # (rebound, next catch) can't be mistaken for this shot's release
-    rel_hi = int(shot.frames[0]) + int(round(0.10 * fps))
+    # Release = the wrist apex (peak extension). The ball track often STARTS as
+    # the ball rises in the hands, so the true overhead release is ~0.3-0.5s
+    # AFTER flight start, not right at it -- search that far in (capped well
+    # short of a rebound, which is ~1s+ later) or the apex lands in the gather.
+    rel_hi = int(shot.frames[0]) + int(round(0.5 * fps))
     rel_f, best_y = None, float("inf")
     for f in range(lo, rel_hi + 1):
         fp = poses.get(f)

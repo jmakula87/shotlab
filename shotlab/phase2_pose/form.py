@@ -141,21 +141,27 @@ def find_release(shot, ball_track, poses, handedness, fps=30.0) -> ReleaseEstima
     apex = _wrist_apex(shot, poses, keys, fps)
     if apex is not None:
         af, at = apex
-        # ball release lagging the wrist snap by >~0.12s == detected-late ball
-        if ball_est.frame - af > 0.12 * max(fps, 1.0):
+        # When the ball estimate and the pose wrist-apex DISAGREE (either way),
+        # trust the apex: the ball can be detected late (apex earlier) OR tracked
+        # rising in the hands so it separates before the true overhead snap (apex
+        # later). Only when they agree do we keep the sharper ball estimate.
+        if abs(ball_est.frame - af) > 0.12 * max(fps, 1.0):
             return ReleaseEstimate(frame=af, t=at, confidence="medium",
                                    diverging=True,
-                                   note="pose wrist-apex (ball detected late in flight)")
+                                   note="pose wrist-apex (ball/apex disagree)")
     return ball_est
 
 
 def _wrist_apex(shot, poses, keys, fps):
     """The frame + sub-frame time of peak shooting-wrist extension (the snap),
-    from pose alone. Searches a pre-window before flight start (the true release
-    precedes the ball's first tracked flight frame). Returns (frame, t) or None."""
+    from pose alone. The apex can fall EITHER side of flight start: before it
+    when the ball is detected late, or up to ~0.5s AFTER it when the ball is
+    tracked rising in the hands (so the overhead release trails the first
+    tracked flight frame). Searches a wide window both ways. Returns (frame, t)
+    or None."""
     start = int(shot.frames[0])
     pre = int(round(0.6 * max(fps, 1.0)))
-    post = max(4, int(round(0.15 * max(fps, 1.0))))
+    post = max(4, int(round(0.5 * max(fps, 1.0))))
     lo = max(min(poses) if poses else start, start - pre)
     best_f, best_y = None, float("inf")
     for f in range(lo, start + post + 1):

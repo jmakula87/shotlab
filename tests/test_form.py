@@ -249,14 +249,17 @@ def test_jump_height_ignores_single_frame_glitch():
 
 
 def test_release_subframe_no_divergence_is_low_conf():
-    """A ball that never leaves the hand (no shot) -> low-confidence fallback."""
+    """A ball that never leaves the hand AND no overhead arm motion (no shot) ->
+    low-confidence fallback (no ball divergence, no wrist apex to fall back on)."""
     from shotlab.phase2_pose.form import find_release
     poses, ball, _ = build_shot_sequence()
-    # pin the ball to the wrist for every frame (never diverges)
     held = {}
     for f, fp in poses.items():
+        # keep the wrist BELOW the shoulder the whole time (arm never shoots),
+        # so there's no valid overhead apex -- a true no-shot
+        fp.xy[L["r_wrist"]] = [235, fp.pt("r_shoulder")[1] + 30]
         w = fp.pt("r_wrist")
-        held[f] = FakeBall(float(w[0]), float(w[1]))
+        held[f] = FakeBall(float(w[0]), float(w[1]))   # ball pinned to the wrist
     shot = FakeShot(list(range(14, 30)))
     est = find_release(shot, held, poses, handedness="right")
     assert est.diverging is False
