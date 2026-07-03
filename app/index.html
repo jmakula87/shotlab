@@ -16,13 +16,15 @@
 
   <main>
     <section class="pick">
+      <button id="scan" class="btn">🔍 Scan me</button>
       <button id="live" class="btn">🔴 Live at the court</button>
       <label class="btn" for="file">📹 Pick a shot clip</label>
       <button id="exportFeel" class="btn small" hidden>⬇️ Feel log (CSV)</button>
       <input id="file" type="file" accept="video/*" capture="environment" hidden />
-      <p class="hint">Live: point the camera at yourself and shoot — you get
-        feedback after each shot. Or pick a recorded clip. Everything runs on your
-        device — nothing is uploaded. (Live camera needs HTTPS or localhost.)</p>
+      <p class="hint">First tap <b>🔍 Scan me</b> and stand at your spot (whole
+        body in frame, ~3s) so it locks onto YOU — not passers-by, objects, or you
+        running to rebound. Then <b>🔴 Live</b> and shoot. Or pick a recorded clip.
+        Everything runs on your device — nothing is uploaded.</p>
     </section>
 
     <section class="stage" id="stage" hidden>

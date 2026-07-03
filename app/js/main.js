@@ -8,9 +8,16 @@ import { startCamera, stopCamera, ShotDetector } from "./live.js";
 import { VoiceFeel } from "./voice.js";
 import { collectFeelLogs, feelLogsToCsv, hasFeelLogs } from "./feelcsv.js";
 import { speak, spokenFeedback, stopSpeaking } from "./say.js";
+import { Enroller, matchesEnrollment } from "./enroll.js";
 
 // spoken feedback on unless the toggle is unchecked (headphones-in flow)
 const ttsOn = () => { const el = $("speakFeedback"); return !el || el.checked; };
+
+// your enrolled body size ("scan me") so live locks onto YOU, not passers-by /
+// far objects / you mid-sprint to the rebound. null = not scanned (accept all).
+let enrollment = null;
+try { enrollment = JSON.parse(localStorage.getItem("shotlab_enroll") || "null"); } catch (_) {}
+let scanning = false;
 
 const $ = id => document.getElementById(id);
 const statusEl = $("status"), video = $("video"), canvas = $("overlay");
@@ -178,6 +185,48 @@ let liveShots = [], voice = null, feelGood = 0, feelOff = 0, sessionId = 0;
 
 $("live").addEventListener("click", startLive);
 $("stopLive").addEventListener("click", stopLive);
+$("scan").addEventListener("click", scanMe);
+
+// "Scan me": stand at your spot, whole body in frame, ~3s -> capture your size.
+async function scanMe() {
+  if (poseBackend() === "unknown") {
+    setStatus("⚠️ pose engine isn't ready yet — wait for “ready”."); return;
+  }
+  try { await startCamera(video); } catch (e) { setStatus("⚠️ " + e.message); return; }
+  $("stage").hidden = false;
+  canvas.width = video.videoWidth || 720; canvas.height = video.videoHeight || 1280;
+  const enr = new Enroller();
+  const t0 = performance.now();
+  scanning = true;
+  const loop = () => {
+    if (!scanning) return;
+    const ts = Math.round(video.currentTime * 1000);
+    let lm = null; try { lm = detect(video, ts); } catch (_) {}
+    render(ctx, lm, null, false);
+    if (lm) enr.add(lm, canvas.height);
+    const el = performance.now() - t0;
+    setStatus(`🔍 Scanning — stand at your spot, whole body in view… `
+              + `${(Math.min(3000, el) / 1000).toFixed(1)}s (${enr.count} reads)`);
+    if (el > 3000) {
+      scanning = false;
+      const e = enr.finish();
+      if (e) {
+        enrollment = e;
+        try { localStorage.setItem("shotlab_enroll", JSON.stringify(e)); } catch (_) {}
+        setStatus(`✅ Locked on — got your size (${e.n} reads). Now tap 🔴 Live.`);
+      } else {
+        setStatus("⚠️ Couldn't get a clean full-body read — try again with your "
+                  + "whole body in the frame.");
+      }
+      stopCamera(video);
+      return;
+    }
+    if ("requestVideoFrameCallback" in HTMLVideoElement.prototype)
+      video.requestVideoFrameCallback(loop);
+    else requestAnimationFrame(loop);
+  };
+  loop();
+}
 
 async function startLive() {
   if (poseBackend() === "unknown") {
@@ -200,9 +249,10 @@ async function startLive() {
   // hands-free feel tagging: say "good" / "off" after a shot
   voice = new VoiceFeel(onFeel);
   voice.start();
-  const mic = voice.supported ? " · 🎙 say “good”/“off” after each shot"
-                              : " · (voice tagging needs Chrome + HTTPS)";
-  setStatus("live — shoot!" + mic);
+  const lock = enrollment ? "🔒 locked on you" : "⚠️ not scanned — tap 🔍 Scan me "
+               + "first so it tracks YOU, not passers-by";
+  const mic = voice.supported ? " · 🎙 say “good”/“off” after each shot" : "";
+  setStatus(`live — shoot! · ${lock}${mic}`);
   liveLoop();
 }
 
@@ -257,10 +307,16 @@ function liveLoop() {
   liveTs = ts;
   let lm = null;
   try { lm = detect(video, ts); } catch (e) { /* keep going */ }
-  render(ctx, lm, null, false);
-  if (lm) {
+  // Only track + analyze a pose that matches YOUR scanned size. This drops the
+  // wrong-subject grabs (far objects, other people, you sprinting to rebound at
+  // a different distance) so it stops coaching them.
+  const isMe = lm && matchesEnrollment(lm, enrollment, canvas.height);
+  render(ctx, isMe ? lm : null, null, false);
+  if (isMe) {
     const shot = liveDetector.feed(t, lm, canvas.width, canvas.height);
     if (shot) onLiveShot(shot);
+  } else if (lm && enrollment) {
+    setStatus("👀 looking for you — step to your spot (whole body in frame)");
   }
   if ("requestVideoFrameCallback" in HTMLVideoElement.prototype)
     video.requestVideoFrameCallback(liveLoop);
