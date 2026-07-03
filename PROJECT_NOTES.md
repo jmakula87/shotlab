@@ -40,8 +40,24 @@ re-exported (personal elbow ideal 117°). Full suite 16/16 + JS green.
     sign pinning. Cam-1 stays wide (arc/rim/makes), Cam-2 = close body-cam.
 
 **Buildable now (no hardware):**
+0. **VOICE-TAG WORKFLOW (chosen 2026-07-02) — record-then-review with spoken tags.**
+   User's tagging decision: NO tap buttons; record the workout with the phone
+   CAMERA APP (saves video + his voice), say a short phrase per shot, tag
+   good/bad + reason POST-session from the audio. Core BUILT: `shotlab/voicetag.py`
+   (fixed vocabulary + `parse_phrase` + `assign_to_shots`, tests 10/10) +
+   guarded `transcribe_vosk` (offline Vosk, grammar-restricted to vocab). **Word
+   list he'll use:** every shot "good"/"bad"; after "bad" optionally "flare" /
+   "off hand" (camera-BLIND → the reason voice tagging exists) / "short" / "long"
+   / "rushed" / "balance" (optional feels). ⚠️ REMAINING (needs his 1st recorded
+   session + `pip install vosk` + model): validate STT on real audio, then a
+   `tools/voicetag_session.py` (transcribe → assign → write felt_good + reason
+   tags into the session records) + feed into export_profile. NOTE the live app
+   does NOT save video (rolling pose buffer only) — that's why this path uses the
+   camera app. Guide-hand (his Q): 2-cam CAN check guide-hand POSITION + release
+   TIMING (3D wrist vs ball — on-side vs under, lingering); finger-level
+   thumb-flick/spin stays the hard stretch (ball occludes fingers).
 1. **USER: test the app on the Pixel** — live camera, gold ideal-skeleton overlay,
-   new Feel log (CSV) button (visible once any live shots are tagged).
+   spoken feedback (🔊 toggle), Feel log (CSV) button.
 2. **Headline finding to chase with filming:** makes come with much deeper knee
    bend (full 0701: 107° vs 137°, d=−0.77, p=0.035; camera-consistent wide subset:
    99° vs 137°, d=−0.97, p=0.017). First make-driver to clear significance.
