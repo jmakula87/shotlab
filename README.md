@@ -68,6 +68,12 @@ and ~0° **elbow flare** (a tucked elbow stays on line — but flare is
 out-of-plane, so it only comes online with the 2nd camera). Body-form angles
 stay personal on purpose — copying a pro's numbers can hurt a shot that works.
 
+**Tagging good shots (hands-free):** narrate each shot as you film ("good" /
+"bad, flare" / "bad, off hand"), then `python tools/voicetag_session.py
+data/out/session --model <vosk-model>` transcribes your audio and writes
+`felt_good` into the session, which `export_profile` then builds your ideal
+from. Needs the optional `vosk` dependency + a small offline model.
+
 ---
 
 ## Model choices (and why)

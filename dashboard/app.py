@@ -200,6 +200,32 @@ def shot_map_chart(df):
     return fig
 
 
+def _textbook_panel(df):
+    """Universal (textbook) targets vs your session average -- shown SEPARATELY
+    from your personal norm so the two never blend."""
+    from shotlab.textbook import TEXTBOOK, grade
+    rows = []
+    for metric, spec in TEXTBOOK.items():
+        label = metric.replace("_deg", "").replace("_", " ")
+        if spec["measurable_now"] and metric in df.columns and df[metric].notna().sum() >= 3:
+            avg = float(df[metric].mean())
+            g = grade(metric, avg)
+            verdict = "✅ on target" if (g and g[0]) else (f"{g[1]:+.0f}° off" if g else "—")
+            rows.append({"metric": label, "your avg": f"{avg:.0f}°",
+                         "target": f"{spec['target']:.0f}°", "status": verdict,
+                         "why it's universal": spec["why"]})
+        else:
+            rows.append({"metric": label, "your avg": "—",
+                         "target": f"{spec['target']:.0f}°", "status": "needs 2nd camera",
+                         "why it's universal": spec.get("needs", spec["why"])})
+    with st.container(border=True):
+        st.subheader("📐 Textbook targets (universal — separate from your own norm)")
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+        st.caption("These few numbers are the same for everyone (physics); your "
+                   "personal ideal (the mean of your good shots) is what everything "
+                   "else compares to. Body-form angles stay personal on purpose.")
+
+
 def _clean(v):
     try:
         import numpy as _np
@@ -447,8 +473,10 @@ def view_session():
         cols = st.columns(len(have))
         for col, (c, lbl, u) in zip(cols, have):
             col.metric(lbl, f"{df[c].mean():.2f}{u}")
-        st.caption("Rim-scaled real-world estimates — concrete but low-confidence "
-                   "on one wide camera (calibration + the 2nd camera firm them up).")
+        st.caption("Real-world estimates. Jump height is honest when the session "
+                   "was built with `--shooter-height` (body-scaled); release height "
+                   "is depth-limited on one oblique camera; the 2nd camera firms "
+                   "these up.")
 
     _data_health(df)
     _export_panel(d, sd)
@@ -490,6 +518,9 @@ def view_session():
                         "mean_made", "mean_miss", "diff", "cohen_d", "p_perm"]
                 st.dataframe(pd.DataFrame(shown)[cols], hide_index=True,
                              width="stretch")
+
+    # ---- textbook (universal) targets, kept separate from your personal norm ----
+    _textbook_panel(view)
 
     # ---- shot chart (half-court zones by make% + per-shot map) ----
     if {"depth", "side"}.issubset(df.columns):
@@ -911,6 +942,25 @@ def view_progress():
             x=alt.X("date:O", title="session date"),
             y=alt.Y(metric, scale=alt.Scale(zero=False)),
             tooltip=["date", metric])
+        # goal line: if this metric has a textbook target, overlay it + say
+        # whether you're closing the gap across sessions
+        from shotlab.textbook import TEXTBOOK
+        base = metric.replace("avg_", "").replace("std_", "")
+        tb = TEXTBOOK.get(base)
+        if (tb and tb.get("measurable_now") and metric.startswith("avg_")
+                and len(sub) >= 1):
+            target = tb["target"]
+            rule = alt.Chart(pd.DataFrame({"y": [target]})).mark_rule(
+                strokeDash=[5, 5], color="#2e7d32").encode(y="y:Q")
+            ch = ch + rule
+            latest, first = float(sub[metric].iloc[-1]), float(sub[metric].iloc[0])
+            gap = latest - target
+            trend = ("closing ✅" if abs(latest - target) < abs(first - target) - 1e-9
+                     else "holding" if abs(abs(latest - target) - abs(first - target)) < 1e-9
+                     else "widening ⚠️")
+            st.caption(f"🎯 Textbook target **{target:.0f}°** (green line). Latest "
+                       f"**{latest:.0f}°** → gap **{gap:+.0f}°**, {trend} vs your "
+                       f"first tracked session.")
         st.altair_chart(ch, use_container_width=True)
 
 
