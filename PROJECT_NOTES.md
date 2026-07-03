@@ -38,6 +38,14 @@ re-exported (personal elbow ideal 117°). Full suite 16/16 + JS green.
     Remaining to write when real footage exists: the session-level glue
     (build_session-style CLI over fuse_pose_tracks) + LEFT_RIGHT-style flare
     sign pinning. Cam-1 stays wide (arc/rim/makes), Cam-2 = close body-cam.
+    (3) **VERIFY COURT DIMS with the metric rig (user asked 2026-07-03).** Court
+    ground-truth = **24.375 ft long × 42.25 ft wide** (rig scale comes from the
+    checkerboard, NOT the court, so it's an INDEPENDENT check). Easiest: a
+    scale-sanity check — triangulate the 5'10" height / 18in rim; if true, all
+    rig distances trustworthy. Direct corner triangulation needs both cams to
+    see the corners (dedicated framing, not the tight body-cam) and is only
+    ±0.5-1 ft on far corners. Single-cam height-ruler estimate already matched
+    the corner-diagonal (32.3 ft) well.
 
 **Buildable now (no hardware):**
 0. **VOICE-TAG WORKFLOW (chosen 2026-07-02) — record-then-review with spoken tags.**
