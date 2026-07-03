@@ -76,6 +76,37 @@ def test_accepts_prebuilt_outcome():
     assert tags[1]["outcome"] == "good"
 
 
+def test_apply_tags_to_session_writes_felt_good(tmp_path=None):
+    """End-to-end (minus STT): injected phrases -> felt_good + felt_reasons in
+    the session CSV, mapped to the right shots by clip-relative time."""
+    import tempfile
+    import pandas as pd
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "tools"))
+    from voicetag_session import apply_tags_to_session
+
+    d = tempfile.mkdtemp()
+    clip = "PXL_20260701_181500000.mp4"          # clip starts 18:15:00
+    # two shots at +12s and +40s into the clip
+    df = pd.DataFrame({
+        "clip": [clip, clip],
+        "shot_in_clip": [1, 2],
+        "abs_time": ["2026-07-01T18:15:12", "2026-07-01T18:15:40"],
+        "made": [None, None],
+    })
+    df.to_csv(os.path.join(d, "session_shots.csv"), index=False)
+
+    phrases = {clip: [{"t": 13.5, "text": "good"},          # -> shot 1
+                      {"t": 41.0, "text": "bad, flare"}]}    # -> shot 2
+    s = apply_tags_to_session(d, phrases_by_clip=phrases)
+    assert s["good"] == 1 and s["bad"] == 1 and s["reasons"] == {"flare": 1}
+
+    out = pd.read_csv(os.path.join(d, "session_shots.csv"))
+    assert bool(out.loc[0, "felt_good"]) is True
+    assert bool(out.loc[1, "felt_good"]) is False
+    assert out.loc[1, "felt_reasons"] == "flare"
+
+
 if __name__ == "__main__":
     import traceback
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
