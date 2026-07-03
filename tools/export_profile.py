@@ -191,6 +191,13 @@ def main(argv=None):
         print(f"no session_shots.csv in {args.session_dir}")
         return 1
     df = pd.read_csv(csv)
+    from shotlab.curate import apply_excludes, load_excludes
+    n0 = len(df)
+    df = apply_excludes(df, args.session_dir)     # drop curated junk + layups
+    ex, lay = load_excludes(args.session_dir)
+    if ex or lay:
+        print(f"  curation: dropped {n0 - len(df)} shots "
+              f"({len(ex)} excluded, {len(lay)} layups)")
     profile = build_profile(df, args.session_dir, name=args.name,
                             handedness=args.handedness,
                             with_skeletons=not args.no_skeletons,

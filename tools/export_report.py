@@ -185,6 +185,8 @@ def main(argv=None):
         print(f"no session_shots.csv in {d}")
         return 1
     df = pd.read_csv(shots_csv)
+    from shotlab.curate import apply_excludes
+    df = apply_excludes(df, d)               # drop curated junk + layups everywhere
     name = os.path.basename(d.rstrip("/\\"))
 
     # headline numbers

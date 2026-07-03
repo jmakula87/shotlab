@@ -101,6 +101,9 @@ def build_shot_closeups(session_dir, only_made=None, raw_dirs=None,
     os.makedirs(cdir, exist_ok=True)
     df = pd.read_csv(os.path.join(session_dir, "session_shots.csv"))
 
+    from .curate import apply_excludes
+    df = apply_excludes(df, session_dir)          # drop junk + layups
+
     def _nm(v):
         return True if v in (True, "True") else (False if v in (False, "False") else None)
     if only_made is not None and "made" in df.columns:
