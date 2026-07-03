@@ -42,6 +42,134 @@ def _shot_map_b64(df):
     return base64.b64encode(buf.getvalue()).decode()
 
 
+def _coach_thumbs(df, session_dir, raw_dirs=None):
+    """A small mid-flight thumbnail (frame + ball trail) per shot, from the
+    cached track. Cached to <session>/thumbs/shot_N.jpg; returns {shot_num: b64}."""
+    import cv2
+    from shotlab.detect_cache import _load as load_track
+    raw_dirs = raw_dirs or [os.path.join("data", "raw", "Hoops"),
+                            os.path.join("data", "raw")]
+    tdir = os.path.join(session_dir, "thumbs")
+    os.makedirs(tdir, exist_ok=True)
+    thumbs = {}
+    for clip, group in df.groupby("clip"):
+        loaded = load_track(clip)
+        by_idx = {}
+        if loaded:
+            _, _track, shots = loaded
+            by_idx = {s.index: s for s in shots}
+        raw = next((os.path.join(dd, clip) for dd in raw_dirs
+                    if os.path.exists(os.path.join(dd, clip))), None)
+        cap = cv2.VideoCapture(raw) if raw else None
+        for _, row in group.iterrows():
+            sn = int(row["shot_num"])
+            fp = os.path.join(tdir, f"shot_{sn}.jpg")
+            if not os.path.exists(fp) and cap is not None:
+                s = by_idx.get(int(row["shot_in_clip"]))
+                if s is None:
+                    continue
+                mid = int(s.frames[len(s.frames) // 2])
+                cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
+                ok, img = cap.read()
+                if not ok:
+                    continue
+                for x, y in zip(s.xs, s.ys):
+                    cv2.circle(img, (int(x), int(y)), 4, (0, 255, 255), -1)
+                cv2.imwrite(fp, cv2.resize(img, (320, 180)),
+                            [cv2.IMWRITE_JPEG_QUALITY, 80])
+            if os.path.exists(fp):
+                with open(fp, "rb") as f:
+                    thumbs[sn] = base64.b64encode(f.read()).decode()
+        if cap:
+            cap.release()
+    return thumbs
+
+
+def _gallery(group, thumbs, metric, unit):
+    cells = []
+    for _, r in group.iterrows():
+        b = thumbs.get(int(r["shot_num"]))
+        if not b:
+            continue
+        v = r.get(metric)
+        tag = f"#{int(r['shot_num'])}"
+        if v is not None and str(v) not in ("nan", "None"):
+            try:
+                tag += f" · {float(v):.0f}{unit}"
+            except (ValueError, TypeError):
+                pass
+        cells.append(f"<figure><img src='data:image/jpeg;base64,{b}'>"
+                     f"<figcaption>{tag}</figcaption></figure>")
+    return "<div class='gallery'>" + "".join(cells) + "</div>"
+
+
+def _coaching_html(df, session_dir):
+    """The coaching block: your makes vs misses, what they share / what's off,
+    galleries of each, and drills. Built from the make-correlation + coach."""
+    import re
+    from shotlab.coach import generate_review, recommend_drills
+
+    def _nm(v):
+        return True if v in (True, "True") else (False if v in (False, "False") else None)
+    made = df["made"].map(_nm) if "made" in df.columns else None
+    if made is None or made.isin([True, False]).sum() < 6:
+        return ""
+    makes, misses = df[made == True], df[made == False]
+
+    # the coachable levers with a KNOWN good direction, biggest gap first. Tempo
+    # and balance-drift are left out here (noisy + ambiguous direction) -- they
+    # still show with full stats in the make-drivers panel below.
+    LEVERS = [("release_angle_deg", "release arc", "°"),
+              ("knee_bend_deg", "knee bend", "°"),
+              ("entry_angle_deg", "entry angle", "°"),
+              ("follow_through_hold_s", "follow-through", "s")]
+    diffs = []
+    for col, label, unit in LEVERS:
+        if col not in df.columns:
+            continue
+        gm, bm = makes[col].dropna(), misses[col].dropna()
+        if len(gm) >= 4 and len(bm) >= 4:
+            d = gm.mean() - bm.mean()
+            sd = df[col].std()
+            if sd and abs(d) / sd > 0.25:                 # a real gap
+                diffs.append((abs(d) / sd, col, label, unit, gm.mean(), bm.mean(), d))
+    diffs.sort(reverse=True)
+
+    shared = "".join(
+        f"<li><b>{label}</b>: your makes average <b>{gmean:.0f}{unit}</b> vs "
+        f"<b>{bmean:.0f}{unit}</b> on misses — a {'higher' if d > 0 else 'lower'} "
+        f"{label} is going in for you.</li>"
+        for _eff, col, label, unit, gmean, bmean, d in diffs[:4]) or (
+        "<li>No single form metric cleanly separated your makes from misses this "
+        "session — your misses are more about touch than a broken mechanic.</li>")
+
+    lead_metric = diffs[0][1] if diffs else "release_angle_deg"
+    lead_unit = diffs[0][3] if diffs else "°"
+
+    rev = generate_review(df)
+
+    def _bold(s):
+        return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", s)
+    drills_html = "".join(f"<li>{_bold(dr)}</li>" for dr in recommend_drills(df))
+
+    thumbs = _coach_thumbs(df, session_dir)
+    mk_pct = (makes.shape[0] / max(1, (made.isin([True, False])).sum())) * 100
+
+    return f"""
+<div class='coach'>
+<h2>🏀 Coaching — what's working and what to groove</h2>
+<p class='lead'>{rev.get('summary', '')}</p>
+<h3>What your makes have in common</h3><ul>{shared}</ul>
+<h3>✅ Your makes ({makes.shape[0]}) — {mk_pct:.0f}% of classifiable shots</h3>
+<p class='hint'>Sorted by shot number; the number under each is its {diffs[0][2] if diffs else 'release arc'}.
+Look for the shared look — that's your rep to repeat.</p>
+{_gallery(makes, thumbs, lead_metric, lead_unit)}
+<h3>⚠️ Your misses ({misses.shape[0]}) — where the {diffs[0][2] if diffs else 'arc'} tends to slip</h3>
+{_gallery(misses, thumbs, lead_metric, lead_unit)}
+<h3>🎯 Work on this</h3><ul>{drills_html}</ul>
+</div>"""
+
+
 def _table(path, title):
     if not os.path.exists(path):
         return ""
@@ -154,6 +282,8 @@ def main(argv=None):
         "<table class='t'><tr><th>Metric</th><th>Your avg</th><th>Target</th>"
         "<th></th><th>Why it's universal</th></tr>" + "".join(tb_rows) + "</table>")
 
+    coaching_html = _coaching_html(df, d)
+
     smap = _shot_map_b64(df)
     shot_map_html = ("<h2>🗺️ Shot map (release points vs the rim; dot = make, "
                      "X = miss — image-space, camera's view)</h2>"
@@ -183,12 +313,19 @@ table.t td{{padding:5px 8px;border-bottom:1px solid #eee;text-align:center}}
 table.t tr:nth-child(even){{background:#fafafa}}
 .review{{background:#f0f7ff;border-left:4px solid #1e6fd8;border-radius:8px;padding:6px 20px;margin:18px 0}}
 .review h3{{margin:12px 0 4px;font-size:15px}} .review li{{margin:3px 0}}
+.coach{{background:#f3fbf4;border-left:4px solid #2e7d32;border-radius:8px;padding:6px 20px;margin:18px 0}}
+.coach h2{{margin-top:10px}} .coach h3{{margin:16px 0 4px;font-size:16px}}
+.coach .lead{{font-size:15px}} .coach .hint{{color:#777;font-size:12px;margin:2px 0 8px}}
+.gallery{{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:6px 0 12px}}
+.gallery figure{{margin:0}} .gallery img{{width:100%;border-radius:6px;display:block}}
+.gallery figcaption{{font-size:11px;color:#555;text-align:center;padding-top:2px}}
 .note{{color:#777;font-size:12px;margin-top:24px;border-top:1px solid #eee;padding-top:10px}}
 </style></head><body>
 <h1>🏀 ShotLab — {name}</h1>
 <p class='sub'>{n} shots · {dur:.0f} min session</p>
 <div class='kpis'><div class='kpi'><b>{n}</b><span>shots</span></div>
 <div class='kpi'><b>{dur:.0f} min</b><span>session</span></div>{make}</div>
+{coaching_html}
 {review_html}
 {make_drivers_html}
 {textbook_html}
