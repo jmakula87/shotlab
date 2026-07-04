@@ -216,7 +216,8 @@ def _textbook_panel(df):
                          "why it's universal": spec["why"]})
         else:
             rows.append({"metric": label, "your avg": "—",
-                         "target": f"{spec['target']:.0f}°", "status": "needs 2nd camera",
+                         "target": f"{spec['target']:.0f}°",
+                         "status": f"needs {spec.get('blocked_by', '2nd camera')}",
                          "why it's universal": spec.get("needs", spec["why"])})
     with st.container(border=True):
         st.subheader("📐 Textbook targets (universal — separate from your own norm)")

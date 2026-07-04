@@ -276,8 +276,9 @@ def main(argv=None):
                            f"<td class='why'>{spec['why']}</td></tr>")
         else:
             need = spec.get("needs", "not measured this session")
+            blk = spec.get("blocked_by", "2nd camera")
             tb_rows.append(f"<tr><td>{label}</td><td>—</td>"
-                           f"<td>{spec['target']:.0f}°</td><td>needs 2nd camera</td>"
+                           f"<td>{spec['target']:.0f}°</td><td>needs {blk}</td>"
                            f"<td class='why'>{need}</td></tr>")
     textbook_html = (
         "<h2>📐 Textbook targets (universal — separate from your own norm)</h2>"

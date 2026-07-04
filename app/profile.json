@@ -27,15 +27,26 @@
   "textbook": {
     "entry_angle_deg": {
       "target": 45.0,
-      "tolerance": 5.0,
-      "measurable_now": true,
-      "why": "~45 deg entry maximizes the rim opening -- true for every shooter."
+      "tolerance": 3.0,
+      "measurable_now": false,
+      "why": "~45 deg entry maximizes the rim opening -- true for every shooter (Noah's 100M+ shots; higher arcs lose make%).",
+      "blocked_by": "calibration",
+      "needs": "a single wide camera foreshortens the arc (reads high), so the raw degrees aren't comparable to this target until we calibrate -- mark the court corners with the known dimensions, or use the 2-camera rig."
+    },
+    "release_angle_deg": {
+      "target": 52.0,
+      "tolerance": 4.0,
+      "measurable_now": false,
+      "why": "~50-52 deg launch produces the 45 deg entry; shorter guards carry a touch more arc (~52 for <=6'0\").",
+      "blocked_by": "calibration",
+      "needs": "a single wide camera foreshortens the arc (reads high), so the raw degrees aren't comparable to this target until we calibrate -- mark the court corners with the known dimensions, or use the 2-camera rig."
     },
     "elbow_flare_deg": {
       "target": 0.0,
       "tolerance": 5.0,
       "measurable_now": false,
       "why": "a tucked elbow keeps the ball on line; flaring it out pushes shots off-line -- bad for everyone.",
+      "blocked_by": "2nd camera",
       "needs": "2-camera 3D (flare is out-of-plane; twocam.elbow_flare measures it once the second camera is calibrated)."
     }
   },
