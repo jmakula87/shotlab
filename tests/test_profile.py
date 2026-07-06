@@ -44,16 +44,31 @@ def test_falls_back_to_all_when_sparse():
     assert len(good) == len(df) and "all shots" in method
 
 
-def test_build_profile_ideal_is_mean_of_good():
+def test_build_profile_ideal_is_median_of_good():
+    """The ideal is the MEDIAN (not mean) of the good shots, so one splayed-pose
+    outlier can't drag the target (2026-07-05 audit)."""
     df = _df()
     df["felt_good"] = [True] * 10 + [None] * 10
     prof = build_profile(df, session_dir="/nope")
     good = df.iloc[:10]
     assert abs(prof["ideal"]["elbow_angle_at_release_deg"]
-               - round(float(good["elbow_angle_at_release_deg"].mean()), 2)) < 0.01
+               - round(float(good["elbow_angle_at_release_deg"].median()), 2)) < 0.01
     # tolerance respects the floor (>= 6 for elbow)
     assert prof["tolerance"]["elbow_angle_at_release_deg"] >= 6.0
     assert prof["n_good"] == 10
+
+
+def test_ideal_is_robust_to_an_outlier():
+    """A single 172 deg straight-leg 'knee bend' artifact must NOT move the ideal
+    or blow the tolerance (median + MAD, out-of-range gating)."""
+    df = _df(n=12)
+    df["felt_good"] = [True] * 12
+    df.loc[df.index[0], "knee_bend_deg"] = 172.0        # straight-leg artifact
+    df.loc[df.index[1], "knee_bend_deg"] = 30.5         # (real deep bend, kept)
+    prof = build_profile(df, session_dir="/nope")
+    kb = prof["ideal"]["knee_bend_deg"]
+    assert 100 <= kb <= 130, kb                          # near the true ~115, not pulled up
+    assert prof["tolerance"]["knee_bend_deg"] < 25       # not the ±27 that flagged nothing
 
 
 def test_profile_has_separate_textbook_block():
@@ -87,8 +102,10 @@ def test_form_ideals_survive_when_best_arc_shots_lack_pose():
     })
     # best_shots.csv = 10 far shots with NO pose (shots 26..35)
     prof = build_profile(df, session_dir="/nope")
-    # arc ideals always populate; form ideals populate from the pose pool
-    assert "release_angle_deg" in prof["ideal"]
+    # arc angles live in `diagnostic` (foreshortened, never scored); the SCORED
+    # form ideals populate from the pose-reliable pool
+    assert "release_angle_deg" in prof["diagnostic"]
+    assert "release_angle_deg" not in prof["ideal"]
     assert "elbow_angle_at_release_deg" in prof["ideal"], prof["ideal"]
     assert "knee_bend_deg" in prof["ideal"]
     assert prof["n_form"] >= 5

@@ -94,6 +94,36 @@ def build_shot_sequence():
     return poses, ball, release_f
 
 
+def build_clean_ball_late_apex():
+    """Models the real release physics: the ball-CENTER starts moving off the
+    wrist landmark at frame 18 (it rolls out to the fingertips), and the arm
+    reaches FULL EXTENSION -- the true release -- at the wrist apex, frame 22.
+    So the ball hand-off (~18) precedes peak extension (~22) by a few frames,
+    exactly as on real footage. Image y grows downward (smaller = higher)."""
+    poses, ball = {}, {}
+    rel = 18
+    for f in range(0, 32):
+        shoulder_y = 210 - 2 * min(f, 22)               # body rises through 22
+        if f <= 22:
+            wrist_y = shoulder_y - 20 - 3 * f            # wrist climbs to a peak at 22
+        else:
+            wrist_y = shoulder_y - 20 - 3 * 22 + 5 * (f - 22)
+        wrist = (240, float(wrist_y))
+        joints = {
+            "r_shoulder": (210, shoulder_y), "l_shoulder": (195, shoulder_y),
+            "r_elbow": (228, wrist_y + 25), "r_wrist": wrist,
+            "r_hip": (205, shoulder_y + 90), "l_hip": (195, shoulder_y + 90),
+            "r_knee": (200, shoulder_y + 140), "r_ankle": (200, 470),
+            "l_ankle": (190, 470),
+        }
+        poses[f] = make_pose(f, joints)
+        if f <= rel:
+            ball[f] = FakeBall(*wrist)                   # in hand until release
+        else:                                            # flies up-and-away -> diverges
+            ball[f] = FakeBall(wrist[0] + 10 * (f - rel), wrist[1] - 4 * (f - rel))
+    return poses, ball, rel
+
+
 def test_release_frame_sync():
     poses, ball, rel = build_shot_sequence()
     shot = FakeShot(list(range(14, 30)))
@@ -120,30 +150,57 @@ def test_release_subframe_and_confidence():
     assert abs(sf.release_t - est.t) < 1e-6
 
 
-def test_late_ball_falls_back_to_wrist_apex():
-    """Far/small ball the detector only locks onto ~0.4s into flight: the ball
-    'release' would land late (arm already down). find_release should instead use
-    the pose wrist-apex and recover the true release."""
+def test_late_ball_still_uses_peak_extension():
+    """Far/small ball the detector only locks onto ~0.4s into flight: the release
+    is still the pose wrist-apex (peak extension), and because the ball hand-off
+    doesn't line up with the peak it comes back unconfirmed (low confidence)."""
     from shotlab.phase2_pose.form import find_release
-    poses, _ball, rel = build_shot_sequence()      # true release / wrist apex = 18
+    poses, _ball, rel = build_shot_sequence()      # wrist apex = 18
     # ball tracked ONLY late, already flying up-and-away from the lowered wrist
     late_ball = {f: FakeBall(300 + 8 * (f - 28), 100 - 6 * (f - 28))
                  for f in range(28, 32)}
     shot = FakeShot(list(range(28, 32)))           # flight detected late
     est = find_release(shot, late_ball, poses, handedness="right", fps=60)
-    assert abs(est.frame - rel) <= 2, est.frame    # NOT the late ball frame (28)
+    assert abs(est.frame - rel) <= 2, est.frame    # peak extension, not the late ball
     assert "apex" in est.note, est.note
+    assert est.confidence == "low"                 # hand-off didn't confirm the peak
 
 
-def test_clean_ball_still_wins_over_apex():
-    """When the ball IS tracked through the release, keep the sharper ball
-    estimate (the apex must not hijack clean footage)."""
-    from shotlab.phase2_pose.form import find_release
-    poses, ball, rel = build_shot_sequence()
+def test_release_anchors_to_peak_extension_confirmed_by_handoff():
+    """Release is peak arm extension (the wrist apex), NOT ball-center divergence:
+    the ball rolls off the fingertips a hand-length past the wrist, so its
+    divergence fires mid-push at a still-bent elbow. The ball hand-off a few
+    frames earlier CONFIRMS the apex (high confidence)."""
+    from shotlab.phase2_pose.form import find_release, _wrist_apex, side_keys
+    poses, ball, _ = build_clean_ball_late_apex()
     shot = FakeShot(list(range(14, 30)))
-    est = find_release(shot, ball, poses, handedness="right", fps=60)
-    assert abs(est.frame - rel) <= 1, est.frame
-    assert "apex" not in est.note
+    af, _ = _wrist_apex(shot, poses, side_keys("right"), fps=30)
+    est = find_release(shot, ball, poses, handedness="right", fps=30)
+    assert est.frame == af, (est.frame, af)            # peak extension = release
+    assert est.confidence == "high"                    # ball hand-off confirmed it
+    assert est.diverging is True
+
+
+def test_pumpfake_gives_no_confident_release():
+    """A pump/aborted shot: the arm RISES (wrist above the shoulder) but the ball
+    never leaves the hand. There's a wrist apex, but with NO clean ball hand-off
+    it must come back LOW confidence and NOT diverging -- so nothing downstream
+    trusts a non-release as a confident release (2026-07-05 audit #3)."""
+    from shotlab.phase2_pose.form import find_release
+    poses, ball = {}, {}
+    for f in range(0, 24):
+        wrist_y = 210 - 6 * f if f <= 10 else 150       # rises above shoulder, holds
+        wrist = (240, float(wrist_y))
+        joints = {"r_shoulder": (210, 200), "l_shoulder": (195, 200),
+                  "r_elbow": (228, wrist_y + 20), "r_wrist": wrist,
+                  "r_hip": (205, 290), "l_hip": (195, 290),
+                  "r_knee": (200, 360), "r_ankle": (200, 470), "l_ankle": (190, 470)}
+        poses[f] = make_pose(f, joints)
+        ball[f] = FakeBall(float(wrist[0]), float(wrist[1]))   # ball pinned to wrist
+    shot = FakeShot(list(range(6, 22)))
+    est = find_release(shot, ball, poses, handedness="right", fps=30)
+    assert est.diverging is False, est
+    assert est.confidence == "low", est.confidence
 
 
 def test_jump_height_is_ankle_based_not_squat():

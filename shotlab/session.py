@@ -97,7 +97,8 @@ def _cache_path(video_path: str) -> str:
 # Bump when the record-building LOGIC changes in a way the schema/params don't
 # capture (e.g. a metric formula). The ShotRecord field set is folded in
 # automatically, so adding/removing a record field invalidates caches on its own.
-_CACHE_VERSION = 10   # v10: release window widened (overhead snap trails ball-track start)
+_CACHE_VERSION = 13   # v13: release re-anchored to peak arm extension (wrist apex),
+                      #      ball hand-off only confirms it (fingertip-release physics)
 
 
 def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
@@ -409,12 +410,13 @@ def aggregate_sessions(out_dir: str = "data/out") -> pd.DataFrame:
     row per session, dated from its shots, so you can track progress across days.
     Returns a DataFrame sorted by date (empty if no sessions yet)."""
     import glob
+    from .curate import apply_excludes
     rows = []
     for d in sorted(glob.glob(os.path.join(out_dir, "session_*"))):
         csv = os.path.join(d, "session_shots.csv")
         if not os.path.exists(csv):
             continue
-        df = pd.read_csv(csv)
+        df = apply_excludes(pd.read_csv(csv), d)   # match every other surface
         if df.empty:
             continue
         t = pd.to_datetime(df.get("abs_time"), errors="coerce").dropna()

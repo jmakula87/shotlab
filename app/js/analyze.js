@@ -122,12 +122,20 @@ function _nearestNonNull(series, idx, key) {
 
 const round1 = x => (x == null ? null : Math.round(x * 10) / 10);
 
+// Metrics measured in the single-camera image plane that a wide view
+// FORESHORTENS (they read high and can't be trusted against a real target until
+// court-corner / 2-cam calibration). Never score or coach off these -- the repo
+// marks them measurable_now:false, and scoring them was surfacing uncalibrated
+// arc angles as if they were dialed-in personal targets (2026-07-05 audit).
+export const CALIBRATION_GATED = new Set(["release_angle_deg", "entry_angle_deg"]);
+
 // Compare measured metrics to the profile's ideal targets -> deltas + feedback.
 export function compareToProfile(metrics, profile) {
   const ideal = (profile && profile.ideal) || {};
   const out = [];
   for (const [key, meas] of Object.entries(metrics)) {
     if (meas == null || ideal[key] == null) continue;
+    if (CALIBRATION_GATED.has(key)) continue;   // foreshortened -> not scored
     const target = ideal[key];
     const delta = round1(meas - target);
     const tol = (profile.tolerance && profile.tolerance[key]) ?? 8;

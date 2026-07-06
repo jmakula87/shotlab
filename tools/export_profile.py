@@ -24,6 +24,7 @@ import json
 import os
 import sys
 
+import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -104,16 +105,44 @@ def select_form_good(df: pd.DataFrame, min_good: int = 5):
     return pose, "pose-reliable shots"
 
 
+# Physically-sane ranges per metric: values outside are pose/tracking artifacts
+# (a 172 deg "knee bend" is a straight-leg mis-detection; a 0.00s follow-through
+# is a floor, not a hold) and must not skew the ideal. None = no gate on that end.
+_VALID_RANGE = {
+    "knee_bend_deg": (30.0, 150.0),          # >150 = not actually bent (artifact)
+    "elbow_angle_at_release_deg": (90.0, 180.0),
+    "tempo_dip_to_release_s": (0.05, 2.0),   # <0.05s = sub-frame floor
+    "follow_through_hold_s": (0.02, 3.0),    # 0.00 = no hold measured
+    "balance_drift_px_per_ht": (0.0, 3.0),
+    "release_angle_deg": (10.0, 80.0),
+    "entry_angle_deg": (10.0, 80.0),
+}
+
+
 def _add_ideal(ideal: dict, tol: dict, pool: pd.DataFrame, col: str, floor: float):
-    """Set ideal[col] = mean and tol[col] = spread (floored) if the pool has
-    >=3 non-null values for the metric; otherwise leave it out."""
+    """Set ideal[col] = MEDIAN and tol[col] = robust spread (floored) over the
+    pool's in-range values, if >=3 remain; otherwise leave it out.
+
+    Median + MAD (not mean + std) so one splayed-skeleton outlier can't drag the
+    target or blow the tolerance so wide it flags nothing (2026-07-05 audit: a
+    5.6 balance-drift outlier and 172 deg knee artifacts were doing exactly
+    that). Out-of-range artifacts are dropped before aggregating."""
     if col not in pool.columns:
         return
     vals = pool[col].dropna()
+    lo, hi = _VALID_RANGE.get(col, (None, None))
+    if lo is not None:
+        vals = vals[vals >= lo]
+    if hi is not None:
+        vals = vals[vals <= hi]
     if len(vals) < 3:
         return
-    ideal[col] = round(float(vals.mean()), 2)
-    tol[col] = round(float(max(vals.std(ddof=0) if len(vals) > 1 else floor, floor)), 2)
+    v = vals.to_numpy(dtype=float)
+    med = float(np.median(v))
+    mad = float(np.median(np.abs(v - med)))
+    robust_std = 1.4826 * mad                 # MAD -> std-equivalent for normals
+    ideal[col] = round(med, 2)
+    tol[col] = round(float(max(robust_std, floor)), 2)
 
 
 def build_profile(df: pd.DataFrame, session_dir: str, *, name="me",
@@ -122,11 +151,16 @@ def build_profile(df: pd.DataFrame, session_dir: str, *, name="me",
     arc_good, arc_method = select_good(df, session_dir, min_good)
     form_good, form_method = select_form_good(df, min_good)
 
+    # `ideal` = the app's SCORED targets -- only trustworthy in-plane form
+    # metrics. The arc angles go in `diagnostic` (shown, never scored): a single
+    # wide camera foreshortens them, so they read high and can't be a real target
+    # until court-corner / 2-cam calibration (2026-07-05 audit).
     ideal, tol = {}, {}
-    for col, floor in ARC_METRICS:
-        _add_ideal(ideal, tol, arc_good, col, floor)
+    diagnostic, diag_tol = {}, {}
     for col, floor in FORM_METRICS:
         _add_ideal(ideal, tol, form_good, col, floor)
+    for col, floor in ARC_METRICS:
+        _add_ideal(diagnostic, diag_tol, arc_good, col, floor)
 
     skeletons = {"load": None, "release": None, "follow": None}
     skel_note = ""
@@ -146,8 +180,11 @@ def build_profile(df: pd.DataFrame, session_dir: str, *, name="me",
         "n_form": int(len(form_good)),
         "source_method": arc_method,
         "form_method": form_method,
-        "ideal": ideal,            # YOUR own norm (mean of your good shots)
+        "ideal": ideal,            # YOUR own norm (median of your good shots), SCORED
         "tolerance": tol,
+        # foreshortened arc angles: shown for reference, NOT scored (see above)
+        "diagnostic": diagnostic,
+        "diagnostic_tolerance": diag_tol,
         "textbook": profile_block(),  # universal targets, SEPARATE from `ideal`
         "skeletons": skeletons,
     }

@@ -45,5 +45,17 @@ const deltas = compareToProfile(a.metrics, prof);
 const eb = deltas.find(d => d.key === "elbow_angle_at_release_deg");
 ok("compareToProfile matches the elbow key", !!eb && eb.within === false);
 
+// foreshortened arc angles must NEVER be scored/coached, even if a stale profile
+// still carries them in `ideal` (2026-07-05 audit fix #4)
+const arcMetrics = { release_angle_deg: 71, entry_angle_deg: 59,
+                     elbow_angle_at_release_deg: 150 };
+const arcProf = { ideal: { release_angle_deg: 52, entry_angle_deg: 45,
+                           elbow_angle_at_release_deg: 160 } };
+const arcDeltas = compareToProfile(arcMetrics, arcProf);
+ok("arc angles are not scored", !arcDeltas.some(
+   d => d.key === "release_angle_deg" || d.key === "entry_angle_deg"));
+ok("non-arc metric still scored alongside", arcDeltas.some(
+   d => d.key === "elbow_angle_at_release_deg"));
+
 console.log(`\n${passed}/${passed + failed} passed`);
 process.exit(failed ? 1 : 0);

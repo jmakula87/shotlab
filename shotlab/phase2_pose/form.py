@@ -120,36 +120,41 @@ def detect_handedness(poses, frames, default="right", thr=0.4) -> str:
 
 
 def find_release(shot, ball_track, poses, handedness, fps=30.0) -> ReleaseEstimate:
-    """Where the ball leaves the shooting hand, to sub-frame precision.
+    """The release frame for POSE metrics, anchored to peak shooting-arm
+    extension (the wrist apex).
 
-    Two signals, combined so neither footage type breaks:
-      - BALL divergence (`_ball_release`): the ball sits at the wrist until
-        release, then separates -- the onset of that divergence is a sharp,
-        accurate release. Great when the ball is tracked THROUGH the release.
-      - POSE wrist-apex (`_wrist_apex`): the shooting wrist peaks at the snap.
-        This needs no ball, so it survives when the detector picks the ball up
-        late.
+    Why the apex and NOT ball-center-vs-wrist divergence: the ball leaves the
+    FINGERTIPS at near-full extension, and the fingertips sit ~a hand-length
+    beyond the wrist landmark. So the ball-center is closest to the wrist during
+    the GATHER (ball cradled by the hand) and moves AWAY as the arm extends --
+    ball-divergence therefore fires mid-PUSH, landing the "release" on a still-
+    bent ~90-100deg elbow. Frame-by-frame checks on this footage confirm the
+    ball only clearly separates at full extension, where the elbow is ~150-170deg
+    -- exactly the wrist apex, and exactly the ~159deg release the shooting
+    research reports. (The 2026-07-05 audit flagged ~160deg as "lockout"; it's
+    actually the correct near-full-extension release. See the elbow-metric note.)
 
-    On far/small-ball footage the detector doesn't lock the ball until it's
-    ~0.4s into flight, so the ball-divergence "release" lands well after the true
-    snap (on an arm-already-down frame). We detect that case -- the wrist apex
-    sits clearly BEFORE the ball release -- and use the apex instead. When the
-    ball is tracked cleanly the two coincide (apex not earlier), so we keep the
-    sharper ball estimate; the synthetic hand-off test still lands on it."""
+    The ball hand-off (`_ball_release`) is used only to CONFIRM the apex is a real
+    shot: a clean divergence at or just before the peak -> high confidence. No
+    clean hand-off (or a pump-fake where the ball never leaves the hand) -> low
+    confidence and NOT marked diverging, so nothing downstream trusts a
+    non-release as a release. When the arm never rises overhead (no valid apex)
+    we fall back to the ball estimate (typically a low-confidence no-shot)."""
     keys = side_keys(handedness)
-    ball_est = _ball_release(shot, ball_track, poses, keys)
     apex = _wrist_apex(shot, poses, keys, fps)
-    if apex is not None:
-        af, at = apex
-        # When the ball estimate and the pose wrist-apex DISAGREE (either way),
-        # trust the apex: the ball can be detected late (apex earlier) OR tracked
-        # rising in the hands so it separates before the true overhead snap (apex
-        # later). Only when they agree do we keep the sharper ball estimate.
-        if abs(ball_est.frame - af) > 0.12 * max(fps, 1.0):
-            return ReleaseEstimate(frame=af, t=at, confidence="medium",
-                                   diverging=True,
-                                   note="pose wrist-apex (ball/apex disagree)")
-    return ball_est
+    ball_est = _ball_release(shot, ball_track, poses, keys, fps)
+    if apex is None:
+        return ball_est                       # no overhead extension -> ball fallback
+    af, at = apex
+    # Real shot: the ball diverges at, or just before, peak extension.
+    handoff = (ball_est.diverging and
+               -2 <= (af - ball_est.frame) <= int(round(0.5 * max(fps, 1.0))))
+    return ReleaseEstimate(
+        frame=af, t=at,
+        confidence="high" if handoff else "low",
+        diverging=bool(handoff),
+        note="wrist-apex (peak arm extension = release)"
+             + ("; ball hand-off confirms" if handoff else "; no clean ball hand-off"))
 
 
 def _wrist_apex(shot, poses, keys, fps):
@@ -190,14 +195,22 @@ def _wrist_apex(shot, poses, keys, fps):
     return best_f, t
 
 
-def _ball_release(shot, ball_track, poses, keys) -> ReleaseEstimate:
+def _ball_release(shot, ball_track, poses, keys, fps=30.0) -> ReleaseEstimate:
     """Ball-divergence release: the END of the in-hand minimum-distance cluster
     (onset of divergence), with sub-frame interpolation across the half-radius
     separation crossing. Low-confidence min-distance fallback when the hand-off
     is never clean."""
     start = int(shot.frames[0])
     lo = max(min(poses) if poses else start, start - 12)
-    window = range(lo, start + 8)
+    # Forward window must reach the true ball-departure. On this footage the ball
+    # is tracked from the GATHER (held out in front of the body), so the ball and
+    # the shooting wrist keep CONVERGING as the arm extends overhead and only
+    # separate at the release ~0.3-0.5s after flight-start. A short window
+    # (start+8) cut off DURING the push, landing the "release" on a still-bent
+    # ~90deg elbow (2026-07-05). Search a wide-enough forward window to catch the
+    # convergence + the divergence that follows it (matches _wrist_apex's post).
+    post = max(8, int(round(0.5 * max(fps, 1.0))))
+    window = range(lo, start + post)
 
     samples = []  # (frame, dist, ball_radius, wrist_visibility)
     for f in window:
@@ -396,10 +409,22 @@ def compute_form(shot, ball_track, poses, fps, *, handedness="right",
         if ang is None:                       # bracket frame invisible: use rel_f
             ang = joint_angle(fp.pt(keys["shoulder"]), fp.pt(keys["elbow"]),
                               fp.pt(keys["wrist"]))
-        conf = "medium" if side_on else "low"
-        note = "" if side_on else "front-on: in-plane elbow angle ok, but flare is out-of-plane"
+        # Measured at peak arm extension (the release). Near-full extension
+        # (~155-170deg) is UNIVERSAL across competent shooters (shooting research),
+        # so this is a weak make/miss differentiator -- it's a form check ("are you
+        # extending/snapping?"), not a coaching target. It's also depth-affected on
+        # one camera and timing-sensitive at 30fps (~15deg/frame near release), so
+        # it never rates above medium, and only when a clean ball hand-off confirms
+        # the release on a side-on view.
+        conf = "medium" if (side_on and rel.confidence == "high") else "low"
+        note = "at peak arm extension; near-full extension is universal, so a weak " \
+               "make/miss signal -- see knee bend & follow-through"
+        if not side_on:
+            note += "; front-on: in-plane angle ok but flare is out-of-plane"
+        if rel.confidence != "high":
+            note += "; release not confirmed by a ball hand-off"
         if abs(rel_t - rel_f) > 1e-3:
-            note = (note + "; " if note else "") + "sub-frame interpolated to release"
+            note += "; sub-frame interpolated"
         metrics.append(FormMetric("elbow_angle_at_release_deg", round(ang, 1), conf, note))
     else:
         metrics.append(FormMetric("elbow_angle_at_release_deg", None, "na",

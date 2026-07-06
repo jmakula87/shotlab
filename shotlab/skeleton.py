@@ -88,35 +88,22 @@ def lo_ok(f, rel_f, hi):
 def _phase_frames(shot, track, poses, fps, handedness):
     """Locate the load / release / follow pose frames.
 
-    Release is taken from the POSE (peak shooting-wrist extension), NOT the ball:
-    on far/small-ball footage the detector doesn't pick the ball up until it's
-    well into flight (~0.4s after the hand lets go), so ball-synced release lands
-    on an arm-already-down frame. The wrist apex just before flight is the true
-    release/snap and gives a clean, iconic form pose.
+    Release uses the SAME `find_release` the metrics do (ball-divergence onset
+    when the ball is tracked through the hand-off, wrist-apex fallback only when
+    the ball is detected late) -- so the film-room release IMAGE and the elbow
+    number printed beside it are from one and the same frame, and the image is
+    the true ball-departure instant rather than the follow-through lockout.
     """
+    from .phase2_pose.form import find_release, detect_handedness
     hand = handedness
     if hand == "auto":
-        from .phase2_pose.form import detect_handedness
         hand = detect_handedness(poses, [int(f) for f in shot.frames])
     keys = side_keys(hand)
 
     lo = int(shot.frames[0]) - _PRE
     hi = int(shot.frames[-1]) + _POST
-    # Release = the wrist apex (peak extension). The ball track often STARTS as
-    # the ball rises in the hands, so the true overhead release is ~0.3-0.5s
-    # AFTER flight start, not right at it -- search that far in (capped well
-    # short of a rebound, which is ~1s+ later) or the apex lands in the gather.
-    rel_hi = int(shot.frames[0]) + int(round(0.5 * fps))
-    rel_f, best_y = None, float("inf")
-    for f in range(lo, rel_hi + 1):
-        fp = poses.get(f)
-        if fp is None:
-            continue
-        if fp.v(keys["wrist"]) >= MIN_VIS and fp.v(keys["shoulder"]) >= MIN_VIS:
-            y = fp.pt(keys["wrist"])[1]          # image y: smaller = higher up
-            if y < best_y:
-                best_y, rel_f = y, f
-    if rel_f is None:
+    rel_f = find_release(shot, track or {}, poses, hand, fps=fps).frame
+    if poses.get(rel_f) is None:
         return {"load": None, "release": None, "follow": None}, keys
     return {
         "load": _load_frame(poses, lo, rel_f, keys),

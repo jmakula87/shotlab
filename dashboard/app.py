@@ -438,10 +438,21 @@ def view_session():
     with st.sidebar:
         sd = st.selectbox("Session", sdirs)
     d = os.path.join(OUT_DIR, sd)
-    df = pd.read_csv(os.path.join(d, "session_shots.csv"))
-    if df.empty:
+    raw_df = pd.read_csv(os.path.join(d, "session_shots.csv"))
+    if raw_df.empty:
         st.warning("No shots in this session.")
         return
+    # Analytics run on the CURATED set (exclude.json), same as the report/profile
+    # -- so headline KPIs, make%, drivers and charts here match every other
+    # surface instead of silently including human-flagged junk (2026-07-05
+    # audit). Feel-tagging below still edits the RAW row-aligned CSV.
+    from shotlab.curate import apply_excludes, load_excludes
+    df = apply_excludes(raw_df, d)
+    _ex, _lay = load_excludes(d)
+    if _ex or _lay:
+        st.caption(f"Showing **{len(df)}** curated shots — "
+                   f"{len(raw_df) - len(df)} flagged/layup shots hidden via "
+                   f"`exclude.json`.")
 
     # ---- headline KPIs ----
     k = st.columns(4)
@@ -557,7 +568,9 @@ def view_session():
     _shot_inspector(view)
 
     # ---- feel tagging (powers the personal-ideal / feel-correlation engine) ----
-    _feel_tagging(df, view, d)
+    # RAW df: the editor writes back to the whole row-aligned CSV (you can still
+    # tag a shot that analytics excludes).
+    _feel_tagging(raw_df, view, d)
 
     # ---- interactive metric-over-time chart with trend ----
     st.subheader("Metric over the session (fatigue view)")
@@ -822,8 +835,11 @@ def view_compare_sessions():
     c = st.columns(2)
     a = c[0].selectbox("Session A", sdirs, index=0, key="cmpA")
     b = c[1].selectbox("Session B", sdirs, index=min(1, len(sdirs) - 1), key="cmpB")
-    dfa = pd.read_csv(os.path.join(OUT_DIR, a, "session_shots.csv"))
-    dfb = pd.read_csv(os.path.join(OUT_DIR, b, "session_shots.csv"))
+    from shotlab.curate import apply_excludes
+    dfa = apply_excludes(pd.read_csv(os.path.join(OUT_DIR, a, "session_shots.csv")),
+                         os.path.join(OUT_DIR, a))
+    dfb = apply_excludes(pd.read_csv(os.path.join(OUT_DIR, b, "session_shots.csv")),
+                         os.path.join(OUT_DIR, b))
 
     def _mkpct(df):
         if "made" not in df.columns:
@@ -904,10 +920,13 @@ def view_progress():
                 st.caption("No metric is drifting much — your levels are holding.")
 
     # did the thing a session told you to work on actually improve?
+    from shotlab.curate import apply_excludes
     sessions = []
     for sd in session_dirs():
         try:
-            sdf = pd.read_csv(os.path.join(OUT_DIR, sd, "session_shots.csv"))
+            sdf = apply_excludes(
+                pd.read_csv(os.path.join(OUT_DIR, sd, "session_shots.csv")),
+                os.path.join(OUT_DIR, sd))
         except Exception:
             continue
         if sdf.empty:

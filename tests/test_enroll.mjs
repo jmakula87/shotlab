@@ -40,5 +40,27 @@ ok("no enrollment -> accept all", matchesEnrollment(person(0.45, 0.55), null, H)
 ok("enrolled but no full body -> reject",
    matchesEnrollment(person(0.2, 0.8, 0.1), e, H) === false);
 
+// torso fallback: when the feet clip out of frame, match on shoulder->hip span
+// instead of dropping the frame (2026-07-05 audit #14).
+function personFull(noseY, shY, hipY, ankleY, ankleVis = 1) {
+  const lm = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, z: 0, visibility: 1 }));
+  lm[0] = { x: 0.5, y: noseY, z: 0, visibility: 1 };
+  lm[11] = { x: 0.46, y: shY, z: 0, visibility: 1 };
+  lm[12] = { x: 0.54, y: shY, z: 0, visibility: 1 };
+  lm[23] = { x: 0.47, y: hipY, z: 0, visibility: 1 };
+  lm[24] = { x: 0.53, y: hipY, z: 0, visibility: 1 };
+  lm[27] = { x: 0.48, y: ankleY, z: 0, visibility: ankleVis };
+  lm[28] = { x: 0.52, y: ankleY, z: 0, visibility: ankleVis };
+  return lm;
+}
+const enrT = new Enroller();
+for (let i = 0; i < 9; i++) enrT.add(personFull(0.20, 0.35, 0.55, 0.80), H);
+const eT = enrT.finish();
+ok("enroller captures a torso reference", eT && Math.abs(eT.torsoPx - 200) < 25);
+ok("feet clipped but torso matches -> accept",
+   matchesEnrollment(personFull(0.20, 0.35, 0.55, 0.80, 0), eT, H) === true);
+ok("feet clipped and torso too small -> reject",
+   matchesEnrollment(personFull(0.40, 0.46, 0.54, 0.70, 0), eT, H) === false); // torso 80px
+
 console.log(`\n${passed}/${passed + failed} passed`);
 process.exit(failed ? 1 : 0);

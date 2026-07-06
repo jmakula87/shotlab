@@ -147,18 +147,20 @@ def build_shot_closeups(session_dir, only_made=None, raw_dirs=None,
                     ext.close()
                 phases, _keys = _phase_frames(s, track, poses, fps, handedness)
                 cap = cv2.VideoCapture(raw)
-                for p in _PHASE_ORDER:
-                    f = phases.get(p)
-                    if f is None or poses.get(f) is None:
-                        continue
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, int(f))
-                    ok, frame = cap.read()
-                    if not ok:
-                        continue
-                    img = _draw_closeup(frame, poses[f], p)
-                    if img is not None:
-                        cv2.imwrite(paths[p], img, [cv2.IMWRITE_JPEG_QUALITY, 88])
-                cap.release()
+                try:
+                    for p in _PHASE_ORDER:
+                        f = phases.get(p)
+                        if f is None or poses.get(f) is None:
+                            continue
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, int(f))
+                        ok, frame = cap.read()
+                        if not ok:
+                            continue
+                        img = _draw_closeup(frame, poses[f], p)
+                        if img is not None:
+                            cv2.imwrite(paths[p], img, [cv2.IMWRITE_JPEG_QUALITY, 88])
+                finally:
+                    cap.release()
             have = {p: paths[p] for p in _PHASE_ORDER if os.path.exists(paths[p])}
             if have:
                 out.append({

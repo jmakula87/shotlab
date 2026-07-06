@@ -1,28 +1,32 @@
 {
   "name": "me",
   "handedness": "right",
-  "note": "Arc ideals from 8 your best-ranked shots; form ideals from 19 your made shots (pose-reliable). Ideal skeletons from 16 clean-pose shots (load, release, follow).",
-  "n_good": 8,
+  "note": "Arc ideals from 10 your best-ranked shots; form ideals from 19 your made shots (pose-reliable). Ideal skeletons from 16 clean-pose shots (load, release, follow).",
+  "n_good": 10,
   "n_form": 19,
   "source_method": "your best-ranked shots",
   "form_method": "your made shots (pose-reliable)",
   "ideal": {
-    "release_angle_deg": 71.41,
-    "entry_angle_deg": 59.16,
-    "elbow_angle_at_release_deg": 162.45,
-    "knee_bend_deg": 95.76,
+    "elbow_angle_at_release_deg": 165.8,
+    "knee_bend_deg": 89.0,
     "tempo_dip_to_release_s": 0.33,
-    "follow_through_hold_s": 0.69,
-    "balance_drift_px_per_ht": 1.43
+    "follow_through_hold_s": 0.72,
+    "balance_drift_px_per_ht": 0.8
   },
   "tolerance": {
-    "release_angle_deg": 13.69,
-    "entry_angle_deg": 10.5,
-    "elbow_angle_at_release_deg": 11.22,
-    "knee_bend_deg": 26.89,
-    "tempo_dip_to_release_s": 0.18,
-    "follow_through_hold_s": 0.33,
-    "balance_drift_px_per_ht": 1.31
+    "elbow_angle_at_release_deg": 7.56,
+    "knee_bend_deg": 12.9,
+    "tempo_dip_to_release_s": 0.05,
+    "follow_through_hold_s": 0.3,
+    "balance_drift_px_per_ht": 0.33
+  },
+  "diagnostic": {
+    "release_angle_deg": 55.6,
+    "entry_angle_deg": 62.4
+  },
+  "diagnostic_tolerance": {
+    "release_angle_deg": 5.0,
+    "entry_angle_deg": 12.01
   },
   "textbook": {
     "entry_angle_deg": {
@@ -53,169 +57,169 @@
   "skeletons": {
     "load": [
       {
+        "x": 0.5253,
+        "y": 0.3988,
+        "visibility": 0.983
+      },
+      {
         "x": 0.5236,
-        "y": 0.3564,
-        "visibility": 0.998
+        "y": 0.3972,
+        "visibility": 0.991
       },
       {
-        "x": 0.5198,
-        "y": 0.3452,
-        "visibility": 0.997
+        "x": 0.5238,
+        "y": 0.3986,
+        "visibility": 0.992
       },
       {
-        "x": 0.5193,
-        "y": 0.345,
-        "visibility": 0.997
+        "x": 0.524,
+        "y": 0.3984,
+        "visibility": 0.993
       },
       {
-        "x": 0.5187,
-        "y": 0.345,
-        "visibility": 0.997
+        "x": 0.52,
+        "y": 0.3944,
+        "visibility": 0.99
       },
       {
-        "x": 0.5187,
-        "y": 0.345,
-        "visibility": 0.998
+        "x": 0.5181,
+        "y": 0.3942,
+        "visibility": 0.99
       },
       {
-        "x": 0.5175,
-        "y": 0.345,
-        "visibility": 0.997
+        "x": 0.5162,
+        "y": 0.3925,
+        "visibility": 0.99
       },
       {
-        "x": 0.5163,
-        "y": 0.3451,
-        "visibility": 0.998
+        "x": 0.5156,
+        "y": 0.3906,
+        "visibility": 0.989
       },
       {
-        "x": 0.5099,
-        "y": 0.3503,
-        "visibility": 0.995
+        "x": 0.503,
+        "y": 0.3895,
+        "visibility": 0.989
       },
       {
-        "x": 0.5065,
-        "y": 0.3524,
-        "visibility": 0.997
-      },
-      {
-        "x": 0.5221,
-        "y": 0.3689,
-        "visibility": 0.996
+        "x": 0.5238,
+        "y": 0.402,
+        "visibility": 0.977
       },
       {
         "x": 0.5203,
-        "y": 0.3692,
+        "y": 0.3945,
+        "visibility": 0.97
+      },
+      {
+        "x": 0.5174,
+        "y": 0.4242,
+        "visibility": 0.997
+      },
+      {
+        "x": 0.4832,
+        "y": 0.416,
         "visibility": 0.996
       },
       {
-        "x": 0.5049,
-        "y": 0.4192,
-        "visibility": 0.999
+        "x": 0.606,
+        "y": 0.4403,
+        "visibility": 0.45
       },
       {
-        "x": 0.4951,
-        "y": 0.4208,
-        "visibility": 0.999
+        "x": 0.5128,
+        "y": 0.4424,
+        "visibility": 0.877
       },
       {
-        "x": 0.5428,
-        "y": 0.4777,
-        "visibility": 0.414
+        "x": 0.6341,
+        "y": 0.3861,
+        "visibility": 0.438
       },
       {
-        "x": 0.5249,
-        "y": 0.4828,
-        "visibility": 0.921
+        "x": 0.5431,
+        "y": 0.3806,
+        "visibility": 0.763
       },
       {
-        "x": 0.5529,
-        "y": 0.4234,
-        "visibility": 0.43
+        "x": 0.6418,
+        "y": 0.3713,
+        "visibility": 0.433
+      },
+      {
+        "x": 0.5503,
+        "y": 0.3619,
+        "visibility": 0.74
+      },
+      {
+        "x": 0.6327,
+        "y": 0.3618,
+        "visibility": 0.437
       },
       {
         "x": 0.5476,
-        "y": 0.4239,
-        "visibility": 0.825
+        "y": 0.3581,
+        "visibility": 0.735
       },
       {
-        "x": 0.5562,
-        "y": 0.4054,
-        "visibility": 0.429
-      },
-      {
-        "x": 0.5541,
-        "y": 0.4036,
-        "visibility": 0.8
-      },
-      {
-        "x": 0.5512,
-        "y": 0.3998,
-        "visibility": 0.432
-      },
-      {
-        "x": 0.549,
-        "y": 0.3982,
-        "visibility": 0.795
-      },
-      {
-        "x": 0.5502,
-        "y": 0.4054,
+        "x": 0.6202,
+        "y": 0.3711,
         "visibility": 0.424
       },
       {
-        "x": 0.5456,
-        "y": 0.4043,
-        "visibility": 0.766
+        "x": 0.5444,
+        "y": 0.3687,
+        "visibility": 0.706
       },
       {
-        "x": 0.476,
-        "y": 0.5957,
+        "x": 0.4864,
+        "y": 0.5805,
         "visibility": 0.999
       },
       {
-        "x": 0.4742,
-        "y": 0.5995,
+        "x": 0.4679,
+        "y": 0.5774,
         "visibility": 0.999
       },
       {
-        "x": 0.5007,
-        "y": 0.7014,
-        "visibility": 0.633
+        "x": 0.5246,
+        "y": 0.6993,
+        "visibility": 0.643
       },
       {
-        "x": 0.5245,
-        "y": 0.7056,
-        "visibility": 0.933
-      },
-      {
-        "x": 0.4571,
-        "y": 0.8024,
-        "visibility": 0.758
-      },
-      {
-        "x": 0.4675,
-        "y": 0.8065,
+        "x": 0.5014,
+        "y": 0.683,
         "visibility": 0.931
       },
       {
-        "x": 0.4459,
-        "y": 0.8174,
-        "visibility": 0.753
+        "x": 0.4671,
+        "y": 0.7961,
+        "visibility": 0.757
       },
       {
-        "x": 0.4528,
-        "y": 0.8195,
-        "visibility": 0.904
+        "x": 0.4558,
+        "y": 0.7945,
+        "visibility": 0.919
       },
       {
-        "x": 0.4762,
-        "y": 0.8282,
-        "visibility": 0.806
+        "x": 0.455,
+        "y": 0.8044,
+        "visibility": 0.755
       },
       {
-        "x": 0.4889,
-        "y": 0.8394,
-        "visibility": 0.916
+        "x": 0.441,
+        "y": 0.8033,
+        "visibility": 0.898
+      },
+      {
+        "x": 0.481,
+        "y": 0.8313,
+        "visibility": 0.794
+      },
+      {
+        "x": 0.478,
+        "y": 0.8392,
+        "visibility": 0.895
       }
     ],
     "release": [
@@ -388,167 +392,167 @@
     "follow": [
       {
         "x": 0.5084,
-        "y": 0.3656,
+        "y": 0.3664,
         "visibility": 0.998
       },
       {
-        "x": 0.5032,
-        "y": 0.3595,
+        "x": 0.5033,
+        "y": 0.3603,
         "visibility": 0.998
-      },
-      {
-        "x": 0.5023,
-        "y": 0.3597,
-        "visibility": 0.997
-      },
-      {
-        "x": 0.5014,
-        "y": 0.3601,
-        "visibility": 0.998
-      },
-      {
-        "x": 0.5036,
-        "y": 0.36,
-        "visibility": 0.999
-      },
-      {
-        "x": 0.5031,
-        "y": 0.3608,
-        "visibility": 0.999
       },
       {
         "x": 0.5025,
-        "y": 0.3614,
-        "visibility": 0.999
-      },
-      {
-        "x": 0.4952,
-        "y": 0.3685,
+        "y": 0.3606,
         "visibility": 0.997
       },
       {
-        "x": 0.4978,
-        "y": 0.37,
+        "x": 0.5015,
+        "y": 0.3609,
+        "visibility": 0.998
+      },
+      {
+        "x": 0.5037,
+        "y": 0.3609,
+        "visibility": 0.999
+      },
+      {
+        "x": 0.5032,
+        "y": 0.3616,
+        "visibility": 0.999
+      },
+      {
+        "x": 0.5026,
+        "y": 0.3623,
+        "visibility": 0.999
+      },
+      {
+        "x": 0.4953,
+        "y": 0.3692,
+        "visibility": 0.997
+      },
+      {
+        "x": 0.4979,
+        "y": 0.3707,
         "visibility": 0.998
       },
       {
         "x": 0.5089,
-        "y": 0.3767,
-        "visibility": 0.997
-      },
-      {
-        "x": 0.5091,
         "y": 0.3773,
         "visibility": 0.997
       },
       {
-        "x": 0.4941,
+        "x": 0.5091,
+        "y": 0.3779,
+        "visibility": 0.997
+      },
+      {
+        "x": 0.494,
         "y": 0.4252,
         "visibility": 0.996
       },
       {
-        "x": 0.5059,
+        "x": 0.506,
         "y": 0.4148,
         "visibility": 0.999
       },
       {
-        "x": 0.5299,
-        "y": 0.3949,
-        "visibility": 0.297
+        "x": 0.5284,
+        "y": 0.3905,
+        "visibility": 0.301
       },
       {
-        "x": 0.5383,
-        "y": 0.37,
-        "visibility": 0.974
+        "x": 0.5379,
+        "y": 0.3694,
+        "visibility": 0.973
       },
       {
-        "x": 0.5546,
-        "y": 0.3527,
-        "visibility": 0.481
+        "x": 0.5534,
+        "y": 0.3506,
+        "visibility": 0.484
       },
       {
-        "x": 0.5676,
-        "y": 0.3159,
-        "visibility": 0.939
+        "x": 0.5665,
+        "y": 0.3156,
+        "visibility": 0.937
       },
       {
-        "x": 0.5589,
-        "y": 0.3439,
-        "visibility": 0.487
+        "x": 0.5579,
+        "y": 0.3415,
+        "visibility": 0.489
       },
       {
-        "x": 0.5759,
-        "y": 0.3097,
-        "visibility": 0.923
-      },
-      {
-        "x": 0.559,
-        "y": 0.3398,
-        "visibility": 0.497
-      },
-      {
-        "x": 0.5747,
-        "y": 0.3066,
+        "x": 0.5746,
+        "y": 0.309,
         "visibility": 0.919
       },
       {
-        "x": 0.5582,
-        "y": 0.3432,
-        "visibility": 0.505
+        "x": 0.558,
+        "y": 0.3378,
+        "visibility": 0.5
       },
       {
-        "x": 0.5711,
-        "y": 0.3088,
-        "visibility": 0.894
+        "x": 0.5734,
+        "y": 0.3064,
+        "visibility": 0.914
       },
       {
-        "x": 0.4958,
-        "y": 0.6003,
+        "x": 0.5573,
+        "y": 0.3413,
+        "visibility": 0.507
+      },
+      {
+        "x": 0.5699,
+        "y": 0.3085,
+        "visibility": 0.889
+      },
+      {
+        "x": 0.4945,
+        "y": 0.6,
         "visibility": 0.999
       },
       {
-        "x": 0.5062,
-        "y": 0.5995,
+        "x": 0.5051,
+        "y": 0.5997,
         "visibility": 0.999
       },
       {
-        "x": 0.5071,
-        "y": 0.7131,
-        "visibility": 0.537
+        "x": 0.5029,
+        "y": 0.7124,
+        "visibility": 0.552
       },
       {
-        "x": 0.5198,
-        "y": 0.7168,
+        "x": 0.5178,
+        "y": 0.7164,
         "visibility": 0.951
       },
       {
-        "x": 0.5034,
-        "y": 0.8214,
-        "visibility": 0.701
+        "x": 0.4977,
+        "y": 0.8176,
+        "visibility": 0.712
       },
       {
-        "x": 0.5161,
-        "y": 0.8278,
+        "x": 0.5163,
+        "y": 0.8277,
         "visibility": 0.962
       },
       {
-        "x": 0.4956,
-        "y": 0.84,
-        "visibility": 0.761
+        "x": 0.4902,
+        "y": 0.8348,
+        "visibility": 0.77
       },
       {
-        "x": 0.5083,
-        "y": 0.846,
-        "visibility": 0.946
+        "x": 0.5088,
+        "y": 0.8467,
+        "visibility": 0.947
       },
       {
-        "x": 0.5258,
-        "y": 0.8449,
-        "visibility": 0.769
+        "x": 0.5195,
+        "y": 0.8426,
+        "visibility": 0.778
       },
       {
-        "x": 0.5395,
-        "y": 0.8523,
+        "x": 0.5404,
+        "y": 0.8506,
         "visibility": 0.946
       }
     ]
