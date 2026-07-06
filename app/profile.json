@@ -11,14 +11,16 @@
     "knee_bend_deg": 89.0,
     "tempo_dip_to_release_s": 0.33,
     "follow_through_hold_s": 0.72,
-    "balance_drift_px_per_ht": 0.8
+    "balance_drift_px_per_ht": 0.8,
+    "release_vs_apex_s": -0.07
   },
   "tolerance": {
     "elbow_angle_at_release_deg": 8.01,
     "knee_bend_deg": 12.9,
-    "tempo_dip_to_release_s": 0.05,
+    "tempo_dip_to_release_s": 0.1,
     "follow_through_hold_s": 0.3,
-    "balance_drift_px_per_ht": 0.33
+    "balance_drift_px_per_ht": 0.33,
+    "release_vs_apex_s": 0.06
   },
   "diagnostic": {
     "release_angle_deg": 53.0,

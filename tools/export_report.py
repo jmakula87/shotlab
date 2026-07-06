@@ -116,30 +116,34 @@ def _coaching_html(df, session_dir):
         return ""
     makes, misses = df[made == True], df[made == False]
 
-    # the coachable levers with a KNOWN good direction, biggest gap first. Tempo
-    # and balance-drift are left out here (noisy + ambiguous direction) -- they
-    # still show with full stats in the make-drivers panel below.
-    LEVERS = [("release_angle_deg", "release arc", "°"),
-              ("knee_bend_deg", "knee bend", "°"),
-              ("entry_angle_deg", "entry angle", "°"),
-              ("follow_through_hold_s", "follow-through", "s")]
+    # the coachable levers with a KNOWN good direction, biggest gap first. Balance
+    # drift is left out here (noisy) -- it still shows in the make-drivers panel.
+    # `dec` = display decimals (seconds need 2, not the old :.0f that rounded
+    # follow-through to "1s" and hid release timing entirely -- audit).
+    from shotlab.metric_ranges import in_range
+    LEVERS = [("release_angle_deg", "release arc", "°", 0),
+              ("knee_bend_deg", "knee bend", "°", 0),
+              ("entry_angle_deg", "entry angle", "°", 0),
+              ("follow_through_hold_s", "follow-through", "s", 2),
+              ("release_vs_apex_s", "release timing (vs jump top)", "s", 2)]
     diffs = []
-    for col, label, unit in LEVERS:
+    for col, label, unit, dec in LEVERS:
         if col not in df.columns:
             continue
-        gm, bm = makes[col].dropna(), misses[col].dropna()
+        gm = makes[col][makes[col].map(lambda v: in_range(col, v))].dropna()
+        bm = misses[col][misses[col].map(lambda v: in_range(col, v))].dropna()
         if len(gm) >= 4 and len(bm) >= 4:
             d = gm.mean() - bm.mean()
-            sd = df[col].std()
+            sd = df[col][df[col].map(lambda v: in_range(col, v))].std()
             if sd and abs(d) / sd > 0.25:                 # a real gap
-                diffs.append((abs(d) / sd, col, label, unit, gm.mean(), bm.mean(), d))
+                diffs.append((abs(d) / sd, col, label, unit, dec, gm.mean(), bm.mean(), d))
     diffs.sort(reverse=True)
 
     shared = "".join(
-        f"<li><b>{label}</b>: your makes average <b>{gmean:.0f}{unit}</b> vs "
-        f"<b>{bmean:.0f}{unit}</b> on misses — a {'higher' if d > 0 else 'lower'} "
+        f"<li><b>{label}</b>: your makes average <b>{gmean:.{dec}f}{unit}</b> vs "
+        f"<b>{bmean:.{dec}f}{unit}</b> on misses — a {'higher' if d > 0 else 'lower'} "
         f"{label} is going in for you.</li>"
-        for _eff, col, label, unit, gmean, bmean, d in diffs[:4]) or (
+        for _eff, col, label, unit, dec, gmean, bmean, d in diffs[:4]) or (
         "<li>No single form metric cleanly separated your makes from misses this "
         "session — your misses are more about touch than a broken mechanic.</li>")
 

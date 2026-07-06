@@ -125,12 +125,33 @@ def generate_review(df: pd.DataFrame) -> dict:
             best = min(spreads, key=spreads.get)
             worst = max(spreads, key=spreads.get)
             strengths.append(f"Your **{best}** shot was your most repeatable "
-                             f"(tightest entry-angle spread) — that's your money spot.")
+                             f"(tightest entry-angle spread).")
             if worst != best:
                 improvements.append(f"Your **{worst}** shot scattered the most — "
                                     f"least repeatable. Park there for a focused set.")
                 focus.append(f"Groove the **{worst}** spot — most reps, smallest motion, "
                              f"chase repeatability before range.")
+
+        # WHERE you actually score -- the money spot is the best make%, not the
+        # tightest spread (audit D14a: the tightest spot was 1-for-6). Also flag a
+        # spot you shoot a lot from but rarely make. Make% is low-confidence.
+        if "made" in df.columns:
+            m = df[df["made"].isin([True, False])]
+            rate = {z: (g["made"] == True).mean() for z, g in m.groupby("zone")
+                    if len(g) >= 6}
+            cnt = m["zone"].value_counts()
+            if rate:
+                bestm = max(rate, key=rate.get)
+                strengths.append(f"You score best from **{bestm}** "
+                                 f"({rate[bestm]*100:.0f}% on {int(cnt.get(bestm, 0))} shots) "
+                                 f"— your money spot (make% is a low-confidence heuristic).")
+                for z in list(cnt.index)[:2]:
+                    if z in rate and cnt[z] >= 0.30 * len(m) and rate[z] < 0.30:
+                        improvements.append(
+                            f"You took **{int(cnt[z])}** shots from **{z}** but made only "
+                            f"**{rate[z]*100:.0f}%** — that volume isn't paying off; "
+                            f"either it's not your spot or your form drifts there.")
+                        break
 
     # ---- volume per zone (where you practiced) ----
     if "zone" in df.columns:
@@ -178,6 +199,43 @@ def recommend_drills(df: pd.DataFrame, max_drills: int = 5) -> list[str]:
     drills = []
     if df.empty:
         return drills
+
+    # 0) target your STRONGEST make-driver -- the mechanic that most tracks with
+    #    YOUR makes. Drills used to ignore the driver analysis entirely (audit
+    #    D14b). Make-correlation is low-confidence, so this is a lean, not a law.
+    from .correlate import correlate_makes
+    _DRIVER_DRILLS = {
+        "follow_through_hold_s":
+            "**Freeze the follow-through:** hold your wrist snapped until the ball "
+            "hits the rim, every rep. Holding it longer is the mechanic most tied "
+            "to your makes this session.",
+        "release_vs_apex_s":
+            "**Top of the jump:** groove releasing at the PEAK of your jump, not on "
+            "the way up. Your makes let it go later than your misses — your cleanest "
+            "make signal.",
+        "knee_bend_deg":
+            "**Load the legs:** exaggerate a deeper dip on a set of 25 — your makes "
+            "come with more knee bend. Power from the legs, not the arm.",
+        "release_angle_deg":
+            "**Softer arc:** shoot over a raised obstacle so you drop it in rather "
+            "than line-drive it — your makes carry more arc.",
+        "tempo_dip_to_release_s":
+            "**One motion:** dip-and-up in a single beat; your makes are quicker "
+            "from the load to the release.",
+        "balance_drift_px_per_ht":
+            "**Land where you left:** shoot with a piece of tape under your lead "
+            "foot and land on it — your makes drift less.",
+    }
+    try:
+        assocs = correlate_makes(df.to_dict("records"))
+        driver = next((a for a in sorted(assocs, key=lambda a: abs(a.cohen_d or 0),
+                                         reverse=True)
+                       if a.metric in _DRIVER_DRILLS and a.cohen_d is not None
+                       and abs(a.cohen_d) >= 0.2), None)
+        if driver:
+            drills.append(_DRIVER_DRILLS[driver.metric])
+    except Exception:
+        pass
 
     # 1) weakest (least repeatable) zone -> form reps there
     if "zone" in df.columns:

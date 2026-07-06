@@ -206,6 +206,16 @@ def main(argv=None):
         agg = {k: v for k, v in agg.items() if k in cdf.columns}
         zone = cdf.groupby("zone").agg(agg).round(1)
         zone = zone.rename(columns={"shot_num": "shots"})
+        # make% per zone -- WHERE the ball actually goes in. Without it a
+        # high-volume low-make spot looked fine (audit D14a: 74% of volume from a
+        # 22% spot). Low-confidence like all make/miss here.
+        if "made" in cdf.columns:
+            m = cdf[cdf["made"].isin([True, False])]
+            if len(m):
+                mk = m.groupby("zone")["made"]
+                zone["attempts"] = mk.count().astype("Int64")
+                zone["makes"] = mk.apply(lambda s: int((s == True).sum())).astype("Int64")
+                zone["make_pct"] = (100.0 * zone["makes"] / zone["attempts"]).round(0)
         zone.to_csv(os.path.join(args.out, "zone_summary.csv"))
         print("\nBy zone:")
         print(zone.to_string())

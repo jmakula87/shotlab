@@ -42,9 +42,13 @@ ARC_METRICS = [
 FORM_METRICS = [
     ("elbow_angle_at_release_deg", 6.0),
     ("knee_bend_deg", 8.0),
-    ("tempo_dip_to_release_s", 0.05),
+    ("tempo_dip_to_release_s", 0.10),        # 0.05 was below 30fps resolution (audit D6)
     ("follow_through_hold_s", 0.10),
     ("balance_drift_px_per_ht", 0.05),
+    # release timing vs jump apex: his CLEANEST make-driver (d=0.58 on trustworthy
+    # shots) -- now scored so the app coaches toward releasing at the top of his
+    # jump (2026-07-06 audit product rec).
+    ("release_vs_apex_s", 0.06),
 ]
 # The most-available reliable form metric (knee side-on is in-plane, so
 # high-confidence); its presence means pose ran on the shot.

@@ -22,6 +22,8 @@ const CUES = {
   follow_through_hold_s: { lo: "hold your follow-through longer" },
   // sideways hip drift: HIGHER = you drifted off balance
   balance_drift_px_per_ht: { hi: "watch your balance" },
+  // release timing vs the top of your jump: LOWER = you let it go too early
+  release_vs_apex_s: { lo: "let it go at the top of your jump" },
 };
 
 const _cap = s => s.charAt(0).toUpperCase() + s.slice(1);

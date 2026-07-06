@@ -36,6 +36,7 @@ ok("has profile-aligned elbow key (bug fix)",
 ok("has tempo", "tempo_dip_to_release_s" in a.metrics);
 ok("has follow-through", "follow_through_hold_s" in a.metrics);
 ok("has balance drift", "balance_drift_px_per_ht" in a.metrics);
+ok("has release-vs-apex (jump-timing) metric", "release_vs_apex_s" in a.metrics);
 ok("elbow computed (non-null)", a.metrics.elbow_angle_at_release_deg != null);
 
 // compareToProfile now aligns on the elbow key

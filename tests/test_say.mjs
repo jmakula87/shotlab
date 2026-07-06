@@ -37,6 +37,12 @@ ok("long follow -> good deviation, dialed",
 ok("drift -> watch balance",
    /balance/i.test(spokenFeedback([off("balance_drift_px_per_ht", 0.3)])));
 
+// release timing: too EARLY (below ideal) -> let it go at the top; later is good
+ok("early release -> top-of-jump cue",
+   /top of your jump/i.test(spokenFeedback([off("release_vs_apex_s", -0.1)])));
+ok("late release -> good deviation, dialed",
+   /dialed/i.test(spokenFeedback([off("release_vs_apex_s", 0.1)])));
+
 // caps at 2 cues, joined
 const two = spokenFeedback([off("knee_bend_deg", 15),
                             off("elbow_angle_at_release_deg", 10),

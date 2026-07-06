@@ -110,15 +110,25 @@ export function analyzeShot(frames, { hand = "right", W, H, fps = 30 } = {}) {
     if (medH > 1) drift = (Math.max(...hips) - Math.min(...hips)) / medH;
   }
 
+  // release vs jump apex: the body's highest point (min hip y) is the top of the
+  // jump; + = released after it (on the way down), - = before it (on the way up).
+  // His cleanest make-driver -- makes release AT/just after the top (audit).
+  let apexIdx = 0;
+  for (let i = 1; i < series.length; i++)
+    if (series[i].hipY != null && series[i].hipY < series[apexIdx].hipY) apexIdx = i;
+  const releaseVsApex = (series[relIdx] && series[apexIdx])
+    ? series[relIdx].t - series[apexIdx].t : null;
+
   return {
     frameCount: series.length,
-    phases: { load: loadIdx, release: relIdx, follow: followIdx },
+    phases: { load: loadIdx, release: relIdx, follow: followIdx, apex: apexIdx },
     metrics: {
       elbow_angle_at_release_deg: round1(elbowAtRelease),
       knee_bend_deg: round1(kneeBend),
       tempo_dip_to_release_s: tempo == null ? null : Math.round(tempo * 1000) / 1000,
       follow_through_hold_s: Math.round(hold * 1000) / 1000,
       balance_drift_px_per_ht: drift == null ? null : Math.round(drift * 1000) / 1000,
+      release_vs_apex_s: releaseVsApex == null ? null : Math.round(releaseVsApex * 1000) / 1000,
     },
     series,
   };
@@ -153,6 +163,7 @@ export const FAULT_SIDE = {
   tempo_dip_to_release_s: "hi",     // higher = slower into the shot
   follow_through_hold_s: "lo",      // lower = cut it short
   balance_drift_px_per_ht: "hi",    // higher = drifted off balance
+  release_vs_apex_s: "lo",          // below ideal = released too early (before the top)
 };
 
 // Cue priority: fix the biggest make-drivers first (follow-through, release
@@ -199,6 +210,7 @@ export const METRIC_LABEL = {
   tempo_dip_to_release_s: ["Tempo (dip→release)", "s"],
   follow_through_hold_s: ["Follow-through hold", "s"],
   balance_drift_px_per_ht: ["Balance drift", ""],
+  release_vs_apex_s: ["Release vs jump top", "s"],
   release_angle_deg: ["Release angle", "°"],
   entry_angle_deg: ["Entry angle", "°"],
 };
