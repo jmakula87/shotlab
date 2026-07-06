@@ -661,9 +661,12 @@ def view_session():
                    "confident jumper; near-rim calls are low-confidence) and setup "
                    "(catch-and-shoot / on-the-move / off-dribble). Heuristic.")
         cc = st.columns(2)
+        # make% over CLASSIFIED shots only (denominator excludes made=NaN), to
+        # match the KPI/movement blocks (2026-07-06 final sweep #17)
         fa = (df[df["shot_form"] != "unknown"].groupby("shot_form")
               .agg(shots=("clip", "count"),
-                   make_pct=("made", lambda s: round(100 * (s == True).mean(), 0)))
+                   make_pct=("made", lambda s: round(100 * (s == True).sum()
+                             / max((s.isin([True, False])).sum(), 1), 0)))
               .reset_index())
         cc[0].dataframe(fa, hide_index=True, width="stretch")
         if "shot_setup" in df.columns and df["shot_setup"].ne("unknown").any():

@@ -55,10 +55,17 @@ def classify_make(shot, ball_track, calib, lookahead: int = 40,
     # rebound / next possession ~1.3s later), so the verdict flipped with rim size
     # and post-net noise (audit D9). The window makes the make/miss call about the
     # ball's pass through the rim, not where it wandered afterward.
-    win_end = min(len(arr), k + 1 + int(round(0.5 * max(fps, 1.0))))
+    # bound the window by FRAME-TIME, not sample count: the track is strided
+    # (stride-2 here), so counting samples made "0.5s" span 1.0s and re-admitted
+    # the post-net floor bounce this window was meant to exclude (2026-07-06 final
+    # sweep). Scale the tracker-jump threshold by the inter-sample frame gap too.
+    win_frames = 0.5 * max(fps, 1.0)
     seg = [arr[k]]
-    for i in range(k + 1, win_end):
-        if np.linalg.norm(arr[i] - arr[i - 1]) > 4.0 * rr:   # tracker jumped -> stop
+    for i in range(k + 1, len(arr)):
+        if frames[i] - frames[k] > win_frames:               # past ~0.5s in time
+            break
+        gap = max(int(frames[i] - frames[i - 1]), 1)
+        if np.linalg.norm(arr[i] - arr[i - 1]) > 4.0 * rr * gap:   # tracker jumped -> stop
             break
         seg.append(arr[i])
     seg = np.array(seg)

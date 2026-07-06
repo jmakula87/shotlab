@@ -84,7 +84,9 @@ def build_session_pdf(session_dir: str) -> bytes:
     from shotlab.correlate import (correlate_makes, summarize_make_drivers,
                                    correlate_feel, summarize_feel_drivers)
 
-    df = pd.read_csv(os.path.join(session_dir, "session_shots.csv"))
+    from shotlab.curate import apply_excludes
+    df = apply_excludes(pd.read_csv(os.path.join(session_dir, "session_shots.csv")),
+                        session_dir)     # curate like every other surface (audit)
     name = os.path.basename(session_dir.rstrip("/\\"))
     n = len(df)
     dur = df["elapsed_min"].max() if "elapsed_min" in df else 0

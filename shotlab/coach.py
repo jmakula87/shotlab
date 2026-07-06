@@ -37,14 +37,19 @@ def grade_shots(df: pd.DataFrame) -> pd.DataFrame:
     metrics = ["release_angle_deg", "entry_angle_deg", "apex_height_ft", "knee_bend_deg"]
     nice = {"release_angle_deg": "release", "entry_angle_deg": "entry",
             "apex_height_ft": "apex", "knee_bend_deg": "knee bend"}
+    from .metric_ranges import in_range
     rows = []
     for zone, g in df.groupby("zone"):
         for _, row in g.iterrows():
             worst = None
             for m in metrics:
-                if m not in g.columns or pd.isna(row.get(m)):
+                # skip absent values AND physically-impossible reads -- an artifact
+                # (e.g. a 172deg "knee bend") must not set the zone norm or get
+                # graded a form fault against it (2026-07-06 final sweep, D4/#7)
+                if m not in g.columns or pd.isna(row.get(m)) or not in_range(m, row[m]):
                     continue
-                med, std = g[m].median(), g[m].std()
+                vals = g[m][g[m].map(lambda v: in_range(m, v))]
+                med, std = vals.median(), vals.std()
                 if std and std > 1e-6:
                     z = (row[m] - med) / std
                     if abs(z) >= 1.5 and (worst is None or abs(z) > abs(worst[1])):
@@ -162,7 +167,8 @@ def generate_review(df: pd.DataFrame) -> dict:
 
     # ---- entry vs ideal (flagged approximate) ----
     if "entry_angle_deg" in df.columns and df["entry_angle_deg"].notna().sum() >= 5:
-        avg = df["entry_angle_deg"].mean()
+        from .metric_ranges import gate
+        avg = gate(df, "entry_angle_deg")["entry_angle_deg"].mean()   # drop artifacts
         focus.append(f"Aim toward a ~45° entry angle (yours averages {avg:.0f}°, but "
                      f"that number is foreshortened by the camera — calibrate next "
                      f"session for a true read).")
@@ -203,37 +209,36 @@ def recommend_drills(df: pd.DataFrame, max_drills: int = 5) -> list[str]:
     # 0) target your STRONGEST make-driver -- the mechanic that most tracks with
     #    YOUR makes. Drills used to ignore the driver analysis entirely (audit
     #    D14b). Make-correlation is low-confidence, so this is a lean, not a law.
+    # (expected make-direction, drill text). Only prescribe when the MEASURED
+    # direction matches the drill's premise -- else it would coach the OPPOSITE of
+    # the data (2026-07-06 final sweep caught "let it go later" prescribed on a
+    # session where makes released earlier). release_vs_apex dropped (low-conf).
     from .correlate import correlate_makes
     _DRIVER_DRILLS = {
-        "follow_through_hold_s":
+        "follow_through_hold_s": ("higher",
             "**Freeze the follow-through:** hold your wrist snapped until the ball "
-            "hits the rim, every rep. Holding it longer is the mechanic most tied "
-            "to your makes this session.",
-        "release_vs_apex_s":
-            "**Top of the jump:** groove releasing at the PEAK of your jump, not on "
-            "the way up. Your makes let it go later than your misses — your cleanest "
-            "make signal.",
-        "knee_bend_deg":
+            "hits the rim, every rep — your makes hold it longer than your misses."),
+        "knee_bend_deg": ("lower",          # lower knee angle = deeper bend
             "**Load the legs:** exaggerate a deeper dip on a set of 25 — your makes "
-            "come with more knee bend. Power from the legs, not the arm.",
-        "release_angle_deg":
+            "come with more knee bend. Power from the legs, not the arm."),
+        "release_angle_deg": ("higher",
             "**Softer arc:** shoot over a raised obstacle so you drop it in rather "
-            "than line-drive it — your makes carry more arc.",
-        "tempo_dip_to_release_s":
+            "than line-drive it — your makes carry more arc."),
+        "tempo_dip_to_release_s": ("lower",
             "**One motion:** dip-and-up in a single beat; your makes are quicker "
-            "from the load to the release.",
-        "balance_drift_px_per_ht":
+            "from the load to the release."),
+        "balance_drift_px_per_ht": ("lower",
             "**Land where you left:** shoot with a piece of tape under your lead "
-            "foot and land on it — your makes drift less.",
+            "foot and land on it — your makes drift less."),
     }
     try:
         assocs = correlate_makes(df.to_dict("records"))
-        driver = next((a for a in sorted(assocs, key=lambda a: abs(a.cohen_d or 0),
-                                         reverse=True)
-                       if a.metric in _DRIVER_DRILLS and a.cohen_d is not None
-                       and abs(a.cohen_d) >= 0.2), None)
-        if driver:
-            drills.append(_DRIVER_DRILLS[driver.metric])
+        for a in sorted(assocs, key=lambda a: abs(a.cohen_d or 0), reverse=True):
+            spec = _DRIVER_DRILLS.get(a.metric)
+            if (spec and a.cohen_d is not None and abs(a.cohen_d) >= 0.2
+                    and a.confidence != "insufficient" and a.direction == spec[0]):
+                drills.append(spec[1])
+                break
     except Exception:
         pass
 
@@ -271,7 +276,8 @@ def recommend_drills(df: pd.DataFrame, max_drills: int = 5) -> list[str]:
 
     # 3) flat entry -> arc drill
     if "entry_angle_deg" in df.columns and df["entry_angle_deg"].notna().sum() >= 5:
-        if df["entry_angle_deg"].mean() < 45:
+        from .metric_ranges import gate
+        if gate(df, "entry_angle_deg")["entry_angle_deg"].mean() < 45:   # drop artifacts
             drills.append("**Arc drill:** shoot over a raised obstacle (chair on a "
                           "table / partner's reach); make yourself drop the ball IN "
                           "rather than line-drive it. Aim for a softer, ~45° entry.")
@@ -302,6 +308,12 @@ def rank_shots(df: pd.DataFrame, top: int = 10) -> pd.DataFrame:
         return pd.DataFrame()
     g = grade_shots(df)[["shot_num", "grade"]]
     d = df.merge(g, on="shot_num", how="left") if "shot_num" in df else df.copy()
+    # null physically-impossible reads so they don't skew the ranking z-scores
+    # (best_shots.csv feeds the profile's arc pool; 2026-07-06 final sweep, #7)
+    from .metric_ranges import in_range
+    for _m in ("apex_height_ft", "entry_angle_deg", "release_angle_deg", "knee_bend_deg"):
+        if _m in d.columns:
+            d[_m] = d[_m].where(d[_m].map(lambda v: in_range(_m, v)))
 
     def zscore(col):
         if col not in d:

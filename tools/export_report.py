@@ -209,11 +209,13 @@ def main(argv=None):
                     f"({p2-p1:+.0f}% vs 1st)</span></div>")
 
     # real-feet + tempo KPIs (rim-scaled, low-conf but concrete)
+    from shotlab.metric_ranges import gate
     for col, lbl, unit in [("apex_above_rim_ft", "arc peak / rim", " ft"),
                            ("release_height_ft", "release ht", " ft"),
                            ("tempo_dip_to_release_s", "tempo", " s")]:
-        if col in df.columns and df[col].notna().sum() >= 3:
-            make += (f"<div class='kpi'><b>{df[col].mean():.2f}{unit}</b>"
+        gcol = gate(df, col)[col] if col in df.columns else None   # drop artifacts
+        if gcol is not None and gcol.notna().sum() >= 3:
+            make += (f"<div class='kpi'><b>{gcol.mean():.2f}{unit}</b>"
                      f"<span>{lbl}</span></div>")
 
     # coach review (markdown -> simple HTML)
@@ -271,7 +273,7 @@ def main(argv=None):
     for metric, spec in TEXTBOOK.items():
         label = metric.replace("_deg", "").replace("_", " ")
         if spec["measurable_now"] and metric in df.columns and df[metric].notna().any():
-            avg = float(df[metric].mean())
+            avg = float(gate(df, metric)[metric].mean())   # drop artifacts
             g = grade(metric, avg)
             verdict = ("✅ on target" if g and g[0]
                        else f"{'+' if g and g[1] > 0 else ''}{g[1]}° off" if g else "—")

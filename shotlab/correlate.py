@@ -65,6 +65,12 @@ class MetricMakeAssoc:
         return asdict(self)
 
 
+# metrics measured AT the release frame -- only trustworthy when the release
+# itself was found confidently (else the value is noise about a guessed frame)
+_RELEASE_ANCHORED = {"release_vs_apex_s", "tempo_dip_to_release_s",
+                     "elbow_angle_at_release_deg"}
+
+
 def _as_bool(made) -> bool | None:
     """ShotRecord.made is True/False/None (None = unclassified)."""
     if made is True or made is False:
@@ -79,8 +85,12 @@ def _pair_values(rows, field, label_field="made"):
     Physically-implausible reads are dropped through metric_ranges.in_range (the
     SAME gate the profile ideals use), so a mis-detected sub-90 deg "elbow at
     release" can't inflate a make-driver -- both decision surfaces see the same
-    real reads (2026-07-06 audit)."""
+    real reads (2026-07-06 audit). Release-anchored metrics additionally require a
+    trustworthy release (release_conf high/medium): a make-driver carried entirely
+    by low-confidence wrist apexes (release_vs_apex_s was d=-1.2 vs ~0 on high-conf
+    only) is an artifact, not a signal (2026-07-06 final sweep)."""
     from .metric_ranges import in_range
+    gate_conf = field in _RELEASE_ANCHORED
     vals, lab = [], []
     for r in rows:
         v = r.get(field) if isinstance(r, dict) else getattr(r, field, None)
@@ -90,6 +100,10 @@ def _pair_values(rows, field, label_field="made"):
             continue
         if not in_range(field, v):     # NaN/inf/artifact == missing
             continue
+        if gate_conf:
+            rc = r.get("release_conf") if isinstance(r, dict) else getattr(r, "release_conf", None)
+            if rc is not None and rc not in ("high", "medium"):
+                continue               # a KNOWN-low-conf release -> not a driver read
         vals.append(float(v))
         lab.append(1 if m else 0)
     return np.array(vals, float), np.array(lab, int)

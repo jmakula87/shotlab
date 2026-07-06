@@ -58,20 +58,14 @@ export function analyzeShot(frames, { hand = "right", W, H, fps = 30 } = {}) {
 
   if (!series.length) return null;
 
-  // release ~ ONSET of the wrist's overhead peak plateau: the first frame within
-  // a small epsilon of the minimum y, NOT the global argmin. Jitter over a long
-  // follow-through would otherwise place "release" anywhere in the plateau and
-  // drift tempo/timing; the onset is stable and lands nearer the true release
-  // (audit D6).
-  let minY = Infinity, maxY = -Infinity;
-  for (const s of series) {
-    if (s.wristY < minY) minY = s.wristY;
-    if (s.wristY > maxY) maxY = s.wristY;
-  }
-  const eps = Math.max(4, 0.06 * (maxY - minY));
+  // release ~ the wrist's HIGHEST point (min image-y), matching the desktop
+  // pipeline's wrist-apex anchor so the app measures at the same instant the
+  // profile ideals were built at. A plateau-ONSET anchor landed systematically
+  // early (~7 frames) -> a false "released too early" fault on correct shots and
+  // an offset elbow/tempo (2026-07-06 final sweep).
   let relIdx = 0;
-  for (let i = 0; i < series.length; i++)
-    if (series[i].wristY <= minY + eps) { relIdx = i; break; }
+  for (let i = 1; i < series.length; i++)
+    if (series[i].wristY < series[relIdx].wristY) relIdx = i;
 
   // load ~ deepest knee bend within ~0.8s BEFORE release (not the whole buffer,
   // so a pre-shot crouch can't masquerade as the load) (audit D6)
@@ -116,8 +110,9 @@ export function analyzeShot(frames, { hand = "right", W, H, fps = 30 } = {}) {
   let apexIdx = 0;
   for (let i = 1; i < series.length; i++)
     if (series[i].hipY != null && series[i].hipY < series[apexIdx].hipY) apexIdx = i;
-  const releaseVsApex = (series[relIdx] && series[apexIdx])
+  let releaseVsApex = (series[relIdx] && series[apexIdx])
     ? series[relIdx].t - series[apexIdx].t : null;
+  if (releaseVsApex != null && Math.abs(releaseVsApex) > 0.6) releaseVsApex = null;  // implausible
 
   return {
     frameCount: series.length,
@@ -163,14 +158,15 @@ export const FAULT_SIDE = {
   tempo_dip_to_release_s: "hi",     // higher = slower into the shot
   follow_through_hold_s: "lo",      // lower = cut it short
   balance_drift_px_per_ht: "hi",    // higher = drifted off balance
-  release_vs_apex_s: "lo",          // below ideal = released too early (before the top)
+  // release_vs_apex_s intentionally omitted -- not a scored lever (low-conf,
+  // sign-unstable; 2026-07-06 final sweep)
 };
 
 // Cue priority: fix the biggest make-drivers first (follow-through, release
 // timing), elbow LAST (his weakest signal). Was object-insertion order, which
 // fired elbow first and crowded out follow-through (audit D14c).
 export const CUE_PRIORITY = [
-  "follow_through_hold_s", "release_vs_apex_s", "knee_bend_deg",
+  "follow_through_hold_s", "knee_bend_deg",
   "tempo_dip_to_release_s", "balance_drift_px_per_ht",
   "elbow_angle_at_release_deg",
 ];

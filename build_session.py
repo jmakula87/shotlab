@@ -144,13 +144,26 @@ def main(argv=None):
         print("No shots with timestamps found.")
         return 1
 
+    # Preserve USER-entered columns (feel tags) across rebuilds -- the records are
+    # rebuilt with felt_good=None, so without this a rebuild silently wipes the
+    # feel labels the dashboard / voicetag persisted into the CSV (they're tier-1
+    # of the profile's good-shot ladder; 2026-07-06 final sweep).
+    _csv = os.path.join(args.out, "session_shots.csv")
+    if os.path.exists(_csv):
+        old = pd.read_csv(_csv)
+        keys = [c for c in ("clip", "shot_in_clip") if c in old.columns and c in df.columns]
+        user_cols = [c for c in ("felt_good", "felt_reasons") if c in old.columns]
+        if keys and user_cols:
+            df = df.drop(columns=[c for c in user_cols if c in df.columns], errors="ignore")
+            df = df.merge(old[keys + user_cols], on=keys, how="left")
+
     # The RAW per-shot table is written whole (so a later film-room review can
     # curate it without a rebuild). Every DERIVED table below, though, runs on
     # the CURATED set -- one exclude.json review then cleans the fatigue trends,
     # best-shots ranking, zone/consistency tables, make% and make-drivers alike,
     # instead of leaking human-flagged junk into half the report (2026-07-05
     # audit). On a first build there's no exclude.json yet, so this is a no-op.
-    df.to_csv(os.path.join(args.out, "session_shots.csv"), index=False)
+    df.to_csv(_csv, index=False)
 
     from shotlab.curate import apply_excludes, load_excludes
     cdf = apply_excludes(df, args.out)

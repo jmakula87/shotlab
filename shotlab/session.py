@@ -99,8 +99,8 @@ def _cache_path(video_path: str) -> str:
 # Bump when the record-building LOGIC changes in a way the schema/params don't
 # capture (e.g. a metric formula). The ShotRecord field set is folded in
 # automatically, so adding/removing a record field invalidates caches on its own.
-_CACHE_VERSION = 18   # v18: windowed make/miss (D9) + audio timing on rim approach
-                      #      (D8) + layup class from rim-relative apex (D17)
+_CACHE_VERSION = 19   # v19: final-sweep fixes -- make/miss window bounded by TIME
+                      #      not samples, apex_above_rim from inliers, movement bh
 # NOTE: is_real is DETECTION-derived (fit/frames/rim), not pose -- ideally it'd be
 # recomputed at load time so a threshold tweak doesn't force a pose re-run. Deferred
 # (needs a full Calibration, not fully reconstructable from the detection cache).
@@ -173,7 +173,7 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
         # ball arc peak above the rim, in feet (rim-scaled; ball is ~at rim depth
         # here, so this is the most trustworthy real-feet number)
         rec.apex_above_rim_ft = _round2(
-            apex_above_rim_ft(float(np.min(s.ys)), calib.rim_y, ppf_rim))
+            apex_above_rim_ft(float(np.min(s.ys[in_idx])), calib.rim_y, ppf_rim))
         if do_spin:
             from .phase3_spin.spin import estimate_spin
             from .video_io import iter_frames
@@ -452,7 +452,8 @@ def aggregate_sessions(out_dir: str = "data/out") -> pd.DataFrame:
                     "knee_bend_deg"]:
             short = met.replace("_deg", "").replace("_ft", "")
             if met in df.columns and df[met].notna().any():
-                row["avg_" + short] = round(float(df[met].mean()), 1)
+                from .metric_ranges import gate       # match the gated std_ below
+                row["avg_" + short] = round(float(gate(df, met)[met].mean()), 1)
             if met in wz and wz[met] == wz[met]:        # not NaN
                 row["std_" + short] = round(float(wz[met]), 1)
         rows.append(row)

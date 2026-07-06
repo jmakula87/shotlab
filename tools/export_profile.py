@@ -45,10 +45,11 @@ FORM_METRICS = [
     ("tempo_dip_to_release_s", 0.10),        # 0.05 was below 30fps resolution (audit D6)
     ("follow_through_hold_s", 0.10),
     ("balance_drift_px_per_ht", 0.05),
-    # release timing vs jump apex: his CLEANEST make-driver (d=0.58 on trustworthy
-    # shots) -- now scored so the app coaches toward releasing at the top of his
-    # jump (2026-07-06 audit product rec).
-    ("release_vs_apex_s", 0.06),
+    # NOTE: release_vs_apex_s was briefly a scored ideal (thought to be his top
+    # driver) but the final sweep showed that signal is a LOW-confidence artifact
+    # -- on high-confidence releases makes vs misses differ by <1 frame (no
+    # effect), and the direction sign-flips on re-grading. Not scored; it still
+    # shows as a (gated) make-driver for reference.
 ]
 # The most-available reliable form metric (knee side-on is in-plane, so
 # high-confidence); its presence means pose ran on the shot.

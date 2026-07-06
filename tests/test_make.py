@@ -46,6 +46,19 @@ def test_miss_when_deflects_aside_in_window():
     assert r.made is False, r
 
 
+def test_window_is_time_bounded_not_sample_count():
+    # STRIDE-2 track: clean down-pass through the rim, then the ball drifts aside
+    # only AFTER 0.5s (frame 120 = closest+16). A sample-count window doubles to
+    # ~1.0s at stride 2 and re-admits that drift (flipping make->miss); a
+    # frame-TIME window excludes it -> stays a make (2026-07-06 final sweep #1).
+    seq = [(100, 300, 100), (102, 350, 150), (104, 400, 205), (106, 400, 225),
+           (108, 400, 245), (110, 405, 250), (112, 410, 250), (114, 415, 250),
+           (116, 420, 250), (118, 425, 250),          # <=0.5s: stays near rim_x
+           (120, 470, 250), (122, 520, 250), (124, 570, 250)]  # >0.5s: drifts aside
+    r = classify_make(FakeShot([100, 102, 104]), _track(seq), CAL, fps=30)
+    assert r.made is True, r
+
+
 def test_na_when_never_reaches_rim():
     track = _track([(0, 100, 100), (1, 120, 120), (2, 140, 140), (3, 160, 160)])
     r = classify_make(FakeShot([0, 1, 2, 3]), track, CAL, fps=30)

@@ -162,7 +162,7 @@ function showRelease() {
 function renderReport(a, deltas) {
   const rep = $("report"); rep.hidden = false;
   const rows = deltas.map(d => {
-    const cls = d.within ? "good" : "bad";
+    const cls = d.fault ? "bad" : "good";   // a better-than-ideal deviation isn't a fault
     const sign = d.delta > 0 ? "+" : "";
     const [lbl, u] = METRIC_LABEL[d.key] || [d.key, ""];
     return `<div class="row"><span class="k">${lbl}</span>
@@ -329,7 +329,7 @@ function onLiveShot(shot) {
                                        W: canvas.width, H: canvas.height });
   if (!a) return;
   const deltas = compareToProfile(a.metrics, profile);
-  const off = deltas.filter(d => !d.within).length;
+  const off = deltas.filter(d => d.fault).length;   // count faults, not good deviations
   const head = off === 0 ? "✅ dialed" : `⚠️ ${off} off`;
   const fb = feedbackLines(deltas).map(l => `<li>${l}</li>`).join("");
   const card = document.createElement("div");

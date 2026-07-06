@@ -82,10 +82,15 @@ def movement_direction(rel_f, poses, keys, rim_xy, fps,
     if len(hips) < 3:
         return "unknown"
     v = hips[-1] - hips[0]                       # image-space movement
-    fp_rel = poses.get(rel_f)
-    bh = _body_height_px(fp_rel, keys) if fp_rel else float("nan")
-    if not (bh == bh) or bh < 1:
-        bh = 1.0
+    # body-height scale from the whole window (median), NOT just rel_f -- a missing
+    # pose at rel_f used to fall back to bh=1px, making the 'set' threshold 0.12px
+    # so a catch-and-shoot never registered as 'set' (2026-07-06 final sweep).
+    bhs = [b for b in (_body_height_px(poses[f], keys)
+                       for f in range(lo, rel_f + 1) if poses.get(f) is not None)
+           if b == b and b > 1]
+    if not bhs:
+        return "unknown"
+    bh = float(np.median(bhs))
     if (v[0] ** 2 + v[1] ** 2) ** 0.5 / bh < set_thresh:
         return "set"
     shooter = hips[-1]

@@ -37,11 +37,10 @@ ok("long follow -> good deviation, dialed",
 ok("drift -> watch balance",
    /balance/i.test(spokenFeedback([off("balance_drift_px_per_ht", 0.3)])));
 
-// release timing: too EARLY (below ideal) -> let it go at the top; later is good
-ok("early release -> top-of-jump cue",
-   /top of your jump/i.test(spokenFeedback([off("release_vs_apex_s", -0.1)])));
-ok("late release -> good deviation, dialed",
-   /dialed/i.test(spokenFeedback([off("release_vs_apex_s", 0.1)])));
+// release_vs_apex_s is intentionally NOT cued (low-confidence, sign-unstable;
+// 2026-07-06 final sweep) -> it never speaks, even when out of band
+ok("release timing is not cued (demoted)",
+   /dialed/i.test(spokenFeedback([off("release_vs_apex_s", -0.1)])));
 
 // caps at 2 cues, joined
 const two = spokenFeedback([off("knee_bend_deg", 15),
