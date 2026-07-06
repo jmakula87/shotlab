@@ -36,18 +36,21 @@ class ShotType:
         return asdict(self)
 
 
-def classify_form(depth, apex_height_ft, release_angle_deg) -> tuple[str, str]:
-    """form, confidence from where the shot was taken + how lobbed the arc was."""
+def classify_form(depth, apex_above_rim_ft, release_angle_deg) -> tuple[str, str]:
+    """form, confidence from where the shot was taken + how high the arc peaked
+    ABOVE THE RIM. Uses the rim-scaled arc peak, not the ball-ruler apex (which
+    reads 3-19ft, making the layup/floater branches unreachable -- audit D17).
+    On this shooter's data layups peak ~0.7-1.5ft above the rim vs ~3.5ft for
+    jumpers. Still LOW confidence near the rim (one camera, no homography)."""
     if depth in ("mid", "far"):
         return "jumper", "medium"          # range rules out a layup/floater
     if depth == "near":
-        flat = release_angle_deg is not None and release_angle_deg < 30
-        low_apex = apex_height_ft is not None and apex_height_ft < 1.3
-        if flat and low_apex:
-            return "layup", "low"          # close, flat, barely any arc
-        if apex_height_ft is not None and apex_height_ft < 2.2:
+        a = apex_above_rim_ft
+        if a is not None and a < 1.6:
+            return "layup", "low"          # barely arcs above the rim
+        if a is not None and a < 2.5:
             return "floater", "low"        # close but lobbed up
-        return "jumper", "low"             # close-range jumper (ambiguous)
+        return "jumper", "low"             # close-range jumper (arcs over)
     return "unknown", "na"
 
 
@@ -93,12 +96,12 @@ def classify_setup(movement_dir, dribbled) -> tuple[str, str]:
     return "unknown", "na"
 
 
-def classify_shot_type(*, depth, apex_height_ft, release_angle_deg,
+def classify_shot_type(*, depth, apex_above_rim_ft, release_angle_deg,
                        movement_dir="unknown", ball_track=None, rel_frame=None,
                        fps=30.0) -> ShotType:
     """Combine form + setup into one tag. Pass ball_track + rel_frame to enable
     dribble detection (omit to fall back to the movement signal only)."""
-    form, fconf = classify_form(depth, apex_height_ft, release_angle_deg)
+    form, fconf = classify_form(depth, apex_above_rim_ft, release_angle_deg)
     dribbled = None
     if ball_track is not None and rel_frame is not None:
         dribbled, _ = detect_dribble(ball_track, rel_frame, fps)

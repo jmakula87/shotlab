@@ -99,8 +99,8 @@ def _cache_path(video_path: str) -> str:
 # Bump when the record-building LOGIC changes in a way the schema/params don't
 # capture (e.g. a metric formula). The ShotRecord field set is folded in
 # automatically, so adding/removing a record field invalidates caches on its own.
-_CACHE_VERSION = 17   # v17: is_real duration cap loosened 2.5->6.0s (a 3.1s real make
-                      #      was being dropped) -- gross-phantom guard only
+_CACHE_VERSION = 18   # v18: windowed make/miss (D9) + audio timing on rim approach
+                      #      (D8) + layup class from rim-relative apex (D17)
 # NOTE: is_real is DETECTION-derived (fit/frames/rim), not pose -- ideally it'd be
 # recomputed at load time so a threshold tweak doesn't force a pose re-run. Deferred
 # (needs a full Calibration, not fully reconstructable from the detection cache).
@@ -201,16 +201,21 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
         # have it, else the flight's first frame.
         st_rel = sf.release_frame if sf is not None else rel_frame
         stype = classify_shot_type(
-            depth=rec.depth, apex_height_ft=rec.apex_height_ft,
+            depth=rec.depth, apex_above_rim_ft=rec.apex_above_rim_ft,
             release_angle_deg=rec.release_angle_deg,
             movement_dir=rec.movement_dir, ball_track=track,
             rel_frame=st_rel, fps=info.fps)
         rec.shot_form, rec.shot_setup = stype.form, stype.setup
-        mk = classify_make(s, track, calib)
+        mk = classify_make(s, track, calib, fps=info.fps)
         made, mconf = mk.made, mk.confidence
         if audio is not None and audio[0] is not None:
             from .audio import audio_make_hint, fuse_make
-            rim_t = float(s.frames[-1]) / info.fps         # ball reaches rim ~ end of flight
+            # time the audio window on the CLOSEST-RIM-APPROACH frame, not the last
+            # tracked flight frame -- on a phantom/over-long track the last frame is
+            # seconds after the real rim event, so the swish/clank window missed it
+            # (audit D8). Fall back to flight end if closest approach is unknown.
+            rim_f = mk.rim_frame if mk.rim_frame is not None else int(s.frames[-1])
+            rim_t = float(rim_f) / info.fps
             hint = audio_make_hint(audio[0], audio[1], rim_t)
             made, mconf = fuse_make(mk.made, mk.confidence, hint)
         rec.made, rec.make_conf = made, mconf

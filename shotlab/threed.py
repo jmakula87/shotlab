@@ -62,7 +62,10 @@ class Camera:
         position = np.asarray(position, float)
         fwd = _unit(np.asarray(target, float) - position)     # camera +Z
         right = _unit(np.cross(np.asarray(up, float), fwd))    # camera +X
-        down = np.cross(fwd, right)                            # camera +Y (img y down)
+        # camera +Y = image DOWN. cross(fwd, right) pointed world-UP, so a point
+        # above the target projected LOWER (a 180deg roll); cross(right, fwd)
+        # points world-down as it must (2026-07-06 audit D15).
+        down = _unit(np.cross(right, fwd))                     # camera +Y (img y down)
         R = np.vstack([right, down, fwd])                      # rows: world->cam
         t = -R @ position
         return Camera(K=np.asarray(K, float), R=R, t=t)

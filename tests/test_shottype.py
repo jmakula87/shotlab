@@ -15,14 +15,14 @@ class FakeBall:
 
 
 def test_form_far_is_confident_jumper():
-    form, conf = classify_form("far", apex_height_ft=4.0, release_angle_deg=52)
+    form, conf = classify_form("far", apex_above_rim_ft=4.0, release_angle_deg=52)
     assert form == "jumper" and conf == "medium"
-    form, conf = classify_form("mid", apex_height_ft=3.0, release_angle_deg=48)
+    form, conf = classify_form("mid", apex_above_rim_ft=3.0, release_angle_deg=48)
     assert form == "jumper" and conf == "medium"
 
 
 def test_form_near_flat_low_is_layup():
-    form, conf = classify_form("near", apex_height_ft=0.8, release_angle_deg=22)
+    form, conf = classify_form("near", apex_above_rim_ft=0.8, release_angle_deg=22)
     assert form == "layup" and conf == "low"      # close, flat, no arc
 
 
@@ -66,7 +66,7 @@ def test_classify_shot_type_end_to_end():
     rel = 60
     track = {rel - 10 + i: FakeBall(cy=y) for i, y in
              enumerate([50, 80, 110, 80, 50, 85, 115, 80, 50, 45, 40])}
-    st = classify_shot_type(depth="far", apex_height_ft=4.0, release_angle_deg=50,
+    st = classify_shot_type(depth="far", apex_above_rim_ft=4.0, release_angle_deg=50,
                             movement_dir="set", ball_track=track, rel_frame=rel,
                             fps=30)
     assert st.form == "jumper" and st.form_conf == "medium"
