@@ -74,7 +74,13 @@ def _as_bool(made) -> bool | None:
 
 def _pair_values(rows, field, label_field="made"):
     """(values, label01) for rows where the metric and the binary label are both
-    known. `label_field` is "made" (make/miss) or "felt_good" (subjective feel)."""
+    known. `label_field` is "made" (make/miss) or "felt_good" (subjective feel).
+
+    Physically-implausible reads are dropped through metric_ranges.in_range (the
+    SAME gate the profile ideals use), so a mis-detected sub-90 deg "elbow at
+    release" can't inflate a make-driver -- both decision surfaces see the same
+    real reads (2026-07-06 audit)."""
+    from .metric_ranges import in_range
     vals, lab = [], []
     for r in rows:
         v = r.get(field) if isinstance(r, dict) else getattr(r, field, None)
@@ -82,13 +88,9 @@ def _pair_values(rows, field, label_field="made"):
         m = _as_bool(m)
         if v is None or m is None:
             continue
-        try:
-            fv = float(v)
-        except (TypeError, ValueError):
+        if not in_range(field, v):     # NaN/inf/artifact == missing
             continue
-        if not np.isfinite(fv):        # NaN/inf (missing pose/spin) == missing
-            continue
-        vals.append(fv)
+        vals.append(float(v))
         lab.append(1 if m else 0)
     return np.array(vals, float), np.array(lab, int)
 

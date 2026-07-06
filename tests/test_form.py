@@ -150,6 +150,62 @@ def test_release_subframe_and_confidence():
     assert abs(sf.release_t - est.t) < 1e-6
 
 
+def test_far_ball_is_not_a_confident_release():
+    """A ball tracked far from the wrist (never in hand) must NOT be graded a
+    confident hand-off just because its distance recedes -- the proximity gate
+    (2026-07-06 audit: curated shots 28/24/21 shipped high-conf with the ball
+    280-620px from the wrist)."""
+    from shotlab.phase2_pose.form import find_release
+    poses, ball = {}, {}
+    for f in range(0, 24):
+        wrist_y = 210 - 8 * f if f <= 8 else 146 + 8 * (f - 8)   # real peak at ~8
+        wrist = (240, float(wrist_y))
+        joints = {"r_shoulder": (210, 200), "l_shoulder": (195, 200),
+                  "r_elbow": (228, wrist_y + 20), "r_wrist": wrist,
+                  "r_hip": (205, 290), "l_hip": (195, 290),
+                  "r_knee": (200, 360), "r_ankle": (200, 470), "l_ankle": (190, 470)}
+        poses[f] = make_pose(f, joints)
+        ball[f] = FakeBall(900.0 + 8 * f, 100.0)    # 600+px away, receding
+    shot = FakeShot(list(range(6, 22)))
+    est = find_release(shot, ball, poses, handedness="right", fps=30)
+    assert est.diverging is False, est
+    assert est.confidence == "low", est.confidence
+
+
+def test_no_overhead_apex_is_not_confirmed():
+    """The ball diverges cleanly but the arm never rises overhead -> no pose
+    corroboration -> unconfirmed low, never a high-confidence release (2026-07-06
+    audit: apex-None used to pass the ball estimate's confidence verbatim)."""
+    from shotlab.phase2_pose.form import find_release
+    poses, ball = {}, {}
+    for f in range(0, 20):
+        wrist = (240.0 + 4 * f, 230.0)              # stays BELOW the shoulder (200)
+        joints = {"r_shoulder": (210, 200), "l_shoulder": (195, 200),
+                  "r_elbow": (228, 215), "r_wrist": wrist,
+                  "r_hip": (205, 290), "l_hip": (195, 290),
+                  "r_knee": (200, 360), "r_ankle": (200, 470), "l_ankle": (190, 470)}
+        poses[f] = make_pose(f, joints)
+        ball[f] = (FakeBall(*wrist) if f <= 8
+                   else FakeBall(wrist[0] + 12 * (f - 8), wrist[1] - 8 * (f - 8)))
+    shot = FakeShot(list(range(2, 18)))
+    est = find_release(shot, ball, poses, handedness="right", fps=30)
+    assert est.confidence == "low", est.confidence
+    assert est.diverging is False
+
+
+def test_wrist_still_rising_at_window_edge_is_rejected():
+    """If the wrist is still rising at the search-window edge, the 'apex' is the
+    window clip (elbow mid-push ~90deg), not the snap -> reject (2026-07-06
+    audit: curated shot 107 saturated the boundary at high confidence)."""
+    from shotlab.phase2_pose.form import _wrist_apex, side_keys
+    poses = {}
+    for f in range(0, 40):
+        wrist_y = 300.0 - 5.0 * f                   # rising through the whole window
+        poses[f] = make_pose(f, {"r_shoulder": (210, 250), "r_wrist": (240, wrist_y)})
+    shot = FakeShot(list(range(6, 22)))
+    assert _wrist_apex(shot, poses, side_keys("right"), fps=30) is None
+
+
 def test_late_ball_still_uses_peak_extension():
     """Far/small ball the detector only locks onto ~0.4s into flight: the release
     is still the pose wrist-apex (peak extension), and because the ball hand-off

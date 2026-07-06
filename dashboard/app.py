@@ -414,7 +414,13 @@ def _feel_tagging(df, view, d):
         n_good = sum(1 for x in feels if x == "good")
         n_off = sum(1 for x in feels if x == "off")
         st.caption(f"tagged so far: **{n_good}** good · **{n_off}** off")
-        st.markdown(summarize_feel_drivers(correlate_feel(rows)))
+        # editor stays on the RAW rows (row-aligned save), but the feel-drivers
+        # preview runs on the CURATED set like every other derived surface
+        # (2026-07-06 audit: it was including excluded/layup shots).
+        from shotlab.curate import apply_excludes
+        crows = (apply_excludes(pd.DataFrame(rows), d).to_dict("records")
+                 if "shot_num" in df.columns else rows)
+        st.markdown(summarize_feel_drivers(correlate_feel(crows)))
 
 
 def _halves_make(df):

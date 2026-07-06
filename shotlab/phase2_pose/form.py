@@ -128,11 +128,16 @@ def find_release(shot, ball_track, poses, handedness, fps=30.0) -> ReleaseEstima
     beyond the wrist landmark. So the ball-center is closest to the wrist during
     the GATHER (ball cradled by the hand) and moves AWAY as the arm extends --
     ball-divergence therefore fires mid-PUSH, landing the "release" on a still-
-    bent ~90-100deg elbow. Frame-by-frame checks on this footage confirm the
-    ball only clearly separates at full extension, where the elbow is ~150-170deg
-    -- exactly the wrist apex, and exactly the ~159deg release the shooting
-    research reports. (The 2026-07-05 audit flagged ~160deg as "lockout"; it's
-    actually the correct near-full-extension release. See the elbow-metric note.)
+    bent ~90-100deg elbow, and a hand-length-thresholded ball-departure lands
+    even earlier. The wrist apex is the best of the available anchors.
+
+    HONEST CAVEAT (2026-07-06 verification): true fingertip departure is ~1-2
+    frames (50-80ms @30fps) BEFORE the wrist apex, so the apex-anchored elbow
+    runs ~+10-15deg HIGH vs the real release (deployed ~165 vs the ~159 research
+    value / ~140-160 measured departure on this shooter). At 30fps the elbow
+    slews ~30-40deg/frame through the snap, so the release instant is inherently
+    +/-10-20deg fuzzy on one camera regardless of anchor. Treat elbow-at-release
+    as "reached near-full extension", not a precise angle -- see the metric note.
 
     The ball hand-off (`_ball_release`) is used only to CONFIRM the apex is a real
     shot: a clean divergence at or just before the peak -> high confidence. No
@@ -144,17 +149,26 @@ def find_release(shot, ball_track, poses, handedness, fps=30.0) -> ReleaseEstima
     apex = _wrist_apex(shot, poses, keys, fps)
     ball_est = _ball_release(shot, ball_track, poses, keys, fps)
     if apex is None:
-        return ball_est                       # no overhead extension -> ball fallback
+        # No overhead extension = no pose corroboration for a release. Do NOT let
+        # the ball estimate's own confidence through as a confirmed release (a
+        # non-shot arc can't be a high-confidence release; 2026-07-06 audit).
+        return ReleaseEstimate(frame=ball_est.frame, t=ball_est.t, confidence="low",
+                               diverging=False,
+                               note="no wrist apex (arm never overhead); unconfirmed")
     af, at = apex
-    # Real shot: the ball diverges at, or just before, peak extension.
-    handoff = (ball_est.diverging and
-               -2 <= (af - ball_est.frame) <= int(round(0.5 * max(fps, 1.0))))
-    return ReleaseEstimate(
-        frame=af, t=at,
-        confidence="high" if handoff else "low",
-        diverging=bool(handoff),
-        note="wrist-apex (peak arm extension = release)"
-             + ("; ball hand-off confirms" if handoff else "; no clean ball hand-off"))
+    # Real shot: a CLEAN in-hand ball hand-off diverges at, or just before
+    # (<=~0.2s -- tight, so a distinct earlier motion / tracker jump can't confirm
+    # the apex), peak extension. Gate on the ball estimate's OWN grade: a weak
+    # (medium) hand-off yields a medium overall release, not high.
+    near = -2 <= (af - ball_est.frame) <= int(round(0.2 * max(fps, 1.0)))
+    if ball_est.diverging and near and ball_est.confidence == "high":
+        conf, div, tail = "high", True, "; ball hand-off confirms"
+    elif ball_est.diverging and near and ball_est.confidence == "medium":
+        conf, div, tail = "medium", True, "; weak ball hand-off"
+    else:
+        conf, div, tail = "low", False, "; no clean ball hand-off"
+    return ReleaseEstimate(frame=af, t=at, confidence=conf, diverging=div,
+                           note="wrist-apex (peak arm extension = release)" + tail)
 
 
 def _wrist_apex(shot, poses, keys, fps):
@@ -183,6 +197,17 @@ def _wrist_apex(shot, poses, keys, fps):
     fp = poses[best_f]
     if float(fp.pt(keys["wrist"])[1]) >= float(fp.pt(keys["shoulder"])[1]):
         return None
+    # Reject a boundary-clipped "apex": the min must be a real INTERIOR peak, i.e.
+    # the wrist has to turn back DOWN after best_f within the window. If it's still
+    # rising at the search edge, best_f is the window clip, not the snap, and the
+    # elbow there is mid-push (~90deg) -- exactly the failure this anchor avoids
+    # (2026-07-06 audit: curated shot 107 saturated at the boundary).
+    turned_down = any(
+        poses.get(f) is not None and poses[f].v(keys["wrist"]) >= 0.4
+        and float(poses[f].pt(keys["wrist"])[1]) > best_y + 2.0
+        for f in range(best_f + 1, start + post + 1))
+    if not turned_down:
+        return None
     # sub-frame apex via a parabolic vertex fit on wrist-y at the peak +/- 1
     y0 = best_y
     ym = float(poses[best_f - 1].pt(keys["wrist"])[1]) if poses.get(best_f - 1) else None
@@ -210,7 +235,8 @@ def _ball_release(shot, ball_track, poses, keys, fps=30.0) -> ReleaseEstimate:
     # ~90deg elbow (2026-07-05). Search a wide-enough forward window to catch the
     # convergence + the divergence that follows it (matches _wrist_apex's post).
     post = max(8, int(round(0.5 * max(fps, 1.0))))
-    window = range(lo, start + post)
+    window = range(lo, start + post + 3)     # a few frames past the apex window so a
+                                             # divergence at/just after the peak still registers
 
     samples = []  # (frame, dist, ball_radius, wrist_visibility)
     for f in window:
@@ -232,6 +258,18 @@ def _ball_release(shot, ball_track, poses, keys, fps=30.0) -> ReleaseEstimate:
     imin = int(np.argmin(dists))
     dmin = dists[imin]
     tol = 0.6 * rmed
+
+    # PROXIMITY GATE: the "in-hand cluster" must actually be in the hand. If the
+    # ball is never tracked near the wrist (min distance > a couple ball radii),
+    # a monotonically-receding distance series alone would otherwise read as a
+    # clean "divergence" and rubber-stamp a false high-confidence release -- e.g.
+    # a ball only picked up already in flight, or a non-shot arc (2026-07-06
+    # audit: curated shots 28/24/21 shipped release_conf=high with the ball
+    # 280-620px from the wrist). No proximity -> no hand-off was observed.
+    if dmin > 2.0 * rmed:
+        return ReleaseEstimate(frame=samples[imin][0], t=float(samples[imin][0]),
+                               confidence="low", diverging=False,
+                               note="ball never near the hand; no hand-off observed")
 
     # Extend the held cluster forward from the minimum while still ~in hand; its
     # last frame is the divergence onset.
@@ -564,10 +602,14 @@ def _height_metrics(metrics, poses, ball_track, keys, span, rel_f, rim_ppf,
     fp = poses.get(rel_f)
     rh = None
     if ppf and fp and ground_y is not None:
-        bc = ball_track.get(rel_f)
-        ball_y = bc.cy if bc is not None else (
-            fp.pt(keys["wrist"])[1] if _vis_ok(fp, [keys["wrist"]]) else None)
-        rh = release_height_ft(ball_y, ground_y, ppf)
+        # Use the shooting WRIST height, NOT the tracked ball. rel_f is the wrist
+        # apex, where the ball has already left the hand and floats a diameter or
+        # two above it -- sampling the ball there inflated release height ~1-1.5ft
+        # (2026-07-06 audit). The wrist at peak extension is the honest hand
+        # position the ball leaves from (reads slightly low, consistent with the
+        # depth-foreshortening note below).
+        rel_y = fp.pt(keys["wrist"])[1] if _vis_ok(fp, [keys["wrist"]]) else None
+        rh = release_height_ft(rel_y, ground_y, ppf)
     metrics.append(FormMetric(
         "release_height_ft", None if rh is None else round(rh, 2),
         "low" if rh is not None else "na",

@@ -105,18 +105,7 @@ def select_form_good(df: pd.DataFrame, min_good: int = 5):
     return pose, "pose-reliable shots"
 
 
-# Physically-sane ranges per metric: values outside are pose/tracking artifacts
-# (a 172 deg "knee bend" is a straight-leg mis-detection; a 0.00s follow-through
-# is a floor, not a hold) and must not skew the ideal. None = no gate on that end.
-_VALID_RANGE = {
-    "knee_bend_deg": (30.0, 150.0),          # >150 = not actually bent (artifact)
-    "elbow_angle_at_release_deg": (90.0, 180.0),
-    "tempo_dip_to_release_s": (0.05, 2.0),   # <0.05s = sub-frame floor
-    "follow_through_hold_s": (0.02, 3.0),    # 0.00 = no hold measured
-    "balance_drift_px_per_ht": (0.0, 3.0),
-    "release_angle_deg": (10.0, 80.0),
-    "entry_angle_deg": (10.0, 80.0),
-}
+from shotlab.metric_ranges import VALID_RANGE as _VALID_RANGE  # shared artifact gate
 
 
 def _add_ideal(ideal: dict, tol: dict, pool: pd.DataFrame, col: str, floor: float):
