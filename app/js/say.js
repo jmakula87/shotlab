@@ -7,6 +7,8 @@
 // For metrics with a clear better direction we only cue the side worth fixing
 // (e.g. not bending enough); the other side is a good deviation and stays quiet.
 
+import { byPriority } from "./analyze.js";
+
 // key -> { hi, lo }: the spoken cue when the measured value is ABOVE / BELOW your
 // ideal. A missing side means that direction is a GOOD deviation -> no cue.
 const CUES = {
@@ -29,8 +31,8 @@ export function spokenFeedback(deltas, { max = 2 } = {}) {
   if (!deltas || !deltas.length)
     return "Couldn't read that one clearly.";
   const cues = [];
-  for (const d of deltas) {
-    if (d.within) continue;
+  for (const d of byPriority(deltas)) {      // drivers first, elbow last (D14c)
+    if (d.fault === false || (d.fault === undefined && d.within)) continue;
     const c = CUES[d.key];
     if (!c) continue;
     const cue = d.delta > 0 ? c.hi : c.lo;   // hi = above ideal, lo = below

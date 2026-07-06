@@ -22,13 +22,13 @@ export function releaseIndex(wristY, noseY) {
 }
 
 export class ShotDetector {
-  constructor({ handedness = "right", bufferS = 2.5, refractoryS = 1.2,
-                settleS = 0.15 } = {}) {
+  constructor({ handedness = "right", bufferS = 3.0, refractoryS = 1.2,
+                maxSettleS = 1.5 } = {}) {
     this.keys = sideKeys(handedness);
     this.bufferS = bufferS;
     this.refractoryS = refractoryS;
-    this.settleS = settleS;
-    this.buf = [];            // [{ t, lm }]
+    this.maxSettleS = maxSettleS;    // cap the wait for the follow-through to end
+    this.buf = [];                   // [{ t, lm }]
     this.lastFire = -Infinity;
   }
 
@@ -37,21 +37,36 @@ export class ShotDetector {
   feed(t, lm, W, H) {
     if (lm) this.buf.push({ t, lm });
     while (this.buf.length && t - this.buf[0].t > this.bufferS) this.buf.shift();
-    if (this.buf.length < 5) return null;
+    if (this.buf.length < 5 || t - this.lastFire < this.refractoryS) return null;
 
-    const wristY = [], noseY = [];
+    const wristY = [], noseY = [], shoulderY = [];
     for (const f of this.buf) {
       wristY.push(f.lm[this.keys.wrist].y * H);
       noseY.push(f.lm[L.nose].y * H);
+      shoulderY.push(f.lm[this.keys.shoulder].y * H);
     }
     const idx = releaseIndex(wristY, noseY);
     if (idx < 0) return null;
 
+    // Require a genuine UPSTROKE: the wrist was below the head (arm down) at some
+    // frame before the peak. Without this, jitter on a wrist held overhead mints
+    // phantom shots (audit D11).
+    let roseFromBelow = false;
+    for (let i = 0; i < idx; i++) if (wristY[i] > noseY[i]) { roseFromBelow = true; break; }
+    if (!roseFromBelow) return null;
+
+    // Fire only once the FOLLOW-THROUGH is actually captured: wait until the
+    // wrist comes back DOWN below the shoulder (hold complete) or we hit the max
+    // wait. The old fixed 0.15s fired mid-follow-through and truncated the
+    // follow-through-hold measurement -- his #1 make-driver (audit D3).
     const peakT = this.buf[idx].t;
-    // fire only once the follow-through has settled and we're past refractory
-    if (t - peakT >= this.settleS && peakT - this.lastFire >= this.refractoryS) {
-      this.lastFire = peakT;
-      return { frames: this.buf.slice(), releaseT: peakT };
+    const wristDown = wristY[wristY.length - 1] > shoulderY[shoulderY.length - 1];
+    const done = (idx < wristY.length - 1) && (wristDown || t - peakT >= this.maxSettleS);
+    if (done && peakT - this.lastFire >= this.refractoryS) {
+      const shot = { frames: this.buf.slice(), releaseT: peakT };
+      this.lastFire = t;             // refractory from the fire, not the peak
+      this.buf = [];                 // clear so a held wrist can't re-fire the shot
+      return shot;
     }
     return null;
   }

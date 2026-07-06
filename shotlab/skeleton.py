@@ -39,12 +39,15 @@ _PRE, _POST = 30, 12    # frame window padding around a shot for pose
 
 
 def _canonical(fp, w, h):
-    """A pose -> (33,2) normalized coords centered on the shoulder midpoint and
-    scaled by the shoulder->hip length (the app's alignment convention). Returns
-    (canon_xy, vis) or None if the torso anchor isn't usable."""
-    xy = fp.xy.astype(float).copy()
-    xy[:, 0] /= w
-    xy[:, 1] /= h
+    """A pose -> (33,2) ASPECT-TRUE coords centered on the shoulder midpoint and
+    scaled by the shoulder->hip length. Returns (canon_xy, vis) or None.
+
+    Works in PIXEL space -- it must NOT normalize x by width and y by height
+    separately, which stored an aspect-distorted shape and made the phone's gold
+    overlay warp on a non-square/portrait canvas (elbow read 169 vs 157 deg;
+    audit D7). Unit is shoulder->hip lengths, so it's aspect-free and the app can
+    align it isotropically. (w,h kept for signature compatibility.)"""
+    xy = fp.xy.astype(float).copy()      # pixels; isotropic
     s_mid = (xy[11] + xy[12]) / 2.0
     h_mid = (xy[23] + xy[24]) / 2.0
     scale = float(np.hypot(*(s_mid - h_mid)))

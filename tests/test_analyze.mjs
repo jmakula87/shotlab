@@ -1,6 +1,6 @@
 // Node test for the app's analyzeShot metrics + profile key alignment.
 // Run: node tests/test_analyze.mjs
-import { analyzeShot, compareToProfile } from "../app/js/analyze.js";
+import { analyzeShot, compareToProfile, feedbackLines, byPriority } from "../app/js/analyze.js";
 
 let passed = 0, failed = 0;
 const ok = (name, cond) => cond ? (passed++, console.log("PASS " + name))
@@ -56,6 +56,20 @@ ok("arc angles are not scored", !arcDeltas.some(
    d => d.key === "release_angle_deg" || d.key === "entry_angle_deg"));
 ok("non-arc metric still scored alongside", arcDeltas.some(
    d => d.key === "elbow_angle_at_release_deg"));
+
+// D13: a better-than-ideal one-sided metric is NOT flagged as a fault
+const goodDeltas = compareToProfile(
+  { balance_drift_px_per_ht: 0.0 },     // lower drift = better than the 0.8 ideal
+  { ideal: { balance_drift_px_per_ht: 0.8 }, tolerance: { balance_drift_px_per_ht: 0.3 } });
+const bd = goodDeltas.find(d => d.key === "balance_drift_px_per_ht");
+ok("lower balance drift is out of band but not a fault", bd && bd.within === false && bd.fault === false);
+ok("screen does not flag better-than-ideal", feedbackLines(goodDeltas).some(l => l.includes("Dialed")));
+
+// D14c: follow-through is cued before elbow
+const pr = byPriority([
+  { key: "elbow_angle_at_release_deg", fault: true, delta: 5 },
+  { key: "follow_through_hold_s", fault: true, delta: -0.2 }]);
+ok("follow-through prioritized over elbow", pr[0].key === "follow_through_hold_s");
 
 console.log(`\n${passed}/${passed + failed} passed`);
 process.exit(failed ? 1 : 0);

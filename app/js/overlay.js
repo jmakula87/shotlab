@@ -37,14 +37,24 @@ const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
 
 // Align an ideal skeleton onto the actual one (translate to the same shoulder
 // center, scale by shoulder->hip length) so limb angles compare visually.
+//
+// The shoulder->hip scale and the placement are computed in PIXELS, so the
+// transform is a true similarity (uniform scale) and limb angles are preserved.
+// Doing it in normalized x,y mixed the aspect ratio and warped the gold overlay
+// on a portrait phone (audit D7). The ideal skeleton is stored aspect-true
+// (isotropic shoulder->hip units), so scaling it to the actual's pixel
+// shoulder->hip length reproduces its shape correctly.
 export function drawIdealAligned(ctx, idealLm, actualLm, opts = {}) {
-  const aS = mid(actualLm, 11, 12), aH = mid(actualLm, 23, 24);
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  const aPx = actualLm.map(p => ({ x: p.x * W, y: p.y * H }));
+  const aS = mid(aPx, 11, 12), aH = mid(aPx, 23, 24);
+  const aScale = dist(aS, aH) || 1e-6;              // pixels
   const iS = mid(idealLm, 11, 12), iH = mid(idealLm, 23, 24);
-  const aScale = dist(aS, aH), iScale = dist(iS, iH) || 1e-6;
+  const iScale = dist(iS, iH) || 1e-6;              // isotropic ideal units
   const s = aScale / iScale;
   const warped = idealLm.map(p => ({
-    x: aS.x + (p.x - iS.x) * s,
-    y: aS.y + (p.y - iS.y) * s,
+    x: (aS.x + (p.x - iS.x) * s) / W,                // pixel placement -> normalized
+    y: (aS.y + (p.y - iS.y) * s) / H,
     visibility: p.visibility ?? 1,
   }));
   drawSkeleton(ctx, warped, { color: opts.color || "#ffb020", width: 3, dot: 4 });

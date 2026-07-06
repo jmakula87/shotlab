@@ -44,6 +44,28 @@ function lmWith(noseY, wristY) {
     if (det.feed(i / 30, lmWith(0.4, 0.2), 1, 1)) fires++;
   ok("does not fire on too-few frames", fires === 0);
 }
+{
+  // D11: a wrist held overhead with jitter has no upstroke-from-below -> no
+  // phantom shots (the old detector re-fired every 1.2s)
+  const det = new ShotDetector({ handedness: "right" });
+  let fires = 0;
+  for (let i = 0; i < 90; i++) {                    // 3s held high, tiny jitter
+    const wy = 0.15 + (i % 2) * 0.01;              // always above the nose (0.4)
+    if (det.feed(i / 30, lmWith(0.4, wy), 1, 1)) fires++;
+  }
+  ok("no phantom fire on a held-overhead wrist", fires === 0);
+}
+{
+  // D3: the fired shot buffers PAST the peak (through a long follow-through hold)
+  // so the hold is measurable, instead of firing 0.15s after the peak
+  const det = new ShotDetector({ handedness: "right" });
+  const seq = [0.8, 0.7, 0.5, 0.3, 0.15, 0.16, 0.16, 0.17, 0.16, 0.17, 0.16, 0.55, 0.75];
+  let shot = null;
+  seq.forEach((wy, i) => { const s = det.feed(i / 30, lmWith(0.4, wy), 1, 1); if (s) shot = s; });
+  ok("fires after the follow-through completes", shot !== null);
+  const afterPeak = shot ? shot.frames.filter(f => f.t > shot.releaseT).length : 0;
+  ok("captures follow-through frames past the peak", afterPeak >= 5);
+}
 
 console.log(`\n${passed}/${passed + failed} passed`);
 process.exit(failed ? 1 : 0);

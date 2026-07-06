@@ -58,14 +58,26 @@ export function analyzeShot(frames, { hand = "right", W, H, fps = 30 } = {}) {
 
   if (!series.length) return null;
 
-  // release ~ highest wrist point (min y in image space)
+  // release ~ ONSET of the wrist's overhead peak plateau: the first frame within
+  // a small epsilon of the minimum y, NOT the global argmin. Jitter over a long
+  // follow-through would otherwise place "release" anywhere in the plateau and
+  // drift tempo/timing; the onset is stable and lands nearer the true release
+  // (audit D6).
+  let minY = Infinity, maxY = -Infinity;
+  for (const s of series) {
+    if (s.wristY < minY) minY = s.wristY;
+    if (s.wristY > maxY) maxY = s.wristY;
+  }
+  const eps = Math.max(4, 0.06 * (maxY - minY));
   let relIdx = 0;
-  for (let i = 1; i < series.length; i++)
-    if (series[i].wristY < series[relIdx].wristY) relIdx = i;
+  for (let i = 0; i < series.length; i++)
+    if (series[i].wristY <= minY + eps) { relIdx = i; break; }
 
-  // load ~ deepest knee bend (min knee angle) at or before release
+  // load ~ deepest knee bend within ~0.8s BEFORE release (not the whole buffer,
+  // so a pre-shot crouch can't masquerade as the load) (audit D6)
+  const loadLo = Math.max(0, relIdx - Math.round(0.8 * fps));
   let loadIdx = null, minKnee = Infinity;
-  for (let i = 0; i <= relIdx; i++)
+  for (let i = loadLo; i <= relIdx; i++)
     if (series[i].knee != null && series[i].knee < minKnee) {
       minKnee = series[i].knee; loadIdx = i;
     }
@@ -129,6 +141,41 @@ const round1 = x => (x == null ? null : Math.round(x * 10) / 10);
 // arc angles as if they were dialed-in personal targets (2026-07-05 audit).
 export const CALIBRATION_GATED = new Set(["release_angle_deg", "entry_angle_deg"]);
 
+// Which side of the ideal is an actual FAULT worth flagging. "both" = no clear
+// better direction (elbow reads "off your normal" either way); "hi" = only when
+// measured is ABOVE the ideal is it a fault; "lo" = only below. A better-than-
+// ideal deviation on a one-sided metric is a GOOD thing and stays quiet -- the
+// screen used to flag it as a fault (e.g. "balance drift lower than ideal";
+// audit D13). Mirrors say.js's cue directions.
+export const FAULT_SIDE = {
+  elbow_angle_at_release_deg: "both",
+  knee_bend_deg: "hi",              // higher angle = straighter legs = less bend
+  tempo_dip_to_release_s: "hi",     // higher = slower into the shot
+  follow_through_hold_s: "lo",      // lower = cut it short
+  balance_drift_px_per_ht: "hi",    // higher = drifted off balance
+};
+
+// Cue priority: fix the biggest make-drivers first (follow-through, release
+// timing), elbow LAST (his weakest signal). Was object-insertion order, which
+// fired elbow first and crowded out follow-through (audit D14c).
+export const CUE_PRIORITY = [
+  "follow_through_hold_s", "release_vs_apex_s", "knee_bend_deg",
+  "tempo_dip_to_release_s", "balance_drift_px_per_ht",
+  "elbow_angle_at_release_deg",
+];
+
+function _isFault(key, delta, within) {
+  if (within) return false;
+  const side = FAULT_SIDE[key] || "both";
+  return side === "both" || (side === "hi" && delta > 0) || (side === "lo" && delta < 0);
+}
+
+// Order deltas by coaching priority (drivers first), unlisted metrics last.
+export function byPriority(deltas) {
+  const rank = k => { const i = CUE_PRIORITY.indexOf(k); return i < 0 ? 99 : i; };
+  return [...deltas].sort((a, b) => rank(a.key) - rank(b.key));
+}
+
 // Compare measured metrics to the profile's ideal targets -> deltas + feedback.
 export function compareToProfile(metrics, profile) {
   const ideal = (profile && profile.ideal) || {};
@@ -139,8 +186,9 @@ export function compareToProfile(metrics, profile) {
     const target = ideal[key];
     const delta = round1(meas - target);
     const tol = (profile.tolerance && profile.tolerance[key]) ?? 8;
-    out.push({ key, measured: meas, ideal: target, delta,
-               within: Math.abs(delta) <= tol });
+    const within = Math.abs(delta) <= tol;
+    out.push({ key, measured: meas, ideal: target, delta, within,
+               fault: _isFault(key, delta, within) });
   }
   return out;
 }
@@ -156,7 +204,9 @@ export const METRIC_LABEL = {
 };
 
 export function feedbackLines(deltas) {
-  const off = deltas.filter(d => !d.within);
+  // only flag the FIXABLE side (a better-than-ideal deviation isn't a fault),
+  // and lead with the biggest make-drivers (audit D13/D14c)
+  const off = byPriority(deltas.filter(d => d.fault));
   if (!deltas.length)
     return ["Couldn't read your form clearly — try filming closer / better light."];
   if (!off.length) return ["✅ Dialed — everything's within your normal range."];
