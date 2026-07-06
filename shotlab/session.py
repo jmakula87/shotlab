@@ -84,6 +84,8 @@ class ShotRecord:
     made: object = None           # True / False / None
     make_conf: str = "na"
     felt_good: object = None      # True / False / None -- user's subjective tag
+    is_real: bool = True          # False = degenerate detection (stationary/phantom/
+    quality_note: str = ""        #  too-long); auto-dropped by curation (audit D2)
 
     def row(self) -> dict:
         return asdict(self)
@@ -97,8 +99,11 @@ def _cache_path(video_path: str) -> str:
 # Bump when the record-building LOGIC changes in a way the schema/params don't
 # capture (e.g. a metric formula). The ShotRecord field set is folded in
 # automatically, so adding/removing a record field invalidates caches on its own.
-_CACHE_VERSION = 15   # v15: RANSAC-inlier round-trip fix (correct release angles),
-                      #      metric range-gating, ruler/tempo/timing confidence caps
+_CACHE_VERSION = 17   # v17: is_real duration cap loosened 2.5->6.0s (a 3.1s real make
+                      #      was being dropped) -- gross-phantom guard only
+# NOTE: is_real is DETECTION-derived (fit/frames/rim), not pose -- ideally it'd be
+# recomputed at load time so a threshold tweak doesn't force a pose re-run. Deferred
+# (needs a full Calibration, not fully reconstructable from the detection cache).
 
 
 def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
@@ -134,11 +139,18 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
                         px_per_foot=ppf_rim, shooter_height_ft=shooter_height_ft)
         forms = {fm.shot: fm for fm in p2.forms}
 
+    from .court import shot_quality
     records = []
     for s in shots:
         mm = metrics_for_shot(s, rim_x=calib.rim_x)
-        apex_i = int(np.argmax(s.ys))           # lowest point = release
+        # release point = the LOWEST fit-INLIER (not argmax over all points, which
+        # picks the stale walk-back outlier and mislocates the zone; audit D12)
+        mask = getattr(s.fit, "inlier_mask", None)
+        in_idx = (np.where(mask)[0] if mask is not None and len(mask) == len(s.ys)
+                  and mask.sum() >= 3 else np.arange(len(s.ys)))
+        apex_i = int(in_idx[np.argmax(s.ys[in_idx])])   # lowest inlier point = release
         z = zone_for_release((s.xs[apex_i], s.ys[apex_i]), calib)
+        real_ok, real_note = shot_quality(s, calib, info.fps)
         # release time = first tracked frame of the flight
         rel_frame = int(s.frames[0])
         t_off = rel_frame / info.fps
@@ -156,6 +168,7 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
             rim_dist_px=s.meta.get("rim_dist_px"),
             rim_dx_px=z.get("rim_dx_px"), rim_dy_px=z.get("rim_dy_px"),
             zone=z["zone"], side=z["side"], depth=z["depth"],
+            is_real=bool(real_ok), quality_note="" if real_ok else real_note,
         )
         # ball arc peak above the rim, in feet (rim-scaled; ball is ~at rim depth
         # here, so this is the most trustworthy real-feet number)
@@ -547,12 +560,15 @@ def consistency_stats(df: pd.DataFrame, metrics=None) -> pd.DataFrame:
             continue
         wz1 = pooled_within_zone_std(sub[sub["elapsed_min"] <= half], m)
         wz2 = pooled_within_zone_std(sub[sub["elapsed_min"] > half], m)
+        # round per-unit: 1dp for degrees is fine, but a seconds std ~0.05 rounds
+        # to a meaningless "0.0/0.1" at 1dp (audit D18b) -- give seconds 3dp, feet 2
+        dec = 3 if m.endswith("_s") else 2 if (m.endswith("_ft") or m.endswith("per_ht")) else 1
         rows.append({
             "metric": m,
-            "overall_std": round(float(sub[m].std()), 1),
-            "within_zone_std": round(pooled_within_zone_std(sub, m), 1),
-            "first_half_std": round(wz1, 1),
-            "second_half_std": round(wz2, 1),
+            "overall_std": round(float(sub[m].std()), dec),
+            "within_zone_std": round(pooled_within_zone_std(sub, m), dec),
+            "first_half_std": round(wz1, dec),
+            "second_half_std": round(wz2, dec),
             "more_erratic_when_tired": bool(wz2 > wz1) if wz2 == wz2 and wz1 == wz1 else None,
         })
     return pd.DataFrame(rows)

@@ -182,6 +182,31 @@ def is_real_shot(shot, calib: Calibration) -> tuple[bool, str]:
     return True, f"ok (rim {d:.0f}px, launched {below:.0f}px below)"
 
 
+def shot_quality(shot, calib: Calibration, fps: float) -> tuple[bool, str]:
+    """Is this candidate a plausible real jump shot? Wraps `is_real_shot` (launch
+    from below the rim, apex reaches rim, downward arc) and adds a DURATION cap
+    and a MOTION floor, so a stationary rim-colored detection, a dribble segment,
+    or an 18-second phantom is rejected instead of shipping as a made basket
+    (2026-07-06 audit D2). Used as a quality FLAG (shots keep their numbering; the
+    curation layer drops the failures), not a detection-time filter."""
+    ok, why = is_real_shot(shot, calib)
+    if not ok:
+        return False, why
+    # DURATION cap is deliberately loose (gross-phantom guard only): valid shots on
+    # this footage span up to ~2.4s, but a sparse-detection real shot whose tracked
+    # segment includes the gather can legitimately reach ~3.5s (verified: a big
+    # clean 3.1s arc was a real make). Don't drop those -- only the clearly bogus
+    # (an 18s stationary detection). The motion floor + is_real_shot's near-vertical
+    # gate catch the other degenerate types regardless of length (2026-07-06 audit).
+    span = (int(shot.frames[-1]) - int(shot.frames[0])) / max(float(fps), 1.0)
+    if span > 6.0:
+        return False, f"flight implausibly long ({span:.1f}s)"
+    step = np.hypot(np.diff(shot.xs), np.diff(shot.ys))
+    if len(step) and float(np.median(step)) < 3.0:    # near-stationary detection
+        return False, "near-stationary track (median step <3px)"
+    return True, why
+
+
 def filter_shots_by_rim(shots, calib: Calibration):
     """Keep only genuine shots (rim-anchored + launch/apex gates).
     Returns (kept_shots, rejected_count)."""

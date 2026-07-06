@@ -21,9 +21,10 @@ arc:
 
 # ---------------- Phase 2: form / pose ----------------
 form:
-  elbow_angle_at_release_deg:  # shoulder-elbow-wrist angle at ball release
-    target: 90.0               # ~90 at set point, extending through release
-    band: [80.0, 100.0]
+  elbow_angle_at_release_deg:  # shoulder-elbow-wrist angle at release (measured at
+                               # peak arm extension / the wrist apex, not the set point)
+    target: 160.0              # near-full extension at release (~159 research); band
+    band: [150.0, 175.0]       # was [80,100] which flagged every valid read (audit D16)
   knee_bend_deg:               # min knee angle in the dip (smaller = deeper bend)
     target: 115.0
     band: [100.0, 130.0]

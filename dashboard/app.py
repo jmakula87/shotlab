@@ -35,7 +35,9 @@ def _pdf_bytes(d, _mtime):
 st.set_page_config(page_title="ShotLab", layout="wide")
 OUT_DIR = os.path.join(ROOT, "data", "out")
 
-_ARC_CONF = {"release_angle_deg": "high", "entry_angle_deg": "high",
+# release/entry angles are FORESHORTENED on one wide camera (advisory, not high --
+# the app skiplists them and the profile keeps them in a diagnostic block; audit D16)
+_ARC_CONF = {"release_angle_deg": "low", "entry_angle_deg": "low",
              "apex_height_ft": "medium"}
 _FORM_KEYS = ["elbow_angle_at_release_deg", "knee_bend_deg", "release_vs_apex_s",
               "follow_through_hold_s", "balance_drift_px_per_ht", "squareness_deg"]
@@ -1032,6 +1034,6 @@ else:
     view_progress()
 
 st.sidebar.divider()
-st.sidebar.caption("Side-on angles (release/entry) = HIGH confidence when the "
-                   "camera is square. Apex-ft = MEDIUM. Elbow flare/squareness "
-                   "= LOW (1 camera). Make% = LOW until rim resolution improves.")
+st.sidebar.caption("Release/entry angles are FORESHORTENED on one wide camera "
+                   "(advisory until court-corner / 2-cam calibration). Apex-ft = "
+                   "MEDIUM. Elbow flare/squareness = LOW (1 camera). Make% = LOW.")

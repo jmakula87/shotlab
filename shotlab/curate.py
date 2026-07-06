@@ -32,8 +32,11 @@ def load_excludes(session_dir):
 
 
 def apply_excludes(df, session_dir, drop_layups=True):
-    """Drop excluded (and, by default, layup) shots from a session dataframe by
-    shot_num. No-op when there's no exclude.json or no shot_num column."""
+    """Drop excluded (and, by default, layup) shots from a session dataframe, plus
+    any auto-flagged degenerate detections (`is_real == False`: stationary/phantom/
+    over-long tracks; audit D2). No-op when there's no shot_num column."""
+    if "is_real" in df.columns:                       # auto-drop phantom detections
+        df = df[df["is_real"].map(lambda v: v not in (False, "False"))]
     if "shot_num" not in df.columns:
         return df
     ex, lay = load_excludes(session_dir)
