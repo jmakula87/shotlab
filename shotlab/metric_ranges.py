@@ -25,7 +25,25 @@ VALID_RANGE = {
     "balance_drift_px_per_ht": (0.0, 3.0),
     "release_angle_deg": (10.0, 80.0),
     "entry_angle_deg": (10.0, 80.0),
+    # real-feet + timing metrics (2026-07-06 audit D4: these had NO gate, so a
+    # 34.9ft "release height" and a physically-impossible -3.86s "release before
+    # apex" were flowing into the trend/coaching tables and the driver engine).
+    "release_height_ft": (4.0, 10.0),        # a 5'10" shooter releases ~5-9ft up
+    "jump_height_ft": (0.0, 2.5),            # rec shooter; >2.5 = tracking failure
+    "apex_height_ft": (0.5, 25.0),           # ball ruler is jittery -> loose gate
+    "apex_above_rim_ft": (0.0, 8.0),
+    "release_vs_apex_s": (-0.6, 0.6),        # |release - jump apex| within ~0.6s
 }
+
+
+def gate(df, col):
+    """Return the rows of `df` whose `col` value is a physically-plausible read
+    (drops NaN/inf/artifacts). No-op if the column is absent. Use before any
+    trend / consistency / fatigue / coaching aggregation so a mis-detected value
+    can't distort the number the shooter reads (2026-07-06 audit D4)."""
+    if col not in df.columns:
+        return df
+    return df[df[col].map(lambda v: in_range(col, v))]
 
 
 def in_range(col: str, val) -> bool:

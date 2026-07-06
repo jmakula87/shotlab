@@ -97,8 +97,8 @@ def _cache_path(video_path: str) -> str:
 # Bump when the record-building LOGIC changes in a way the schema/params don't
 # capture (e.g. a metric formula). The ShotRecord field set is folded in
 # automatically, so adding/removing a record field invalidates caches on its own.
-_CACHE_VERSION = 14   # v14: release gates -- ball-proximity, apex-None cap, wrist-apex
-                      #      boundary reject, confidence-aware handoff (2026-07-06 audit)
+_CACHE_VERSION = 15   # v15: RANSAC-inlier round-trip fix (correct release angles),
+                      #      metric range-gating, ruler/tempo/timing confidence caps
 
 
 def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
@@ -481,7 +481,8 @@ def prescribe_target(df: pd.DataFrame) -> dict:
         wz = row.get("within_zone_std")
         if wz is None or wz != wz or m not in df.columns:
             continue
-        level = float(df[m].abs().mean())
+        from .metric_ranges import gate
+        level = float(gate(df, m)[m].abs().mean())
         cv = wz / level if level > 1e-9 else wz          # spread relative to level
         if best is None or cv > best["cv"]:
             best = {"target_metric": m, "within_zone_std": round(float(wz), 2),
@@ -540,7 +541,8 @@ def consistency_stats(df: pd.DataFrame, metrics=None) -> pd.DataFrame:
     for m in metrics:
         if m not in df.columns:
             continue
-        sub = df[["elapsed_min", "zone", m]].dropna(subset=[m])
+        from .metric_ranges import gate
+        sub = gate(df[["elapsed_min", "zone", m]].dropna(subset=[m]), m)
         if len(sub) < 4:
             continue
         wz1 = pooled_within_zone_std(sub[sub["elapsed_min"] <= half], m)
@@ -576,7 +578,8 @@ def fatigue_breakdown(df: pd.DataFrame, metrics=None) -> pd.DataFrame:
     for m in metrics:
         if m not in df.columns:
             continue
-        sub = df[["elapsed_min", m]].dropna()
+        from .metric_ranges import gate
+        sub = gate(df[["elapsed_min", m]].dropna(), m)
         if len(sub) < 6:
             continue
         sd = float(sub[m].std())
@@ -628,7 +631,8 @@ def fatigue_trends(df: pd.DataFrame, metrics=None) -> pd.DataFrame:
     for m in metrics:
         if m not in df.columns:
             continue
-        sub = df[["elapsed_min", m]].dropna()
+        from .metric_ranges import gate
+        sub = gate(df[["elapsed_min", m]].dropna(), m)   # drop artifact reads
         if len(sub) < 3:
             out.append({"metric": m, "n": len(sub), "slope_per_min": None,
                         "start": None, "end": None, "trend": "insufficient data"})

@@ -58,12 +58,37 @@ def serialize_detection(track, shots, params) -> dict:
             "rmse": float(s.fit.rmse_px),
             "direction": int(s.fit.direction),
             "rim_dist_px": s.meta.get("rim_dist_px"),
+            # Which of `frames` are fit INLIERS. Without this, a round-trip marked
+            # every point an inlier and release_angle/apex read off the walk-back
+            # outliers (2026-07-06 audit D1). Aligned with `frames`.
+            "inliers": ([int(bool(b)) for b in np.asarray(s.fit.inlier_mask).tolist()]
+                        if getattr(s.fit, "inlier_mask", None) is not None
+                        and len(np.asarray(s.fit.inlier_mask)) == len(s.frames)
+                        else None),
         } for s in shots],
     }
 
 
+def _recover_inlier_mask(sd, xs, ys) -> np.ndarray:
+    """Which points are fit inliers. Prefer the serialized mask; for older caches
+    that lack it, recompute from the stored (correct) coeffs by the same residual
+    test the RANSAC fit uses -- the gross walk-back outliers sit far from the
+    fitted parabola, so this recovers the real inliers without re-detecting."""
+    saved = sd.get("inliers")
+    if saved is not None and len(saved) == len(xs):
+        m = np.array([bool(b) for b in saved])
+        if m.sum() >= 3:
+            return m
+    hs = -np.asarray(ys, float)
+    pred = np.polyval(np.asarray(sd["coeffs"], float), np.asarray(xs, float))
+    thr = max(8.0, 3.0 * float(sd.get("rmse", 0.0)) + 1.0)
+    m = np.abs(pred - hs) < thr
+    return m if m.sum() >= 3 else np.ones(len(xs), bool)
+
+
 def deserialize_detection(data):
-    """Inverse of serialize_detection -> (track, shots)."""
+    """Inverse of serialize_detection -> (track, shots). Rebuilds the fit's xs/hs
+    from the INLIERS (not every point) so release_angle/apex match a fresh fit."""
     track = {int(k): BallCandidate(int(k), v[0], v[1], v[2], v[3])
              for k, v in data["track"].items()}
     shots = []
@@ -72,9 +97,10 @@ def deserialize_detection(data):
         xs = np.array([track[int(f)].cx for f in frames])
         ys = np.array([track[int(f)].cy for f in frames])
         radii = np.array([track[int(f)].r for f in frames])
+        mask = _recover_inlier_mask(sd, xs, ys)
         fit = ArcFit(coeffs=np.array(sd["coeffs"]),
-                     inlier_mask=np.ones(len(xs), bool), xs=xs, hs=-ys,
-                     n_used=sd["n_used"], rmse_px=sd["rmse"],
+                     inlier_mask=mask, xs=xs[mask], hs=(-ys)[mask],
+                     n_used=int(mask.sum()), rmse_px=sd["rmse"],
                      direction=sd["direction"])
         shots.append(Shot(index=sd["index"], frames=frames, xs=xs, ys=ys,
                           radii=radii, fit=fit,

@@ -487,20 +487,26 @@ def compute_form(shot, ball_track, poses, fps, *, handedness="right",
     else:
         metrics.append(FormMetric("knee_bend_deg", None, "na", "legs not visible"))
 
+    # These two are anchored to the release frame, so they're only as trustworthy
+    # as the release estimate -- cap their confidence at it (was hard-coded
+    # "high"; 2026-07-06 audit D10). 30fps quantizes tempo, so <0.05s is a floor,
+    # not a real read.
+    rel_conf = "high" if rel.confidence == "high" else "medium" if rel.confidence == "medium" else "low"
+
     # ---- 2b. shot tempo: dip bottom -> release (quickness) --------------
-    if load_f is not None and rel_t >= load_f:
+    if load_f is not None and rel_t >= load_f and (rel_t - load_f) / fps >= 0.05:
         tempo = (rel_t - load_f) / fps
-        metrics.append(FormMetric("tempo_dip_to_release_s", round(tempo, 3), "high",
+        metrics.append(FormMetric("tempo_dip_to_release_s", round(tempo, 3), rel_conf,
                                   "time from your deepest load to release (lower = quicker)"))
     else:
         metrics.append(FormMetric("tempo_dip_to_release_s", None, "na",
-                                  "load/release not both tracked"))
+                                  "load/release not both tracked, or sub-0.05s (below fps resolution)"))
 
     # ---- 3. release vs jump apex (seconds, both sub-frame) --------------
     apex_t = _apex_subframe(poses, span)
     if apex_t is not None:
         dt = (rel_t - apex_t) / fps          # + = release after apex (late)
-        metrics.append(FormMetric("release_vs_apex_s", round(dt, 3), "high",
+        metrics.append(FormMetric("release_vs_apex_s", round(dt, 3), rel_conf,
                                   "+ = released after the peak (late)"))
     else:
         metrics.append(FormMetric("release_vs_apex_s", None, "na", "body not tracked"))
@@ -656,6 +662,6 @@ def _jump_height(poses, span, ppf):
     jh = jump_height_ft(ground, peak, ppf)
     # physics gate: past a world-class vertical it's a tracking failure, not a
     # jump -- report nothing rather than a garbage number
-    if jh is not None and jh > 4.0:
-        return None
+    if jh is not None and jh > 2.5:          # rec shooter; >2.5ft = tracking failure
+        return None                          # (was 4.0 -- passed ~4x-hot rim-scaled reads; audit D5)
     return jh
