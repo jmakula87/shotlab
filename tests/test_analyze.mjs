@@ -14,14 +14,15 @@ function lm(joints) {
 // right-handed shooter; wrist rises to a release at frame 6, knee bends mid-load
 const frames = [];
 for (let i = 0; i < 12; i++) {
-  const wr = i <= 6 ? 0.7 - i * 0.08 : 0.22 + (i - 6) * 0.04;   // rise then fall
-  const kn = i <= 5 ? 0.60 + i * 0.01 : 0.62;                    // knee point
+  const wr = i <= 6 ? 0.7 - i * 0.08 : 0.22 + (i - 6) * 0.04;   // rise to peak at 6
+  const kn = i <= 4 ? 0.60 - i * 0.02 : 0.52 + (i - 4) * 0.02;  // deepest knee bend at 4
+  const hp = 0.55 - 0.02 * Math.min(i, 8) + 0.03 * Math.max(0, i - 8); // jump apex at 8
   frames.push({ t: i / 30, lm: lm({
     12: { x: 0.50, y: 0.35 },   // r_shoulder
     14: { x: 0.55, y: 0.45 },   // r_elbow
     16: { x: 0.60, y: wr },     // r_wrist
-    24: { x: 0.50, y: 0.55 },   // r_hip
-    23: { x: 0.45, y: 0.55 },   // l_hip
+    24: { x: 0.50, y: hp },     // r_hip
+    23: { x: 0.45, y: hp },     // l_hip
     26: { x: 0.52, y: kn },     // r_knee
     28: { x: 0.50, y: 0.75 },   // r_ankle
     0: { x: 0.50, y: 0.30 },    // nose
@@ -37,6 +38,12 @@ ok("has tempo", "tempo_dip_to_release_s" in a.metrics);
 ok("has follow-through", "follow_through_hold_s" in a.metrics);
 ok("has balance drift", "balance_drift_px_per_ht" in a.metrics);
 ok("has release-vs-apex (jump-timing) metric", "release_vs_apex_s" in a.metrics);
+// VALUE guards (presence-only assertions let a frozen relIdx=0 pass; 2026-07-07 audit)
+ok("release anchored at the wrist peak (frame 6)", a.phases.release === 6);
+ok("jump apex detected at the hip minimum (frame 8)", a.phases.apex === 8);
+ok("load is at/before release", a.phases.load != null && a.phases.load <= a.phases.release);
+ok("tempo = (release-load)/fps, positive", a.metrics.tempo_dip_to_release_s > 0);
+ok("release before jump apex -> negative", a.metrics.release_vs_apex_s < 0);
 ok("elbow computed (non-null)", a.metrics.elbow_angle_at_release_deg != null);
 
 // compareToProfile now aligns on the elbow key

@@ -46,25 +46,33 @@ function lmWith(noseY, wristY) {
 }
 {
   // D11: a wrist held overhead with jitter has no upstroke-from-below -> no
-  // phantom shots (the old detector re-fired every 1.2s)
+  // phantom shots. Run LONG (>>bufferS) so the buffer actually ROTATES -- the
+  // old test used exactly bufferS frames, so the guard it claimed to check was
+  // dead code (2026-07-07 audit).
   const det = new ShotDetector({ handedness: "right" });
   let fires = 0;
-  for (let i = 0; i < 90; i++) {                    // 3s held high, tiny jitter
+  for (let i = 0; i < 400; i++) {                   // ~13s held high, buffer rotates
     const wy = 0.15 + (i % 2) * 0.01;              // always above the nose (0.4)
     if (det.feed(i / 30, lmWith(0.4, wy), 1, 1)) fires++;
   }
   ok("no phantom fire on a held-overhead wrist", fires === 0);
 }
 {
-  // D3: the fired shot buffers PAST the peak (through a long follow-through hold)
-  // so the hold is measurable, instead of firing 0.15s after the peak
+  // D3: the fire waits for the follow-through to COMPLETE (wrist back down), so
+  // the hold is measurable -- not a fixed 0.15s (~5 frames) after the peak. Use
+  // a long hold and require the capture to reach well past that boundary
+  // (2026-07-07 audit: afterPeak>=5 sat exactly on the buggy boundary).
   const det = new ShotDetector({ handedness: "right" });
-  const seq = [0.8, 0.7, 0.5, 0.3, 0.15, 0.16, 0.16, 0.17, 0.16, 0.17, 0.16, 0.55, 0.75];
+  const hold = Array(14).fill(0.16);
+  const seq = [0.8, 0.7, 0.5, 0.3, 0.15, ...hold, 0.55, 0.75];  // peak at 4, ~14-frame hold
   let shot = null;
   seq.forEach((wy, i) => { const s = det.feed(i / 30, lmWith(0.4, wy), 1, 1); if (s) shot = s; });
   ok("fires after the follow-through completes", shot !== null);
   const afterPeak = shot ? shot.frames.filter(f => f.t > shot.releaseT).length : 0;
-  ok("captures follow-through frames past the peak", afterPeak >= 5);
+  ok("captures the whole follow-through (not just 0.15s)", afterPeak >= 10);
+  // the captured shot ends with the wrist back DOWN (below the shoulder default 0.5)
+  const last = shot && shot.frames[shot.frames.length - 1];
+  ok("capture reaches the wrist coming back down", last && last.lm[16].y > 0.5);
 }
 
 console.log(`\n${passed}/${passed + failed} passed`);

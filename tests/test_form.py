@@ -165,7 +165,11 @@ def test_far_ball_is_not_a_confident_release():
                   "r_hip": (205, 290), "l_hip": (195, 290),
                   "r_knee": (200, 360), "r_ankle": (200, 470), "l_ankle": (190, 470)}
         poses[f] = make_pose(f, joints)
-        ball[f] = FakeBall(900.0 + 8 * f, 100.0)    # 600+px away, receding
+        # closest approach at the apex frame (f=8) so the hand-off TIMING check
+        # passes -- only the proximity gate (ball ~46px away, never in hand) can
+        # reject it. A receding-from-0 ball was killed by timing, leaving the
+        # gate untested (2026-07-07 audit).
+        ball[f] = FakeBall(240.0 + 20.0 * abs(f - 8), 100.0)
     shot = FakeShot(list(range(6, 22)))
     est = find_release(shot, ball, poses, handedness="right", fps=30)
     assert est.diverging is False, est

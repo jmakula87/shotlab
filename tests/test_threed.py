@@ -31,6 +31,16 @@ def test_look_at_centers_target():
     assert abs(px[0] - 960) < 1e-6 and abs(px[1] - 540) < 1e-6
 
 
+def test_look_at_is_a_proper_rotation_with_correct_orientation():
+    # the old test only pinned the optical axis, which is invariant to roll/mirror
+    # -- a det=-1 (mirror) or 180deg roll bug survived it (2026-07-07 audit).
+    cam = Camera.look_at((0, 0, -5), (0, 0, 0), up=(0, 1, 0), K=K)
+    assert abs(np.linalg.det(cam.R) - 1.0) < 1e-9        # proper rotation, not a reflection
+    above = cam.project((0, 2, 0))[0]
+    below = cam.project((0, -2, 0))[0]
+    assert above[1] < below[1]                           # a point above -> higher (smaller y)
+
+
 def test_triangulation_recovers_known_3d():
     pts = np.array([[0.1, 1.5, 0.2], [-0.3, 1.0, 0.4], [0.0, 3.05, 5.0]])
     p1 = CAM1.project(pts)

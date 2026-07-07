@@ -59,6 +59,16 @@ def test_window_is_time_bounded_not_sample_count():
     assert r.made is True, r
 
 
+def test_jump_threshold_is_scaled_by_frame_gap():
+    # a stride-2 make drops ~65px/sample -- above the raw 4*rr=60 jump threshold
+    # but below the gap-scaled 4*rr*2=120. Without the *gap scaling the down-pass
+    # is truncated to one point and the make is lost (2026-07-07 test audit).
+    seq = [(100, 300, 100), (102, 350, 150), (104, 400, 205),
+           (106, 400, 270), (108, 400, 335)]
+    r = classify_make(FakeShot([100, 102, 104]), _track(seq), CAL, fps=30)
+    assert r.made is True, r
+
+
 def test_na_when_never_reaches_rim():
     track = _track([(0, 100, 100), (1, 120, 120), (2, 140, 140), (3, 160, 160)])
     r = classify_make(FakeShot([0, 1, 2, 3]), track, CAL, fps=30)

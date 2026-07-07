@@ -97,6 +97,20 @@ def test_summary_is_honest_when_empty():
     assert "Not enough" in txt
 
 
+def test_release_anchored_driver_needs_trustworthy_release():
+    """A release-anchored 'driver' carried entirely by LOW-confidence releases is
+    an artifact and must be gated out (2026-07-07 test audit; guards the fix for
+    the release_vs_apex d=-1.2 phantom driver)."""
+    from shotlab.correlate import correlate_makes
+    rows = []
+    for _ in range(9):   # strong elbow separation, but every row is release_conf low
+        rows.append({"elbow_angle_at_release_deg": 170.0, "made": True, "release_conf": "low"})
+        rows.append({"elbow_angle_at_release_deg": 150.0, "made": False, "release_conf": "low"})
+    a = {x.metric: x for x in correlate_makes(rows)}
+    e = a["elbow_angle_at_release_deg"]
+    assert e.confidence == "insufficient", (e.confidence, e.n_made, e.cohen_d)
+
+
 if __name__ == "__main__":
     import traceback
     funcs = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

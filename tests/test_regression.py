@@ -40,10 +40,19 @@ def test_prescribe_target_is_stable():
     assert prescribe_target(_fixture())["target_metric"] == "release_angle_deg"
 
 
-def test_fatigue_and_correlate_run_clean():
+def test_fatigue_slope_matches_a_planted_decline():
+    # a metric that drops exactly 1.0/min -> slope ~ -1.0, trend 'declining'.
+    # (The old test only checked the column EXISTED, so negating the fitted slope
+    # survived it -- 2026-07-07 audit.)
+    df = pd.DataFrame({"elapsed_min": np.arange(20, dtype=float), "zone": ["z"] * 20,
+                       "knee_bend_deg": 120.0 - np.arange(20, dtype=float)})
+    ft = fatigue_trends(df).set_index("metric")
+    assert abs(float(ft.loc["knee_bend_deg", "slope_per_min"]) - (-1.0)) < 0.01
+    assert ft.loc["knee_bend_deg", "trend"] == "declining"
+
+
+def test_correlate_finds_no_driver_on_alternating_labels():
     df = _fixture()
-    ft = fatigue_trends(df)
-    assert not ft.empty and "slope_per_min" in ft.columns
     # made/miss alternate -> no metric should be a strong make-driver here
     assocs = correlate_makes(df.to_dict("records"), n_perm=200)
     assert all(a.confidence in ("low", "insufficient") for a in assocs)
