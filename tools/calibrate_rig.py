@@ -49,7 +49,8 @@ def mono(path: str) -> int:
     return 0
 
 
-def stereo(path_a: str, path_b: str) -> int:
+def stereo(path_a: str, path_b: str, square_in: float = 0.9) -> int:
+    square_ft = square_in / 12.0        # the TRUE printed square size sets the scale
     info_a, info_b = probe(path_a), probe(path_b)
     s = sync_clips(path_a, path_b)
     if s is None:
@@ -67,7 +68,7 @@ def stereo(path_a: str, path_b: str) -> int:
         print("not enough shared views -- keep the board visible to both cameras")
         return 1
     rig = calibrate_stereo(va, vb, (info_a.width, info_a.height),
-                           (info_b.width, info_b.height))
+                           (info_b.width, info_b.height), square_ft=square_ft)
     os.makedirs(OUT_DIR, exist_ok=True)
     out = os.path.join(OUT_DIR, "stereo_rig.json")
     rig.save(out)
@@ -80,10 +81,17 @@ def main(argv=None):
     ap.add_argument("clips", nargs="+", help="one clip with --mono, else A B")
     ap.add_argument("--mono", action="store_true",
                     help="single-camera intrinsics only")
+    ap.add_argument("--square-in", type=float, default=0.9,
+                    help="TRUE printed square size in inches. The sheet nominally "
+                         "prints 0.9in squares + a 6.000in verify ruler; if the "
+                         "ruler measured short (printer scaled), pass the real size "
+                         "here so the rig scale is correct. e.g. ruler=5.875in -> "
+                         "--square-in 0.88125  (= 0.9 * measured_ruler/6). "
+                         "Mono ignores this (focal length is scale-invariant).")
     args = ap.parse_args(argv)
     if args.mono or len(args.clips) == 1:
         return mono(args.clips[0])
-    return stereo(args.clips[0], args.clips[1])
+    return stereo(args.clips[0], args.clips[1], square_in=args.square_in)
 
 
 if __name__ == "__main__":
