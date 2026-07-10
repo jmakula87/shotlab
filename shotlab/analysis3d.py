@@ -26,7 +26,13 @@ from dataclasses import dataclass, asdict, field
 import numpy as np
 
 from .arc3d import analyze_shot, BALL_DIAM_FT
+from .ballistic import fit_ballistic, intrinsics
 from .video_io import frame_times, is_variable_fps, probe
+
+# nominal Pixel main-cam focal at 1080p (diagonal-referenced ~26mm equiv). Only
+# used as the ballistic reprojection GATE + relative depth; the trustworthy
+# apex/lateral/release come from the focal-free arc3d math.
+_NOMINAL_FOCAL_PX = 1400.0
 
 
 def _contiguous_runs(frames, max_gap=5):
@@ -54,17 +60,41 @@ def wide_arcs(clip: str, weights: str, *, conf=0.12, imgsz=1280,
             b = max(c, key=lambda z: getattr(z, "conf", 1.0))
             fr.append(idx); us.append(b.cx); vs.append(b.cy); rs.append(b.r)
     fr = np.array(fr); us = np.array(us); vs = np.array(vs); rs = np.array(rs)
+    return arcs_from_track(fr, us, vs, rs, ts, info.fps, W, H,
+                           is_vfr=bool(is_variable_fps(clip)[0]),
+                           min_pts=min_pts, max_shots=max_shots)
+
+
+def arcs_from_track(fr, us, vs, rs, ts, fps, W, H, *, is_vfr=False,
+                    min_pts=8, max_shots=60):
+    """Build per-shot 3D arc metrics from an already-detected ball track (lets
+    the gate be re-tuned without re-detecting)."""
+    fr = np.asarray(fr); us = np.asarray(us); vs = np.asarray(vs); rs = np.asarray(rs)
     out = []
     for seg in _contiguous_runs(fr):
         if len(seg) < min_pts:
             continue
         f = fr[seg]
-        t = np.array([ts.get(int(i), i / info.fps) for i in f])
+        t = np.array([ts.get(int(i), i / fps) for i in f])
         try:
-            a = analyze_shot(us[seg], vs[seg], rs[seg], info.fps, W, H, times=t)
+            a = analyze_shot(us[seg], vs[seg], rs[seg], fps, W, H, times=t)
         except ValueError:
             continue
-        trust = a.gravity_error_pct < 25
+        # robust "is this a clean shot arc" gate: fit the whole flight as one
+        # gravity projectile and measure how well it reprojects. This is stable
+        # at small ball size where the per-frame-radius gravity check is noisy.
+        reproj = None
+        try:
+            K = intrinsics(W, H, _NOMINAL_FOCAL_PX)
+            bf = fit_ballistic(t, us[seg], vs[seg], rs[seg], K)
+            reproj = bf.reproj_rmse_px
+        except Exception:
+            pass
+        # a real jump-shot arc: rises (apex above release), lasts long enough,
+        # and the projectile model fits the pixels tightly
+        clean = (reproj is not None and reproj < 5.0
+                 and a.apex_above_release_ft > 0.75 and a.n >= 10
+                 and t[-1] - t[0] > 0.4)
         out.append({
             "first_frame": int(f[0]), "last_frame": int(f[-1]),
             "n_points": int(a.n), "flight_s": round(float(t[-1] - t[0]), 2),
@@ -73,12 +103,14 @@ def wide_arcs(clip: str, weights: str, *, conf=0.12, imgsz=1280,
             "release_angle_deg": a.release_angle_deg,
             "entry_angle_deg": a.entry_angle_deg,
             "gravity_error_pct": a.gravity_error_pct,
-            "trustworthy": bool(trust),
+            "reproj_px": round(reproj, 2) if reproj is not None else None,
+            "trustworthy": bool(clean),
         })
         if len(out) >= max_shots:
             break
-    return {"image_w": W, "image_h": H, "fps": round(info.fps, 2),
-            "is_vfr": bool(is_variable_fps(clip)[0]), "shots": out}
+    return {"image_w": W, "image_h": H, "fps": round(fps, 2),
+            "is_vfr": bool(is_vfr), "shots": out,
+            "gate": "ballistic reprojection < 5px + real-arc shape"}
 
 
 def flare_from_close(clip: str, *, start=0, stop=None, variant="full",

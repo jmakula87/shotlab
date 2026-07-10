@@ -1073,26 +1073,31 @@ def view_3d():
     if shots:
         wdf = pd.DataFrame(shots)
         good = wdf[wdf["trustworthy"]]
-        st.caption(f"{len(wdf)} arcs detected · **{len(good)} pass the gravity "
-                   f"self-check** (reconstructed vertical accel ≈ −32.2 ft/s²). "
-                   f"Clip frame-rate {'VARIABLE' if wide.get('is_vfr') else 'constant'} "
-                   f"({wide.get('fps')} fps) — handled per-frame.")
-        show = good if not st.checkbox("show all (incl. rejected)", value=False) else wdf
+        st.caption(f"{len(wdf)} ball tracks · **{len(good)} are clean shot arcs** "
+                   f"(a gravity projectile fits the pixels to <5px — robust at the "
+                   f"far ball's size, unlike a raw per-frame check). Clip frame-rate "
+                   f"{'VARIABLE' if wide.get('is_vfr') else 'constant'} "
+                   f"({wide.get('fps')} fps) — handled per-frame via real timestamps.")
+        show = good if not st.checkbox("show all (incl. non-arcs)", value=False) else wdf
         cols = ["first_frame", "n_points", "flight_s", "apex_above_release_ft",
                 "lateral_drift_ft", "release_angle_deg", "entry_angle_deg",
-                "gravity_error_pct", "trustworthy"]
+                "reproj_px", "trustworthy"]
         st.dataframe(show[[c for c in cols if c in show.columns]]
                      .rename(columns={"apex_above_release_ft": "apex↑ (ft)",
                                       "lateral_drift_ft": "L/R drift (ft)",
                                       "release_angle_deg": "release°",
                                       "entry_angle_deg": "entry°",
-                                      "gravity_error_pct": "gravity err %"}),
+                                      "reproj_px": "fit err (px)",
+                                      "trustworthy": "clean arc"}),
                      use_container_width=True, hide_index=True)
         if len(good) >= 2:
-            st.caption(f"Apex above release: median "
-                       f"**{good['apex_above_release_ft'].median():.1f} ft** · "
-                       f"L/R drift median **{good['lateral_drift_ft'].median():+.1f} ft** "
-                       f"(+ = drifts one way; near 0 = straight).")
+            st.caption(f"**Trustworthy (focal-free):** apex above release median "
+                       f"**{good['apex_above_release_ft'].median():.1f} ft** across "
+                       f"{len(good)} clean arcs — the vertical channel is unambiguous. "
+                       f"⚠️ On this shooter-facing camera the horizontal channel "
+                       f"(release°/entry°, L/R drift) mixes left-right with toward-rim "
+                       f"depth, so treat those as directional until the camera tilt "
+                       f"(W4) is recovered.")
     else:
         st.info("No arcs computed (needs the wide clip + ball weights).")
 
