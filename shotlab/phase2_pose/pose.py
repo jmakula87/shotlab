@@ -54,10 +54,15 @@ class FramePose:
     frame_idx: int
     xy: np.ndarray        # (33, 2) pixel coords
     vis: np.ndarray       # (33,) visibility 0..1
-    z: np.ndarray         # (33,) model depth (qualitative only)
+    z: np.ndarray         # (33,) image-relative model depth (qualitative only)
+    world: np.ndarray | None = None   # (33,3) METRIC landmarks, meters, hip-origin
 
     def pt(self, name: str) -> np.ndarray:
         return self.xy[L[name]]
+
+    def w(self, name: str) -> np.ndarray:
+        """Metric 3D landmark (meters, hip-centered) or None if unavailable."""
+        return None if self.world is None else self.world[L[name]]
 
     def v(self, name: str) -> float:
         return float(self.vis[L[name]])
@@ -146,9 +151,15 @@ class PoseExtractor:
         xy = np.array([[lm.x * w, lm.y * h] for lm in lms], dtype=float)
         vis = np.array([lm.visibility for lm in lms], dtype=float)
         z = np.array([lm.z for lm in lms], dtype=float)
+        # metric 3D landmarks (meters, hip-origin) -- a monocular 3D estimate we
+        # otherwise pay for and discard; used for out-of-plane form (elbow flare)
+        world = None
+        if getattr(res, "pose_world_landmarks", None):
+            wl = res.pose_world_landmarks[0]
+            world = np.array([[lm.x, lm.y, lm.z] for lm in wl], dtype=float)
         if self.smooth:
             xy = self._filt_xy(xy)
-        return FramePose(frame_idx, xy, vis, z)
+        return FramePose(frame_idx, xy, vis, z, world=world)
 
 
 # ---- geometry helpers ------------------------------------------------------
