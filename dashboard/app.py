@@ -1073,13 +1073,16 @@ def view_3d():
     if shots:
         wdf = pd.DataFrame(shots)
         good = wdf[wdf["trustworthy"]]
-        st.caption(f"{len(wdf)} ball tracks · **{len(good)} are clean shot arcs** "
-                   f"(a gravity projectile fits the pixels to <5px — robust at the "
-                   f"far ball's size, unlike a raw per-frame check). Clip frame-rate "
+        seg = wide.get("segmentation", "gap-split")
+        nclips = wide.get("n_clips")
+        st.caption(f"{len(wdf)} shots{f' across {nclips} clips' if nclips else ''} · "
+                   f"**{len(good)} are clean shot arcs** (a gravity projectile fits "
+                   f"the pixels to <5px — robust at the far ball's size, unlike a raw "
+                   f"per-frame check). Segmentation: {seg}. Frame-rate "
                    f"{'VARIABLE' if wide.get('is_vfr') else 'constant'} "
                    f"({wide.get('fps')} fps) — handled per-frame via real timestamps.")
         show = good if not st.checkbox("show all (incl. non-arcs)", value=False) else wdf
-        cols = ["first_frame", "n_points", "flight_s", "apex_above_release_ft",
+        cols = ["clip", "first_frame", "n_points", "flight_s", "apex_above_release_ft",
                 "lateral_drift_ft", "release_angle_deg", "entry_angle_deg",
                 "reproj_px", "trustworthy"]
         st.dataframe(show[[c for c in cols if c in show.columns]]

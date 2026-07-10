@@ -65,10 +65,83 @@ def wide_arcs(clip: str, weights: str, *, conf=0.12, imgsz=1280,
                            min_pts=min_pts, max_shots=max_shots)
 
 
+def _build_arc(f, us_seg, vs_seg, rs_seg, t, W, H):
+    """One shot's ball points -> arc-metric dict (or None if unusable). The
+    'trustworthy' gate is the ballistic REPROJECTION: fit the whole flight as one
+    gravity projectile through K; a real single-shot arc fits to a few px, while
+    a dribble/bounce/merged run does not. This is stable where the per-frame-
+    radius gravity check is too noisy (small far ball)."""
+    try:
+        a = analyze_shot(us_seg, vs_seg, rs_seg, 30.0, W, H, times=t)
+    except ValueError:
+        return None
+    reproj = None
+    try:
+        bf = fit_ballistic(t, us_seg, vs_seg, rs_seg, intrinsics(W, H, _NOMINAL_FOCAL_PX))
+        reproj = bf.reproj_rmse_px
+    except Exception:
+        pass
+    clean = (reproj is not None and reproj < 5.0
+             and a.apex_above_release_ft > 0.75 and a.n >= 10
+             and t[-1] - t[0] > 0.4)
+    return {
+        "first_frame": int(f[0]), "last_frame": int(f[-1]),
+        "n_points": int(a.n), "flight_s": round(float(t[-1] - t[0]), 2),
+        "apex_above_release_ft": a.apex_above_release_ft,
+        "lateral_drift_ft": round(float(a.X[-1] - a.X[0]), 2),
+        "release_angle_deg": a.release_angle_deg,
+        "entry_angle_deg": a.entry_angle_deg,
+        "gravity_error_pct": a.gravity_error_pct,
+        "reproj_px": round(reproj, 2) if reproj is not None else None,
+        "trustworthy": bool(clean),
+    }
+
+
+def arcs_from_cached_shots(clips, *, max_shots=200):
+    """Fit each RIM-ANCHORED cached shot (from the standard pipeline's detection
+    cache) -- the correct segmentation. A high-recall detector makes the ball
+    near-continuous, so gap-splitting merges shots; the cached shots are already
+    split at the rim. Returns the same shape as arcs_from_track. `clips` = list
+    of wide clip paths whose <stem>_track.json exists."""
+    from .detect_cache import _path, deserialize_detection
+    out = []
+    W = H = None
+    is_vfr = False
+    for clip in clips:
+        tj = _path(clip)
+        if not os.path.exists(tj):
+            continue
+        with open(tj, encoding="utf-8") as fh:
+            _, shots = deserialize_detection(json.load(fh))
+        info = probe(clip)
+        W, H = info.width, info.height
+        is_vfr = is_vfr or is_variable_fps(clip)[0]
+        ts = frame_times(clip)
+        for s in shots:
+            f = np.asarray(s.frames)
+            if len(f) < 8:
+                continue
+            t = np.array([ts.get(int(i), i / info.fps) for i in f])
+            d = _build_arc(f, s.xs, s.ys, s.radii, t, W, H)
+            if d is None:
+                continue
+            d["clip"] = os.path.basename(clip)
+            out.append(d)
+            if len(out) >= max_shots:
+                break
+    good = sum(o["trustworthy"] for o in out)
+    return {"image_w": W, "image_h": H, "is_vfr": bool(is_vfr),
+            "fps": round(probe(clips[0]).fps, 2) if clips else None,
+            "n_clips": len(clips), "shots": out, "n_clean": good,
+            "gate": "ballistic reprojection < 5px + real-arc shape",
+            "segmentation": "rim-anchored (standard-pipeline cache)"}
+
+
 def arcs_from_track(fr, us, vs, rs, ts, fps, W, H, *, is_vfr=False,
                     min_pts=8, max_shots=60):
-    """Build per-shot 3D arc metrics from an already-detected ball track (lets
-    the gate be re-tuned without re-detecting)."""
+    """Build per-shot 3D arc metrics from an already-detected ball track by
+    naive gap-splitting (only reliable with a SPARSE detector -- for a dense
+    detector use arcs_from_cached_shots with rim-anchored boundaries)."""
     fr = np.asarray(fr); us = np.asarray(us); vs = np.asarray(vs); rs = np.asarray(rs)
     out = []
     for seg in _contiguous_runs(fr):
@@ -76,36 +149,10 @@ def arcs_from_track(fr, us, vs, rs, ts, fps, W, H, *, is_vfr=False,
             continue
         f = fr[seg]
         t = np.array([ts.get(int(i), i / fps) for i in f])
-        try:
-            a = analyze_shot(us[seg], vs[seg], rs[seg], fps, W, H, times=t)
-        except ValueError:
+        d = _build_arc(f, us[seg], vs[seg], rs[seg], t, W, H)
+        if d is None:
             continue
-        # robust "is this a clean shot arc" gate: fit the whole flight as one
-        # gravity projectile and measure how well it reprojects. This is stable
-        # at small ball size where the per-frame-radius gravity check is noisy.
-        reproj = None
-        try:
-            K = intrinsics(W, H, _NOMINAL_FOCAL_PX)
-            bf = fit_ballistic(t, us[seg], vs[seg], rs[seg], K)
-            reproj = bf.reproj_rmse_px
-        except Exception:
-            pass
-        # a real jump-shot arc: rises (apex above release), lasts long enough,
-        # and the projectile model fits the pixels tightly
-        clean = (reproj is not None and reproj < 5.0
-                 and a.apex_above_release_ft > 0.75 and a.n >= 10
-                 and t[-1] - t[0] > 0.4)
-        out.append({
-            "first_frame": int(f[0]), "last_frame": int(f[-1]),
-            "n_points": int(a.n), "flight_s": round(float(t[-1] - t[0]), 2),
-            "apex_above_release_ft": a.apex_above_release_ft,
-            "lateral_drift_ft": round(float(a.X[-1] - a.X[0]), 2),
-            "release_angle_deg": a.release_angle_deg,
-            "entry_angle_deg": a.entry_angle_deg,
-            "gravity_error_pct": a.gravity_error_pct,
-            "reproj_px": round(reproj, 2) if reproj is not None else None,
-            "trustworthy": bool(clean),
-        })
+        out.append(d)
         if len(out) >= max_shots:
             break
     return {"image_w": W, "image_h": H, "fps": round(fps, 2),
