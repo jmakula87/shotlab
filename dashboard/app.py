@@ -1016,15 +1016,113 @@ def view_film_room():
     components.html(film_room_html(cl), height=760, scrolling=True)
 
 
+# ---------------------------------------------------------------- 3D analysis
+def analysis3d_dirs():
+    if not os.path.isdir(OUT_DIR):
+        return []
+    return sorted(d for d in os.listdir(OUT_DIR)
+                  if os.path.exists(os.path.join(OUT_DIR, d, "analysis3d.json")))
+
+
+def view_3d():
+    st.subheader("🧊 3D analysis (2-camera)")
+    st.caption("Metrics one wide camera can't give alone — the ball's true-feet "
+               "arc (depth-corrected, gravity-validated) and elbow flare from the "
+               "close camera's 3D pose. No calibration board required.")
+    dirs = analysis3d_dirs()
+    if not dirs:
+        st.info("No 3D analysis yet. Build one with:\n\n"
+                "`python tools/analyze3d.py --wide <wide.mp4> --close <close.mp4> "
+                "--weights runs/detect/ball_finetune/weights/best.pt --out "
+                "data/out/<name>_3d`")
+        return
+    sd = st.selectbox("Session", dirs, key="a3d_sess")
+    from shotlab.analysis3d import Analysis3D
+    a = Analysis3D.load(os.path.join(OUT_DIR, sd, "analysis3d.json"))
+
+    # ---- elbow flare (headline new metric) ----
+    st.markdown("### Elbow flare")
+    fl = (a.flare or {}).get("summary")
+    if fl:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Median flare", f"{fl['median_deg']:+.1f}°",
+                  help="Elbow's swing out of the shooting plane at release. "
+                       "Magnitude is the coaching signal; sign is setup-dependent.")
+        c2.metric("Shot-to-shot spread", f"±{fl['sd_deg']:.1f}°",
+                  help="Lower = more repeatable elbow. This is your consistency.")
+        c3.metric("Shots measured", f"{fl['n']}")
+        st.caption(f"Confidence: **{a.flare.get('confidence','low-med')}** — "
+                   f"{a.flare.get('note','')}")
+        fdf = pd.DataFrame(a.flare.get("shots", []))
+        if not fdf.empty:
+            chart = (alt.Chart(fdf).mark_bar(opacity=0.8)
+                     .encode(alt.X("flare_deg:Q", bin=alt.Bin(maxbins=18),
+                                   title="elbow flare (deg)  ·  0 = tucked/on-line"),
+                             alt.Y("count()", title="shots"))
+                     .properties(height=200))
+            rule = alt.Chart(pd.DataFrame({"x": [fl["median_deg"]]})).mark_rule(
+                color="#d62728", size=2).encode(x="x:Q")
+            st.altair_chart(chart + rule, use_container_width=True)
+    else:
+        st.info("No flare computed (needs the close body-camera clip).")
+
+    # ---- metric ball arc ----
+    st.markdown("### Ball arc (true feet, depth-corrected)")
+    wide = a.wide or {}
+    shots = wide.get("shots", [])
+    if shots:
+        wdf = pd.DataFrame(shots)
+        good = wdf[wdf["trustworthy"]]
+        st.caption(f"{len(wdf)} arcs detected · **{len(good)} pass the gravity "
+                   f"self-check** (reconstructed vertical accel ≈ −32.2 ft/s²). "
+                   f"Clip frame-rate {'VARIABLE' if wide.get('is_vfr') else 'constant'} "
+                   f"({wide.get('fps')} fps) — handled per-frame.")
+        show = good if not st.checkbox("show all (incl. rejected)", value=False) else wdf
+        cols = ["first_frame", "n_points", "flight_s", "apex_above_release_ft",
+                "lateral_drift_ft", "release_angle_deg", "entry_angle_deg",
+                "gravity_error_pct", "trustworthy"]
+        st.dataframe(show[[c for c in cols if c in show.columns]]
+                     .rename(columns={"apex_above_release_ft": "apex↑ (ft)",
+                                      "lateral_drift_ft": "L/R drift (ft)",
+                                      "release_angle_deg": "release°",
+                                      "entry_angle_deg": "entry°",
+                                      "gravity_error_pct": "gravity err %"}),
+                     use_container_width=True, hide_index=True)
+        if len(good) >= 2:
+            st.caption(f"Apex above release: median "
+                       f"**{good['apex_above_release_ft'].median():.1f} ft** · "
+                       f"L/R drift median **{good['lateral_drift_ft'].median():+.1f} ft** "
+                       f"(+ = drifts one way; near 0 = straight).")
+    else:
+        st.info("No arcs computed (needs the wide clip + ball weights).")
+
+    # ---- depth / calibration status ----
+    st.markdown("### Depth & true release angle")
+    if a.camera_tilt:
+        t = a.camera_tilt
+        st.success(f"Camera tilt recovered (pitch {t.get('pitch_deg')}°, roll "
+                   f"{t.get('roll_deg')}°) → absolute depth and true 3D release "
+                   f"angle are unlocked.")
+    else:
+        st.warning("Absolute **depth** (toward/away drift) and the **true 3D "
+                   "release angle** need the wide camera's tilt. Recover it from "
+                   "≥2 clean arcs (W4, `ballistic.fit_camera_tilt`) or a rim-PnP "
+                   "pass. The vertical + left/right arc above is already trustworthy.")
+    st.caption("The true ±2–3° metric elbow flare (stereo) needs the next session "
+               "framed so the ball is co-visible in BOTH cameras.")
+
+
 # ---------------------------------------------------------------- main
 st.title("🏀 ShotLab")
-mode = st.sidebar.radio("View", ["Per-clip", "Session analytics", "Film room",
-                                 "Shot review", "Compare shots",
+mode = st.sidebar.radio("View", ["Per-clip", "Session analytics", "3D analysis",
+                                 "Film room", "Shot review", "Compare shots",
                                  "Compare sessions", "Progress"])
 if mode == "Per-clip":
     view_clip()
 elif mode == "Session analytics":
     view_session()
+elif mode == "3D analysis":
+    view_3d()
 elif mode == "Film room":
     view_film_room()
 elif mode == "Shot review":

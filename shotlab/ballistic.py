@@ -137,3 +137,64 @@ def intrinsics(image_w: int, image_h: int, focal_px: float) -> np.ndarray:
     return np.array([[focal_px, 0, image_w / 2.0],
                      [0, focal_px, image_h / 2.0],
                      [0, 0, 1.0]])
+
+
+def _grav_dir(pitch: float, roll: float) -> np.ndarray:
+    """Gravity direction in camera coords for a camera tilted `pitch` up and
+    `roll` about its optical axis. Level camera (0,0) -> (0,+g,0) (world-down is
+    image-down). pitch>0 tips the lens up, tilting gravity partly into +Z."""
+    cp, sp = np.cos(pitch), np.sin(pitch)
+    cr, sr = np.cos(roll), np.sin(roll)
+    # start from world-down (0,1,0), rotate by roll about Z then pitch about X
+    d = np.array([0.0, 1.0, 0.0])
+    d = np.array([cr * d[0] - sr * d[1], sr * d[0] + cr * d[1], d[2]])   # roll (Z)
+    d = np.array([d[0], cp * d[1] - sp * d[2], sp * d[1] + cp * d[2]])   # pitch (X)
+    return G_FT * d
+
+
+def fit_camera_tilt(shots, K, ball_diam_ft: float = BALL_DIAM_FT,
+                    radius_weight: float = 0.3):
+    """Recover the (fixed) camera tilt shared by several shots, from the physics
+    alone -- no rim, no board. Each shot is a gravity projectile; the ONE tilt
+    (pitch, roll) that makes every shot's reprojection consistent is the camera's
+    orientation, which is what W2 needs to turn its arc into true depth & release
+    angle.
+
+    shots: list of (t, u, v, r) tuples (>=2 arcs with DIFFERENT launch directions
+    are needed to observe tilt; a single arc is degenerate). Returns
+    (pitch_deg, roll_deg, g_vec, per_shot_fits, rmse_px)."""
+    shots = [(np.asarray(t, float) - np.asarray(t, float)[0], np.asarray(u, float),
+              np.asarray(v, float), np.asarray(r, float)) for (t, u, v, r) in shots]
+    if len(shots) < 2:
+        raise ValueError("need >=2 shots to observe camera tilt")
+    fx, fy = K[0, 0], K[1, 1]
+    cx0, cy0 = K[0, 2], K[1, 2]
+
+    # seed each shot's P0,V0 from a level-camera fit, then refine tilt jointly
+    seeds = []
+    for (t, u, v, r) in shots:
+        f = fit_ballistic(t, u, v, r, K, ball_diam_ft, radius_weight=radius_weight)
+        seeds.append(np.concatenate([f.P0, f.V0]))
+    p0 = np.concatenate([[0.0, 0.0]] + seeds)      # pitch, roll, then per-shot 6
+
+    def resid(p):
+        pitch, roll = p[0], p[1]
+        g = _grav_dir(pitch, roll)
+        out = []
+        for i, (t, u, v, r) in enumerate(shots):
+            P0 = p[2 + 6 * i: 5 + 6 * i]; V0 = p[5 + 6 * i: 8 + 6 * i]
+            P = P0 + np.outer(t, V0) + 0.5 * np.outer(t * t, g)
+            pu, pv, Z = _project(P, fx, fy, cx0, cy0)
+            rp = fx * (ball_diam_ft / 2.0) / Z
+            out.append(np.concatenate([pu - u, pv - v, radius_weight * (rp - r)]))
+        return np.concatenate(out)
+
+    sol = least_squares(resid, p0, method="lm", max_nfev=8000)
+    pitch, roll = float(sol.x[0]), float(sol.x[1])
+    g = _grav_dir(pitch, roll)
+    fits = []
+    for i, (t, u, v, r) in enumerate(shots):
+        fits.append(fit_ballistic(t, u, v, r, K, ball_diam_ft, g_vec=g,
+                                  radius_weight=radius_weight))
+    rmse = float(np.sqrt(np.mean(resid(sol.x)[: sum(2 * len(s[0]) for s in shots)] ** 2)))
+    return round(np.degrees(pitch), 1), round(np.degrees(roll), 1), g, fits, round(rmse, 2)

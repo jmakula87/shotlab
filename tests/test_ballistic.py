@@ -70,8 +70,33 @@ def test_analyze_shot_uses_real_times_not_fps():
         (a_wrong.gravity_error_pct, a_true.gravity_error_pct)
 
 
+def test_recovers_camera_tilt():
+    """A tilted camera viewing several arcs with different launch directions
+    recovers its own pitch/roll from the physics alone."""
+    from shotlab.ballistic import fit_camera_tilt, _grav_dir
+    rng = np.random.default_rng(7)
+    pitch, roll = np.radians(15), np.radians(-3)
+    g = _grav_dir(pitch, roll)
+    shots = []
+    for k in range(3):
+        P0 = np.array([rng.uniform(-1, 1), -1.0, 15.0 + k])
+        V0 = np.array([rng.uniform(-3, 3), -18.0 - k, 9.0 + 2 * k])
+        t = np.sort(rng.uniform(0, 0.9, 15))
+        P = P0 + np.outer(t, V0) + 0.5 * np.outer(t * t, g)
+        Z = P[:, 2]
+        u = F * P[:, 0] / Z + W / 2 + rng.normal(0, 1, len(t))
+        v = F * P[:, 1] / Z + H / 2 + rng.normal(0, 1, len(t))
+        r = F * (BALL_DIAM_FT / 2) / Z + rng.normal(0, 0.4, len(t))
+        shots.append((t, u, v, r))
+    p_deg, r_deg, gv, fits, rmse = fit_camera_tilt(shots, K)
+    assert abs(p_deg - 15) < 2.5, p_deg
+    assert abs(r_deg - (-3)) < 3.0, r_deg
+    assert rmse < 2.0, rmse
+
+
 if __name__ == "__main__":
     test_recovers_known_projectile()
     test_gravity_gate_flags_nonprojectile()
     test_analyze_shot_uses_real_times_not_fps()
+    test_recovers_camera_tilt()
     print("ok")
