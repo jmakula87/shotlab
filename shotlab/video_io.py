@@ -110,3 +110,47 @@ def iter_frames(path: str, start: int = 0, stop: int | None = None
             idx += 1
     finally:
         cap.release()
+
+
+def frame_times(path: str, start: int = 0, stop: int | None = None) -> dict[int, float]:
+    """{frame_index: presentation_time_seconds} straight from the container's PTS.
+
+    These phones record VARIABLE frame rate (a Pixel clip measured 30 fps then
+    24 fps mid-clip), so `frame_index / nominal_fps` is WRONG -- physics that
+    assumes constant fps (arc gravity fits, sync frame-maps) silently distorts
+    time. This reads the true per-frame timestamp. Uses grab() only (no color
+    decode), so it's cheap enough to run over a whole clip.
+    """
+    cap = cv2.VideoCapture(path)
+    if not cap.isOpened():
+        raise FileNotFoundError(f"Cannot open video: {path}")
+    if start:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, start)
+    idx = start
+    out: dict[int, float] = {}
+    try:
+        while True:
+            if stop is not None and idx >= stop:
+                break
+            if not cap.grab():
+                break
+            out[idx] = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+            idx += 1
+    finally:
+        cap.release()
+    return out
+
+
+def is_variable_fps(path: str, tol: float = 0.15) -> tuple[bool, float]:
+    """(is_vfr, measured_fps) for a clip. measured_fps = 1/median(frame dt) from
+    real PTS; is_vfr True when >5% of gaps deviate from the median by >tol."""
+    ts = np.array(sorted(frame_times(path).values()))
+    if len(ts) < 3:
+        return False, 0.0
+    dt = np.diff(ts)
+    dt = dt[(dt > 0) & (dt < 1.0)]
+    if len(dt) < 2:
+        return False, 0.0
+    med = float(np.median(dt))
+    frac_off = float(np.mean(np.abs(dt - med) > tol * med))
+    return frac_off > 0.05, (1.0 / med if med else 0.0)
