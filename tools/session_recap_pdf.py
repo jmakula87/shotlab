@@ -90,9 +90,19 @@ def _text_page(pdf, title, lines, subtitle=None):
     pdf.savefig(fig); plt.close(fig)
 
 
-def build(session_dir, flare_json=None):
+def build(session_dir, flare_json=None, truth_path=None):
     df = pd.read_csv(os.path.join(session_dir, "session_shots.csv"))
     name = os.path.basename(session_dir)
+    verified = False
+    n_dropped = 0
+    if truth_path and os.path.exists(truth_path):
+        truth = json.load(open(truth_path, encoding="utf-8"))
+        df["key"] = df["clip"].astype(str) + "|" + df["shot_in_clip"].astype(int).astype(str)
+        df["truth"] = df["key"].map(truth)
+        n_dropped = int((df["truth"] == "notshot").sum())
+        df = df[df["truth"].isin(["make", "miss"])].copy()   # real shots only
+        df["made"] = df["truth"] == "make"                    # YOUR ground truth
+        verified = True
     made = df[df["made"] == True]
     miss = df[df["made"] == False]
     from io import BytesIO
@@ -100,12 +110,16 @@ def build(session_dir, flare_json=None):
     with PdfPages(buf) as pdf:
         # ---------- page 1: overview ----------
         n = len(df); nmk = int(df["made"].sum()); ncl = df["made"].notna().sum()
+        conf_note = ("makes/misses VERIFIED BY YOU" if verified
+                     else "make/miss is LOW confidence")
         lines = [
-            (f"{n} shots across {df['clip'].nunique()} clips · "
-             f"{nmk}/{ncl} makes = {100*nmk/ncl:.0f}% (make/miss is LOW confidence)", 12, "#000"),
-            ("", 8, "#000"),
-            ("Per clip:", 12, "#000"),
+            (f"{n} real shots across {df['clip'].nunique()} clips · "
+             f"{nmk}/{ncl} makes = {100*nmk/ncl:.0f}% ({conf_note})", 12, "#000"),
         ]
+        if verified:
+            lines.append((f"({n_dropped} detections you flagged as non-shots — "
+                          f"dribbles/retrieves — were removed.)", 10, "#a55"))
+        lines += [("", 8, "#000"), ("Per clip:", 12, "#000")]
         for c, g in df.groupby("clip"):
             lines.append((f"   {c[-16:]}: {len(g)} shots, {int(g['made'].sum())} makes",
                           10, "#333"))
@@ -183,7 +197,9 @@ def build(session_dir, flare_json=None):
         fig.text(0.06, 0.040, "⚠ Elbow-at-release is unreliable on one far camera "
                  "(release-frame sensitive; prior clean-release", fontsize=8.5, color="#a55")
         fig.text(0.06, 0.022, "   work put it near zero) — ignore its bar. Correlation, "
-                 "not proof; make/miss is low-confidence.", fontsize=8.5, color="#a55")
+                 "not proof; " + ("makes verified by you, but n is small."
+                 if verified else "make/miss is low-confidence."),
+                 fontsize=8.5, color="#a55")
         pdf.savefig(fig); plt.close(fig)
 
         # ---------- page 4: cross-metric relationships ----------
@@ -293,9 +309,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("session_dir")
     ap.add_argument("--flare", default=None)
+    ap.add_argument("--truth", default=None,
+                    help="make_truth.json from the audit -> use verified labels, drop non-shots")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
-    data = build(a.session_dir, a.flare)
+    data = build(a.session_dir, a.flare, a.truth)
     out = a.out or os.path.join(a.session_dir, os.path.basename(a.session_dir) + "_recap.pdf")
     with open(out, "wb") as f:
         f.write(data)

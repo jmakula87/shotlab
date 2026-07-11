@@ -34,9 +34,9 @@ def _pdf_bytes(d, _mtime):
 
 
 @st.cache_data(show_spinner="building recap…")
-def _recap_bytes(d, _mtime, flare_path):
+def _recap_bytes(d, _mtime, flare_path, truth_path):
     from session_recap_pdf import build
-    return build(d, flare_path)
+    return build(d, flare_path, truth_path)
 
 st.set_page_config(page_title="ShotLab", layout="wide")
 OUT_DIR = os.path.join(ROOT, "data", "out")
@@ -378,12 +378,17 @@ def _export_panel(d, sd):
             c[0].caption(f"PDF unavailable: {e}")
         try:                                        # rich recap: stats + drivers + relationships
             flarep = os.path.join(OUT_DIR, sd + "_3d", "analysis3d.json")
-            recap = _recap_bytes(d, os.path.getmtime(csv),
-                                 flarep if os.path.exists(flarep) else None)
-            c[1].download_button("⬇️ Rich recap", recap, file_name=f"{sd}_recap.pdf",
-                                 mime="application/pdf", width="stretch",
-                                 help="all stats + what tracks with makes + cross-metric "
-                                      "relationships (arc vs leg load / direction) + flare")
+            truthp = os.path.join(d, "make_truth.json")
+            has_truth = os.path.exists(truthp)
+            sig = os.path.getmtime(csv) + (os.path.getmtime(truthp) if has_truth else 0)
+            recap = _recap_bytes(d, sig, flarep if os.path.exists(flarep) else None,
+                                 truthp if has_truth else None)
+            c[1].download_button(
+                "⬇️ Rich recap" + (" ✓verified" if has_truth else ""), recap,
+                file_name=f"{sd}_recap.pdf", mime="application/pdf", width="stretch",
+                help="all stats + what tracks with makes + cross-metric relationships"
+                     + (" · built on your audited make/miss labels" if has_truth else
+                        " · run the Make/miss audit to rebuild on verified labels"))
         except Exception as e:
             c[1].caption(f"recap unavailable: {e}")
         if c[2].button("Rebuild HTML report", width="stretch"):
