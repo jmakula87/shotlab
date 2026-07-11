@@ -1176,17 +1176,124 @@ def view_3d():
                "framed so the ball is co-visible in BOTH cameras.")
 
 
+# ---------------------------------------------------------------- make/miss audit
+def view_make_audit():
+    st.subheader("✅ Make/miss audit — verify what the tracker called")
+    st.caption("Make/miss is the pipeline's weakest signal: a geometric heuristic "
+               "(ball continues straight down through the rim = make) on a small, "
+               "far ball — most calls are LOW confidence. You filmed these, so YOU "
+               "are the ground truth. Confirm or correct each call; we measure how "
+               "often the tracker is right and recompute make% from your answers.")
+    sds = session_dirs()
+    if not sds:
+        st.info("No sessions built yet."); return
+    sd = st.selectbox("Session", sds, key="audit_sess")
+    d = os.path.join(OUT_DIR, sd)
+    df = pd.read_csv(os.path.join(d, "session_shots.csv"))
+    shots = []
+    for _, r in df.iterrows():
+        stem = str(r["clip"]).replace(".mp4", "")
+        vid = os.path.join(OUT_DIR, stem, "shots", f"shot_{int(r['shot_in_clip'])}_h264.mp4")
+        shots.append({"clip": str(r["clip"]), "shot": int(r["shot_in_clip"]),
+                      "made": bool(r["made"]) if pd.notna(r["made"]) else None,
+                      "conf": r.get("make_conf"), "vid": vid,
+                      "key": f"{r['clip']}|{int(r['shot_in_clip'])}"})
+    tpath = os.path.join(d, "make_truth.json")
+    truth = json.load(open(tpath, encoding="utf-8")) if os.path.exists(tpath) else {}
+    by_key = {s["key"]: s for s in shots}
+
+    filt = st.radio("Review order", ["low-confidence first", "all", "unreviewed only"],
+                    horizontal=True, key="audit_filt")
+    order = list(shots)
+    if filt == "low-confidence first":
+        rank = {"low": 0, "medium": 1, "na": 2}
+        order.sort(key=lambda s: (rank.get(s["conf"], 3), s["key"] in truth))
+    elif filt == "unreviewed only":
+        order = [s for s in shots if s["key"] not in truth] or shots
+
+    n = len(order)
+    idx = st.session_state.get("audit_idx", 0) % n
+    nav = st.columns([1, 1, 3])
+    if nav[0].button("← prev", key="audit_prev"):
+        st.session_state["audit_idx"] = (idx - 1) % n; st.rerun()
+    if nav[1].button("next →", key="audit_next"):
+        st.session_state["audit_idx"] = (idx + 1) % n; st.rerun()
+    nav[2].caption(f"Shot {idx+1} of {n} in this list")
+
+    s = order[idx]
+    cv, ci = st.columns([3, 2])
+    with cv:
+        if os.path.exists(s["vid"]):
+            st.video(s["vid"])
+        else:
+            st.warning("This shot's clip isn't rendered. Run "
+                       f"`python tools/render_shots.py` on {s['clip']}, or watch it in "
+                       "the Per-clip overlay.")
+    with ci:
+        pred = "MAKE" if s["made"] else ("miss" if s["made"] is False else "?")
+        st.metric(f"Shot {s['shot']} · {s['clip'][-16:]}", f"predicted: {pred}",
+                  f"confidence: {s['conf']}")
+        opts = ["make", "miss", "can't tell"]
+        prev_truth = truth.get(s["key"])
+        default = opts.index(prev_truth) if prev_truth in opts else \
+            (0 if s["made"] else 1 if s["made"] is False else 2)
+        choice = st.radio("What actually happened?", opts, index=default,
+                          key=f"truth_{s['key']}")
+        if st.button("💾 Save & next", key="audit_save", type="primary"):
+            truth[s["key"]] = choice
+            with open(tpath, "w", encoding="utf-8") as f:
+                json.dump(truth, f, indent=2)
+            st.session_state["audit_idx"] = (idx + 1) % n; st.rerun()
+        if prev_truth:
+            st.caption(f"your last answer: **{prev_truth}**"
+                       + ("  ✓ matches tracker" if (prev_truth == "make") == bool(s["made"])
+                          else "  ✗ tracker was wrong" if prev_truth in ("make", "miss") else ""))
+
+    # ---- scoreboard ----
+    rev = {k: v for k, v in truth.items() if v in ("make", "miss") and k in by_key}
+    st.divider()
+    if rev:
+        correct = sum((v == "make") == bool(by_key[k]["made"]) for k, v in rev.items())
+        acc = 100 * correct / len(rev)
+        cmk = sum(1 for s in shots
+                  if (truth.get(s["key"]) if truth.get(s["key"]) in ("make", "miss")
+                      else ("make" if s["made"] else "miss")) == "make")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Reviewed", f"{len(rev)}/{len(shots)}")
+        m2.metric("Tracker accuracy", f"{acc:.0f}%", f"{correct}/{len(rev)} correct")
+        m3.metric("Corrected make%", f"{100*cmk/len(shots):.0f}%",
+                  f"was {100*df['made'].mean():.0f}%")
+        # break accuracy down by the tracker's own confidence
+        rowss = []
+        for cf in ["medium", "low", "na"]:
+            sub = {k: v for k, v in rev.items() if by_key[k]["conf"] == cf}
+            if sub:
+                cc = sum((v == "make") == bool(by_key[k]["made"]) for k, v in sub.items())
+                rowss.append([cf, len(sub), f"{100*cc/len(sub):.0f}%"])
+        if rowss:
+            st.caption("Accuracy by the tracker's own confidence label:")
+            st.dataframe(pd.DataFrame(rowss, columns=["tracker conf", "reviewed",
+                         "accuracy"]), hide_index=True)
+        st.caption("Once you've reviewed enough, I can recompute make% and the "
+                   "make-driver correlations from your corrected labels.")
+    else:
+        st.info("No shots reviewed yet — start with the low-confidence ones (most "
+                "likely to be wrong).")
+
+
 # ---------------------------------------------------------------- main
 st.title("🏀 ShotLab")
 mode = st.sidebar.radio("View", ["Per-clip", "Session analytics", "3D analysis",
-                                 "Film room", "Shot review", "Compare shots",
-                                 "Compare sessions", "Progress"])
+                                 "Make/miss audit", "Film room", "Shot review",
+                                 "Compare shots", "Compare sessions", "Progress"])
 if mode == "Per-clip":
     view_clip()
 elif mode == "Session analytics":
     view_session()
 elif mode == "3D analysis":
     view_3d()
+elif mode == "Make/miss audit":
+    view_make_audit()
 elif mode == "Film room":
     view_film_room()
 elif mode == "Shot review":
