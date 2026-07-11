@@ -69,7 +69,8 @@ def main(argv=None):
         txt = [f"SHOT {s.index}", f"release {m.release_angle_deg}",
                f"entry {m.entry_angle_deg}", f"zone {z['zone']}"]
         raw = os.path.join(outdir, f"shot_{s.index}.mp4")
-        render_shot_clip(args.video, s, track, raw, fps=info.fps, metrics_text=txt)
+        render_shot_clip(args.video, s, track, raw, fps=info.fps, metrics_text=txt,
+                         rim=(calib.rim_x, calib.rim_y, calib.rim_radius_px))
         h264 = to_h264(raw, os.path.join(outdir, f"shot_{s.index}_h264.mp4"))
         index.append({"shot": s.index, "file": os.path.basename(h264),
                       "release": m.release_angle_deg, "entry": m.entry_angle_deg,

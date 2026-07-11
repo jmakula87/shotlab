@@ -36,23 +36,44 @@ def _draw_skeleton(frame, fp):
 
 
 def render_shot_clip(video_path: str, shot, track, out_path: str,
-                     fps: float, pad: int = 8, metrics_text=None) -> str:
+                     fps: float, pad: int = 8, metrics_text=None,
+                     post_s: float = 1.5, rim=None) -> str:
     """Render a short overlay clip for ONE shot: the ball trail + fitted arc +
-    a metrics caption, over the shot's frames (with a little pad before/after).
-    Used by the per-shot review in the dashboard."""
+    a metrics caption. Used by the per-shot review / make-miss audit.
+
+    Two things that matter for judging make vs miss:
+      * the window runs PAST the last ball DETECTION by `post_s` seconds -- the
+        ball is usually lost right at the rim, so without this the clip ends
+        before you can see it drop through or bounce out;
+      * playback fps is the window's REAL rate from the container timestamps
+        (these phones record variable frame rate; writing at a nominal 30 made
+        the clips play sped-up).
+    `rim` = (rim_x, rim_y, rim_radius_px) draws the rim so in/out is visible."""
+    from ..video_io import frame_times
     info = probe(video_path)
     lo = max(0, int(shot.frames[0]) - pad)
-    hi = min(info.n_frames - 1, int(shot.frames[-1]) + pad)
+    post = int(round(post_s * (info.fps or 30.0)))
+    hi = min(info.n_frames - 1, int(shot.frames[-1]) + post)
+
+    # real-time playback fps from the container PTS over this window
+    ts = frame_times(video_path, lo, hi + 1)
+    tv = sorted(ts.values())
+    real_fps = ((len(tv) - 1) / (tv[-1] - tv[0])) if len(tv) > 2 and tv[-1] > tv[0] \
+        else (info.fps or 30.0)
+
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    vw = cv2.VideoWriter(out_path, fourcc, min(fps, 60), (info.width, info.height))
+    vw = cv2.VideoWriter(out_path, fourcc, min(real_fps, 60), (info.width, info.height))
 
     xs = np.linspace(shot.xs.min(), shot.xs.max(), 60)
     curve = np.stack([xs, -shot.fit.height_at(xs)], 1).astype(np.int32)
     shot_frames = set(int(f) for f in shot.frames)
+    last_det = int(shot.frames[-1])
 
     for idx, frame in iter_frames(video_path, start=lo, stop=hi + 1):
-        cv2.polylines(frame, [curve], False, _YELLOW, 2, cv2.LINE_AA)
-        # trail of detected ball up to now
+        if rim is not None:
+            cv2.circle(frame, (int(rim[0]), int(rim[1])), max(int(rim[2]), 6),
+                       _YELLOW, 2, cv2.LINE_AA)
+        cv2.polylines(frame, [curve], False, _YELLOW, 1, cv2.LINE_AA)
         for f in range(lo, idx + 1):
             c = track.get(f)
             if c is not None and f in shot_frames:
@@ -61,6 +82,10 @@ def render_shot_clip(video_path: str, shot, track, out_path: str,
         if c is not None:
             cv2.circle(frame, (int(c.cx), int(c.cy)), max(int(c.r), 5), _GREEN, 2,
                        cv2.LINE_AA)
+        if idx > last_det:      # past tracking -> tell the viewer to watch the rim
+            cv2.putText(frame, "ball lost - watch the yellow rim (in or out?)",
+                        (20, info.height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
+                        _WHITE, 2, cv2.LINE_AA)
         for i, ln in enumerate(metrics_text or []):
             cv2.putText(frame, ln, (20, 40 + i * 32), cv2.FONT_HERSHEY_SIMPLEX,
                         0.9, _GREEN if i == 0 else _WHITE, 2, cv2.LINE_AA)
