@@ -1212,14 +1212,24 @@ def view_make_audit():
                     or (isinstance(s.get("note"), str) and "not a shot" in s["note"]))
     tpath = os.path.join(d, "make_truth.json")
     truth = json.load(open(tpath, encoding="utf-8")) if os.path.exists(tpath) else {}
+    ppath = os.path.join(d, "make_pred.json")   # learned visual model (net + ball-below-rim)
+    preds = json.load(open(ppath, encoding="utf-8")) if os.path.exists(ppath) else {}
+    for s in shots:
+        pr = preds.get(s["key"], {})
+        s["mpred"] = pr.get("made"); s["mprob"] = pr.get("prob")
     by_key = {s["key"]: s for s in shots}
 
     n_susp = sum(_suspect(s) for s in shots)
-    filt = st.radio(f"Review order  ({n_susp} auto-suspected non-shots)",
-                    ["suspected non-shots first", "low-confidence first", "all",
-                     "unreviewed only"], horizontal=True, key="audit_filt")
+    opts = ["suspected non-shots first", "low-confidence first", "all", "unreviewed only"]
+    if preds:
+        opts.insert(0, "model-uncertain first")
+    filt = st.radio(f"Review order  ({n_susp} auto-suspected non-shots"
+                    + (f" · model predicted {len(preds)}" if preds else "") + ")",
+                    opts, horizontal=True, key="audit_filt")
     order = list(shots)
-    if filt == "suspected non-shots first":
+    if filt == "model-uncertain first":
+        order.sort(key=lambda s: (abs((s.get("mprob") or 0.5) - 0.5), s["key"] in truth))
+    elif filt == "suspected non-shots first":
         order.sort(key=lambda s: (not _suspect(s), s["key"] in truth))
     elif filt == "low-confidence first":
         rank = {"low": 0, "medium": 1, "na": 2}
@@ -1249,6 +1259,11 @@ def view_make_audit():
         pred = "MAKE" if s["made"] else ("miss" if s["made"] is False else "?")
         st.metric(f"Shot {s['shot']} · {s['clip'][-16:]}", f"predicted: {pred}",
                   f"confidence: {s['conf']}  ·  {s.get('form','')}")
+        if s.get("mpred") is not None:
+            mp = "MAKE" if s["mpred"] else "miss"
+            sure = "unsure" if abs((s["mprob"] or 0.5) - 0.5) < 0.15 else "confident"
+            st.info(f"🤖 Visual model: **{mp}** ({s['mprob']:.0%} make · {sure}) "
+                    f"— ~87% accurate; confirm or correct below.")
         if _suspect(s):
             st.warning("⚠ Auto-suspected **NOT a shot** (low apex + layup/floater/"
                        "on-the-move). If it's a dribble/retrieve, mark it below.")
@@ -1296,6 +1311,14 @@ def view_make_audit():
                        f"real session is closer to **~{proj:.0f} shots**. Every stat, "
                        f"make%, and driver in the recap is contaminated until these "
                        f"are removed.")
+        if preds and real:
+            mp = [(k, v) for k, v in real.items() if by_key[k].get("mpred") is not None]
+            if mp:
+                agree = sum(by_key[k]["mpred"] == (v == "make") for k, v in mp)
+                st.caption(f"🤖 The visual make/miss model agreed with you on "
+                           f"**{agree}/{len(mp)} = {100*agree/len(mp):.0f}%** of the real "
+                           f"shots you've reviewed — so future sessions can be mostly "
+                           f"auto-labeled, with you only checking the 'model-uncertain' ones.")
         st.caption("When you've reviewed enough (esp. the low-confidence ones), tell "
                    "me — I'll drop the non-shots, recompute make% + drivers, and "
                    "regenerate the recap on the clean set. Your answers are saved to "
