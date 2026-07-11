@@ -1791,13 +1791,88 @@ def view_flare_review():
                "and rebuild your per-shot flare (and the Explorer/recap update).")
 
 
+# ---------------- form notes (watch full clips, rate each shot)
+def view_form_notes():
+    st.subheader("📝 Form notes — watch full clips, rate each shot's form")
+    st.caption("Your eye is the best judge of form. Watch the clip, then rate each "
+               "shot good / ok / bad (+ a note). Saved to form_notes.json — these "
+               "become labels we can later check against makes, or train a form score on.")
+    sds = session_dirs()
+    if not sds:
+        st.info("No sessions yet."); return
+    sd = st.selectbox("Session", sds, format_func=_session_label, key="fn_sess")
+    d = os.path.join(OUT_DIR, sd)
+    try:
+        df = pd.read_csv(os.path.join(d, "session_shots.csv"))
+    except Exception:
+        st.info("No shots in that session."); return
+    clips = sorted(df["clip"].astype(str).unique())
+    clip = st.selectbox("Clip", clips, key="fn_clip",
+                        format_func=lambda c: c.replace(".mp4", "")[-13:])
+    stem = clip.replace(".mp4", "")
+
+    ov = glob.glob(os.path.join(OUT_DIR, stem, "*overlay_h264.mp4")) or \
+        glob.glob(os.path.join(OUT_DIR, stem, "*overlay.mp4"))
+    if ov:
+        st.video(ov[0])
+    else:
+        st.info("No full-clip overlay rendered for this clip "
+                "(`python analyze.py <clip>` to make one). Rating still works below.")
+
+    fnpath = os.path.join(d, "form_notes.json")
+    notes = json.load(open(fnpath, encoding="utf-8")) if os.path.exists(fnpath) else {}
+    g = df[df["clip"].astype(str) == clip].sort_values("shot_in_clip")
+    rated = sum(1 for _, r in g.iterrows()
+                if f"{clip}|{int(r['shot_in_clip'])}" in notes)
+    st.caption(f"{len(g)} shots in this clip · {rated} rated. "
+               f"Use the times below to find each shot in the video.")
+
+    OPTS = ["—", "good", "ok", "bad"]
+    with st.form(f"formnotes_{clip}"):
+        updates = {}
+        hdr = st.columns([1, 2, 3, 3])
+        for h, t in zip(hdr, ["shot", "your rating", "note", "metrics"]):
+            h.markdown(f"**{t}**")
+        for _, r in g.iterrows():
+            key = f"{clip}|{int(r['shot_in_clip'])}"
+            cur = notes.get(key, {})
+            c = st.columns([1, 2, 3, 3])
+            c[0].markdown(f"**#{int(r['shot_in_clip'])}**  \n"
+                          f"{float(r.get('elapsed_min', 0) or 0):.1f} min")
+            rating = c[1].radio("r", OPTS, index=OPTS.index(cur.get("rating", "—"))
+                                if cur.get("rating") in OPTS else 0,
+                                key=f"fn_r_{key}", horizontal=True,
+                                label_visibility="collapsed")
+            note = c[2].text_input("n", value=cur.get("note", ""), key=f"fn_n_{key}",
+                                   label_visibility="collapsed",
+                                   placeholder="what looked off? (optional)")
+            met = "  ·  ".join(f"{lab.split(' ')[0]} {r[k]:.0f}"
+                              for k, lab in [("release_angle_deg", "rel°"),
+                                             ("knee_bend_deg", "knee°"),
+                                             ("elbow_angle_at_release_deg", "elb°")]
+                              if k in r and pd.notna(r[k]))
+            c[3].caption(met)
+            updates[key] = {"rating": rating, "note": note}
+        if st.form_submit_button("💾 Save all ratings", type="primary"):
+            for k, v in updates.items():
+                if v["rating"] != "—" or v["note"].strip():
+                    notes[k] = v
+                elif k in notes:
+                    del notes[k]
+            with open(fnpath, "w", encoding="utf-8") as fh:
+                json.dump(notes, fh, indent=2)
+            st.success(f"Saved — {sum(1 for v in notes.values() if v.get('rating') in ('good','ok','bad'))} "
+                       f"shots rated across this session.")
+
+
 # ---------------------------------------------------------------- main
 st.title("🏀 ShotLab")
 mode = st.sidebar.radio("View", ["Shot Explorer", "Shot scatter", "Shot chart",
                                  "Makes vs misses", "Closest to ideal",
                                  "Session analytics", "3D analysis", "Make/miss audit",
-                                 "Flare review", "Film room", "Shot review", "Per-clip",
-                                 "Compare shots", "Compare sessions", "Progress"])
+                                 "Flare review", "Form notes", "Film room",
+                                 "Shot review", "Per-clip", "Compare shots",
+                                 "Compare sessions", "Progress"])
 if mode == "Shot Explorer":
     view_explore()
 elif mode == "Shot scatter":
@@ -1818,6 +1893,8 @@ elif mode == "Make/miss audit":
     view_make_audit()
 elif mode == "Flare review":
     view_flare_review()
+elif mode == "Form notes":
+    view_form_notes()
 elif mode == "Film room":
     view_film_room()
 elif mode == "Shot review":

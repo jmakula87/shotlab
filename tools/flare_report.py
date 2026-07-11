@@ -31,7 +31,7 @@ from shotlab.threed import elbow_flare
 from shotlab.sync import sync_clips
 from shotlab.detect_cache import _path as track_path, deserialize_detection
 from shotlab.correlate import correlate_label
-from shotlab.analysis3d import Analysis3D
+from shotlab.analysis3d import Analysis3D, refine_release_frame
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UP = (0.0, -1.0, 0.0)
@@ -122,10 +122,13 @@ def process_pair(wide_stem, close_stem):
 
     os.makedirs(STILLS, exist_ok=True)
     rows = []
-    for f in rel:
+    for f0 in rel:
+        # snap to the extended-arm release; skip gathers/pumps (bent elbow)
+        f, elb = refine_release_frame(series, f0)
+        if f is None:
+            continue
         fp = series[f]
         fl = elbow_flare(fp.w("r_shoulder"), fp.w("r_elbow"), fp.w("r_wrist"), up=UP)
-        # map this release to the wide shot by time
         ptime = cts.get(f, f / fps) + offset
         made = None
         if wtimes:
@@ -136,7 +139,8 @@ def process_pair(wide_stem, close_stem):
         name = f"{close_stem}_{f}_{'make' if made else ('miss' if made is not None else 'unk')}.jpg"
         cv2.imwrite(os.path.join(STILLS, name), still)
         rows.append({"clip": close_stem, "frame": int(f), "flare_deg": fl.angle_deg,
-                     "made": made, "still": os.path.join("flare_stills", name)})
+                     "elbow_deg": round(float(elb), 0), "made": made,
+                     "still": os.path.join("flare_stills", name)})
     return rows
 
 

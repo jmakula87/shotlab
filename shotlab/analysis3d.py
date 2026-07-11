@@ -160,6 +160,28 @@ def arcs_from_track(fr, us, vs, rs, ts, fps, W, H, *, is_vfr=False,
             "gate": "ballistic reprojection < 5px + real-arc shape"}
 
 
+def _elbow_ext(fp):
+    """Shooting-arm elbow angle (deg); ~180 = straight, ~90 = bent at the gather."""
+    from .phase2_pose.pose import joint_angle
+    return joint_angle(fp.pt("r_shoulder"), fp.pt("r_elbow"), fp.pt("r_wrist"))
+
+
+def refine_release_frame(series, f, half=6, elbow_min=145.0):
+    """Snap a wrist-apex candidate to the nearby frame with the MOST-extended
+    elbow (wrist still above the head). Returns (frame, elbow_deg) or (None, ang)
+    if the arm never extends near here -- i.e. it's a gather/pump, not a release,
+    which is what produces bogus high-flare readings."""
+    best, ba = None, -1.0
+    for g in range(f - half, f + half + 1):
+        fp = series.get(g)
+        if fp is None or fp.pt("r_wrist")[1] >= fp.pt("nose")[1]:
+            continue
+        a = _elbow_ext(fp)
+        if a > ba:
+            ba, best = a, g
+    return (best, ba) if (best is not None and ba >= elbow_min) else (None, ba)
+
+
 def flare_from_close(clip: str, *, start=0, stop=None, variant="full",
                      min_gap_frames=15):
     """Elbow flare (deg) at each release from the close clip's metric world
@@ -189,9 +211,13 @@ def flare_from_close(clip: str, *, start=0, stop=None, variant="full",
                 rel.append(f)
     flares = []
     for f in rel:
-        fp = series[f]
+        f2, elb = refine_release_frame(series, f)
+        if f2 is None:                 # arm never extends here -> not a clean release
+            continue
+        fp = series[f2]
         fl = elbow_flare(fp.w("r_shoulder"), fp.w("r_elbow"), fp.w("r_wrist"), up=UP)
-        flares.append({"frame": int(f), "flare_deg": fl.angle_deg})
+        flares.append({"frame": int(f2), "flare_deg": fl.angle_deg,
+                       "elbow_deg": round(float(elb), 0)})
     vals = np.array([x["flare_deg"] for x in flares]) if flares else np.array([])
     summary = None
     if len(vals):
