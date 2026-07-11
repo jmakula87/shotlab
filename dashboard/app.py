@@ -1569,16 +1569,179 @@ def view_scatter():
         st.info("👆 Click a dot to load that shot.")
 
 
+@st.cache_data
+def _profile():
+    p = os.path.join(ROOT, "app", "profile.json")
+    return json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
+
+
+def _cohen_d(a, b):
+    a, b = np.asarray(a, float), np.asarray(b, float)
+    if len(a) < 3 or len(b) < 3:
+        return None
+    sp = np.sqrt(((len(a)-1)*a.var(ddof=1) + (len(b)-1)*b.var(ddof=1)) / (len(a)+len(b)-2))
+    return float((a.mean() - b.mean()) / sp) if sp > 0 else None
+
+
+def _date_picker(df, label="Session (date)", multi=False, key=None):
+    dates = sorted(df["date_label"].unique(),
+                   key=lambda s: df[df["date_label"] == s]["date"].iloc[0], reverse=True)
+    if multi:
+        return st.multiselect(label, dates, default=dates, key=key)
+    return st.selectbox(label, dates, key=key)
+
+
+# ---------------- shot chart
+def view_shotchart():
+    st.subheader("🎯 Shot chart — where you shoot from")
+    df = _all_shots(_shots_sig())
+    if df.empty or "rim_dx_px" not in df:
+        st.info("No shot-position data yet."); return
+    with st.sidebar:
+        st.markdown("### Chart")
+        sess = _date_picker(df, key="sc_sess")
+        vonly = st.checkbox("Verified make/miss only", value=True, key="sc_v")
+    f = df[df["date_label"] == sess].copy()
+    if vonly:
+        f = f[f["verified"]]
+    f = f[f["rim_dx_px"].notna() & f["rim_dist_px"].notna()].reset_index(drop=True)
+    if f.empty:
+        st.info("No positioned shots for that filter."); return
+    f["_i"] = f.index
+    mk = int((f["outcome"] == "make").sum())
+    ch = (alt.Chart(f).mark_point(size=170, filled=True, opacity=0.8, strokeWidth=2)
+          .encode(
+              x=alt.X("rim_dx_px:Q", title="← left   ·   horizontal offset from rim   ·   right →",
+                      scale=alt.Scale(zero=False)),
+              y=alt.Y("rim_dist_px:Q", title="distance from rim  (farther up = deeper shot)",
+                      scale=alt.Scale(zero=False)),
+              color=alt.Color("outcome:N", scale=alt.Scale(domain=["make", "miss"],
+                              range=["#2a9d4a", "#c0392b"]), legend=alt.Legend(title="result")),
+              shape=alt.Shape("outcome:N", scale=alt.Scale(domain=["make", "miss"],
+                              range=["circle", "cross"]), legend=None),
+              tooltip=["outcome", "zone", "movement_dir",
+                       alt.Tooltip("release_angle_deg:Q", title="release°")])
+          .add_params(alt.selection_point(name="pt", fields=["_i"], on="click"))
+          .properties(height=470))
+    ev = st.altair_chart(ch, use_container_width=True, on_select="rerun", key="scchart")
+    st.caption(f"{len(f)} shots · {mk} makes ({100*mk/len(f):.0f}%) · ● make / ✚ miss · "
+               f"image-space relative to the rim (one camera, so positions are only "
+               f"comparable WITHIN this session). Click a dot to watch.")
+    metrics = [(k, lab) for k, lab in _MEASURABLES if k in df and df[k].notna().any()]
+    pts = (ev.selection.get("pt") if ev and ev.selection else None) or []
+    idxs = [p.get("_i") for p in pts if isinstance(p, dict) and "_i" in p]
+    if idxs:
+        _shot_detail(f.iloc[int(idxs[0])], metrics)
+
+
+# ---------------- makes vs misses split
+def view_makesplit():
+    st.subheader("⚖️ Makes vs misses — what's different when you score")
+    df = _all_shots(_shots_sig())
+    if df.empty:
+        st.info("No shots yet."); return
+    with st.sidebar:
+        st.markdown("### Compare")
+        sel = _date_picker(df, "Sessions (date)", multi=True, key="ms_sess")
+        vonly = st.checkbox("Verified make/miss only", value=True, key="ms_v")
+    f = df[df["date_label"].isin(sel)].copy()
+    if vonly:
+        f = f[f["verified"]]
+    made, miss = f[f["outcome"] == "make"], f[f["outcome"] == "miss"]
+    if len(made) < 3 or len(miss) < 3:
+        st.info("Need at least a few verified makes AND misses — audit a session in "
+                "Make/miss audit, or widen the filter."); return
+    metrics = [(k, lab) for k, lab in _MEASURABLES if k in f and made[k].notna().sum() >= 3
+               and miss[k].notna().sum() >= 3]
+    rows = []
+    for k, lab in metrics:
+        a, b = made[k].dropna(), miss[k].dropna()
+        rows.append({"metric": lab, "makes": round(a.mean(), 1), "misses": round(b.mean(), 1),
+                     "d": _cohen_d(a.values, b.values), "_k": k})
+    rd = pd.DataFrame(rows).dropna(subset=["d"]).sort_values("d", key=lambda s: s.abs(),
+                                                             ascending=False)
+    st.caption(f"{len(made)} makes vs {len(miss)} misses. Cohen's d = how separated "
+               f"(|d|≥0.4 notable). Small samples — leads, not proof.")
+    bars = (alt.Chart(rd).mark_bar().encode(
+                x=alt.X("d:Q", title="Cohen's d  (makes − misses)"),
+                y=alt.Y("metric:N", sort=None, title=None),
+                color=alt.condition("abs(datum.d) >= 0.4", alt.value("#2a7"), alt.value("#bbb")),
+                tooltip=["metric", "makes", "misses", alt.Tooltip("d:Q", format="+.2f")])
+            .properties(height=28*len(rd)+20))
+    st.altair_chart(bars, use_container_width=True)
+    lab = st.selectbox("Look at one metric's distribution", [r["metric"] for _, r in rd.iterrows()])
+    k = rd[rd["metric"] == lab]["_k"].iloc[0]
+    dd = pd.concat([made[[k]].assign(result="make"), miss[[k]].assign(result="miss")]).dropna()
+    hist = (alt.Chart(dd).mark_bar(opacity=0.6).encode(
+                x=alt.X(f"{k}:Q", bin=alt.Bin(maxbins=20), title=lab),
+                y=alt.Y("count()", title="shots", stack=None),
+                color=alt.Color("result:N", scale=alt.Scale(domain=["make", "miss"],
+                                range=["#2a9d4a", "#c0392b"])))
+            .properties(height=220))
+    st.altair_chart(hist, use_container_width=True)
+
+
+# ---------------- closest-to-ideal leaderboard
+def view_ideal_board():
+    st.subheader("🏅 Closest-to-ideal reps — study your best form")
+    prof = _profile()
+    ideal, tol = prof.get("ideal", {}), prof.get("tolerance", {})
+    if not ideal:
+        st.info("No profile ideals yet (run tools/export_profile.py)."); return
+    df = _all_shots(_shots_sig())
+    if df.empty:
+        st.info("No shots yet."); return
+    metrics = [(k, lab) for k, lab in _MEASURABLES if k in df and df[k].notna().any()]
+    used = [k for k in ideal if k in df.columns and tol.get(k)]
+    with st.sidebar:
+        st.markdown("### Leaderboard")
+        sel = _date_picker(df, "Sessions (date)", multi=True, key="ib_sess")
+        outc = st.multiselect("Outcome", ["make", "miss"], default=["make", "miss"], key="ib_o")
+        vonly = st.checkbox("Verified make/miss only", value=False, key="ib_v")
+    f = df[df["date_label"].isin(sel) & df["outcome"].isin(outc)].copy()
+    if vonly:
+        f = f[f["verified"]]
+    if f.empty or not used:
+        st.info("No shots / ideal metrics for that filter."); return
+
+    def _dist(r):
+        ds = [abs(r[k] - ideal[k]) / tol[k] for k in used
+              if pd.notna(r.get(k)) and tol[k]]
+        return float(np.mean(ds)) if ds else np.nan
+    f = f.reset_index(drop=True)
+    f["form_gap"] = f.apply(_dist, axis=1)
+    f = f[f["form_gap"].notna()].sort_values("form_gap").reset_index(drop=True)
+    st.caption(f"Ranked by average distance from your ideal ({', '.join(k for k in used)}), "
+               f"in tolerance units — lower = closer to ideal form. Click a row to watch.")
+    show = ["form_gap", "outcome", "date_label"] + [k for k, _ in metrics if k in used]
+    disp = f[show].rename(columns=dict(metrics, form_gap="ideal gap", date_label="date",
+                                       outcome="result")).round(2)
+    ev = st.dataframe(disp, hide_index=True, use_container_width=True,
+                      on_select="rerun", selection_mode="single-row", height=340)
+    picks = ev.selection.rows if ev and ev.selection else []
+    if picks:
+        _shot_detail(f.iloc[picks[0]], metrics)
+    else:
+        st.info("👆 Click a row to watch that rep (top rows = closest to your ideal).")
+
+
 # ---------------------------------------------------------------- main
 st.title("🏀 ShotLab")
-mode = st.sidebar.radio("View", ["Shot Explorer", "Shot scatter", "Session analytics",
-                                 "3D analysis", "Make/miss audit", "Film room",
-                                 "Shot review", "Per-clip", "Compare shots",
+mode = st.sidebar.radio("View", ["Shot Explorer", "Shot scatter", "Shot chart",
+                                 "Makes vs misses", "Closest to ideal",
+                                 "Session analytics", "3D analysis", "Make/miss audit",
+                                 "Film room", "Shot review", "Per-clip", "Compare shots",
                                  "Compare sessions", "Progress"])
 if mode == "Shot Explorer":
     view_explore()
 elif mode == "Shot scatter":
     view_scatter()
+elif mode == "Shot chart":
+    view_shotchart()
+elif mode == "Makes vs misses":
+    view_makesplit()
+elif mode == "Closest to ideal":
+    view_ideal_board()
 elif mode == "Per-clip":
     view_clip()
 elif mode == "Session analytics":
