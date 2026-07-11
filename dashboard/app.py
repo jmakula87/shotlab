@@ -1725,13 +1725,79 @@ def view_ideal_board():
         st.info("👆 Click a row to watch that rep (top rows = closest to your ideal).")
 
 
+# ---------------- flare review
+def view_flare_review():
+    st.subheader("🧿 Flare review — check each elbow-flare reading")
+    st.caption("Flare is read from the close-camera pose at release. A mis-detected "
+               "frame (arm still BENT at the gather) reads artificially flared. Review "
+               "the stills — flag the bad ones and I'll drop them and recompute your "
+               "per-shot flare. White line = shoulder→wrist; red = elbow's offset.")
+    sessions = [sd for sd in session_dirs()
+                if os.path.exists(os.path.join(OUT_DIR, sd, "flare_readings.json"))]
+    if not sessions:
+        st.info("No flare readings yet. Run `tools/join_flare_to_shots.py` on a "
+                "2-camera session."); return
+    sd = st.selectbox("Session", sessions, format_func=_session_label, key="flr_sess")
+    d = os.path.join(OUT_DIR, sd)
+    a3d_dir = os.path.join(OUT_DIR, sd + "_3d")
+    readings = json.load(open(os.path.join(d, "flare_readings.json"), encoding="utf-8"))
+    xpath = os.path.join(d, "flare_exclude.json")
+    excluded = set(json.load(open(xpath, encoding="utf-8")) if os.path.exists(xpath) else [])
+
+    ss = st.session_state
+    if ss.get("flr_excl_sd") != sd:
+        ss.flr_excl = set(excluded); ss.flr_excl_sd = sd
+
+    vals = np.array([abs(r["flare_deg"]) for r in readings])
+    c1, c2 = st.columns([3, 2])
+    order = c1.radio("Order", ["outliers first", "by shot", "flagged only"],
+                     horizontal=True, key="flr_order")
+    thr = c2.slider("Highlight |flare| above", 5, 40, 15, key="flr_thr")
+    R = list(readings)
+    if order == "outliers first":
+        R.sort(key=lambda r: -abs(r["flare_deg"]))
+    elif order == "flagged only":
+        R = [r for r in R if r["s8"] in ss.flr_excl]
+    else:
+        R.sort(key=lambda r: (r["wide_shot"]))
+    st.caption(f"{len(readings)} readings · median |flare| {np.median(vals):.0f}° · "
+               f"{int((vals>thr).sum())} above {thr}° · **{len(ss.flr_excl)} flagged bad**")
+
+    per_page = 12
+    npage = max(1, (len(R) + per_page - 1) // per_page)
+    pg = st.number_input("Page", 1, npage, 1, key="flr_pg") - 1
+    page = R[pg*per_page:(pg+1)*per_page]
+    for r0 in range(0, len(page), 3):
+        cols = st.columns(3)
+        for j, r in enumerate(page[r0:r0+3]):
+            with cols[j]:
+                sp = os.path.join(a3d_dir, str(r["still"]).replace("\\", "/"))
+                if os.path.exists(sp):
+                    st.image(sp, use_container_width=True)
+                out = "make" if r.get("made") else "miss" if r.get("made") is False else "?"
+                flag = abs(r["flare_deg"]) > thr
+                st.markdown(f"**{r['flare_deg']:+.0f}°**{' ⚠️' if flag else ''} · "
+                            f"{r['wide_shot'].split('|')[-1]} · {out}")
+                bad = st.checkbox("bad reading", value=(r["s8"] in ss.flr_excl),
+                                  key=f"flrbad_{r['s8']}")
+                (ss.flr_excl.add if bad else ss.flr_excl.discard)(r["s8"])
+
+    b1, b2 = st.columns(2)
+    if b1.button("💾 Save flags", type="primary", key="flr_save"):
+        with open(xpath, "w", encoding="utf-8") as f:
+            json.dump(sorted(ss.flr_excl), f, indent=2)
+        b1.success(f"Saved {len(ss.flr_excl)} flagged readings to flare_exclude.json.")
+    b2.caption("After saving, tell me to recompute — I'll drop the flagged readings "
+               "and rebuild your per-shot flare (and the Explorer/recap update).")
+
+
 # ---------------------------------------------------------------- main
 st.title("🏀 ShotLab")
 mode = st.sidebar.radio("View", ["Shot Explorer", "Shot scatter", "Shot chart",
                                  "Makes vs misses", "Closest to ideal",
                                  "Session analytics", "3D analysis", "Make/miss audit",
-                                 "Film room", "Shot review", "Per-clip", "Compare shots",
-                                 "Compare sessions", "Progress"])
+                                 "Flare review", "Film room", "Shot review", "Per-clip",
+                                 "Compare shots", "Compare sessions", "Progress"])
 if mode == "Shot Explorer":
     view_explore()
 elif mode == "Shot scatter":
@@ -1750,6 +1816,8 @@ elif mode == "3D analysis":
     view_3d()
 elif mode == "Make/miss audit":
     view_make_audit()
+elif mode == "Flare review":
+    view_flare_review()
 elif mode == "Film room":
     view_film_room()
 elif mode == "Shot review":

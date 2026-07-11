@@ -45,12 +45,19 @@ def main():
 
     a3d = json.load(open(a.a3d, encoding="utf-8"))
     flare_shots = a3d["flare"]["shots"]
-    # group flare readings by close clip -> [(frame, flare_deg)]
+    # readings the user flagged bad in the flare review are dropped
+    xpath = os.path.join(a.session, "flare_exclude.json")
+    excluded = set(json.load(open(xpath, encoding="utf-8"))) if os.path.exists(xpath) else set()
+    # group flare readings by close clip -> [(frame, flare_deg, still, made)]
     by_close = {}
     for s in flare_shots:
-        by_close.setdefault(str(s["clip"]), []).append((int(s["frame"]), s["flare_deg"]))
+        if f"{s['clip']}|{s['frame']}" in excluded:
+            continue
+        by_close.setdefault(str(s["clip"]), []).append(
+            (int(s["frame"]), s["flare_deg"], s.get("still"), s.get("made")))
 
     out = {}
+    readings = []          # per-reading, for the flare-review gallery
     for wide_name, close_name in PAIRS:
         wp = os.path.join(a.wide_dir, wide_name)
         cp = os.path.join(a.close_dir, close_name + ".mp4")
@@ -68,11 +75,14 @@ def main():
             windows.append((sh.index, t0, t1))
         ct = frame_times(cp)
         assigned = {}
-        for frame, fl in by_close.get(close_name, []):
+        for frame, fl, still, made in by_close.get(close_name, []):
             wide_t = ct.get(frame, frame / 30.0) + offset
             hit = [idx for idx, t0, t1 in windows if t0 - 0.4 <= wide_t <= t1 + 0.4]
             if len(hit) == 1:
                 assigned.setdefault(hit[0], []).append(fl)
+                readings.append({"wide_shot": f"{wide_name}|{hit[0]}",
+                                 "flare_deg": fl, "still": still, "made": made,
+                                 "s8": f"{close_name}|{frame}"})
         for idx, vals in assigned.items():
             out[f"{wide_name}|{idx}"] = round(float(np.median(vals)), 2)
         print(f"  {wide_name}: sync {offset:+.2f}s conf {conf:.2f}, "
@@ -81,7 +91,10 @@ def main():
     dst = os.path.join(a.session, "flare_by_shot.json")
     with open(dst, "w", encoding="utf-8") as f:
         json.dump(out, f, indent=2)
-    print(f"wrote {dst} ({len(out)} shots with flare)")
+    with open(os.path.join(a.session, "flare_readings.json"), "w", encoding="utf-8") as f:
+        json.dump(readings, f, indent=2)
+    print(f"wrote {dst} ({len(out)} shots with flare); {len(readings)} readings "
+          f"({len(excluded)} excluded)")
 
 
 if __name__ == "__main__":
