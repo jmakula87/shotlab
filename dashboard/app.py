@@ -1197,16 +1197,26 @@ def view_make_audit():
         shots.append({"clip": str(r["clip"]), "shot": int(r["shot_in_clip"]),
                       "made": bool(r["made"]) if pd.notna(r["made"]) else None,
                       "conf": r.get("make_conf"), "vid": vid,
-                      "form": r.get("shot_form", ""),
+                      "form": r.get("shot_form", ""), "setup": r.get("shot_setup", ""),
+                      "apex": r.get("apex_height_ft"), "note": r.get("quality_note"),
                       "key": f"{r['clip']}|{int(r['shot_in_clip'])}"})
+    def _suspect(s):
+        low = s.get("apex") is not None and pd.notna(s["apex"]) and s["apex"] < 2.0
+        return bool((low and (s["form"] in ("layup", "floater")
+                              or s.get("setup") == "on_the_move"))
+                    or (isinstance(s.get("note"), str) and "not a shot" in s["note"]))
     tpath = os.path.join(d, "make_truth.json")
     truth = json.load(open(tpath, encoding="utf-8")) if os.path.exists(tpath) else {}
     by_key = {s["key"]: s for s in shots}
 
-    filt = st.radio("Review order", ["low-confidence first", "all", "unreviewed only"],
-                    horizontal=True, key="audit_filt")
+    n_susp = sum(_suspect(s) for s in shots)
+    filt = st.radio(f"Review order  ({n_susp} auto-suspected non-shots)",
+                    ["suspected non-shots first", "low-confidence first", "all",
+                     "unreviewed only"], horizontal=True, key="audit_filt")
     order = list(shots)
-    if filt == "low-confidence first":
+    if filt == "suspected non-shots first":
+        order.sort(key=lambda s: (not _suspect(s), s["key"] in truth))
+    elif filt == "low-confidence first":
         rank = {"low": 0, "medium": 1, "na": 2}
         order.sort(key=lambda s: (rank.get(s["conf"], 3), s["key"] in truth))
     elif filt == "unreviewed only":
@@ -1234,6 +1244,9 @@ def view_make_audit():
         pred = "MAKE" if s["made"] else ("miss" if s["made"] is False else "?")
         st.metric(f"Shot {s['shot']} · {s['clip'][-16:]}", f"predicted: {pred}",
                   f"confidence: {s['conf']}  ·  {s.get('form','')}")
+        if _suspect(s):
+            st.warning("⚠ Auto-suspected **NOT a shot** (low apex + layup/floater/"
+                       "on-the-move). If it's a dribble/retrieve, mark it below.")
         # 'not a shot' is the key addition: the detector fires on dribbles/retrieves
         labels = ["made", "missed", "NOT a shot (dribble/retrieve)", "can't tell"]
         vals = ["make", "miss", "notshot", "unsure"]
