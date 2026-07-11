@@ -57,8 +57,27 @@ def _bbox(fp, w, h, pad=0.5, aspect=0.8):
     return x0, y0, x1, y1
 
 
-def _draw_closeup(frame, fp, phase, out_h=520):
-    """Crop to the body and draw the skeleton, emphasizing this phase's joints."""
+def _mid(a, b):
+    return (a + b) / 2.0
+
+
+def _warp_ideal(ideal_xy, fp):
+    """Map the ideal skeleton (normalized [0,1], shooter-centered) onto THIS
+    pose's body: same shoulder-midpoint and shoulder->hip length, so a difference
+    in a limb angle shows as the two skeletons diverging. Returns (33,2) pixels."""
+    u_sh, u_hip = _mid(fp.xy[11], fp.xy[12]), _mid(fp.xy[23], fp.xy[24])
+    u_scale = float(np.hypot(*(u_sh - u_hip)))
+    i_sh, i_hip = _mid(ideal_xy[11], ideal_xy[12]), _mid(ideal_xy[23], ideal_xy[24])
+    i_scale = float(np.hypot(*(i_sh - i_hip)))
+    if u_scale < 1e-6 or i_scale < 1e-6:
+        return None
+    return u_sh + (ideal_xy - i_sh) * (u_scale / i_scale)
+
+
+def _draw_closeup(frame, fp, phase, out_h=520, ideal=None):
+    """Crop to the body and draw the skeleton, emphasizing this phase's joints.
+    If `ideal` = (xy(33,2), vis(33,)) is given, overlay the warped ideal form in
+    magenta so you can see where you diverge from it."""
     import cv2
     h, w = frame.shape[:2]
     box = _bbox(fp, w, h)
@@ -67,6 +86,16 @@ def _draw_closeup(frame, fp, phase, out_h=520):
     x0, y0, x1, y1 = box
     crop = frame[y0:y1, x0:x1].copy()
     hot = _HILITE.get(phase, ())
+    # ideal (magenta) UNDER your skeleton, so yours reads on top
+    if ideal is not None:
+        ixy, ivis = ideal
+        warp = _warp_ideal(np.asarray(ixy, float), fp)
+        if warp is not None:
+            for a, b in _BONES:
+                if ivis[a] >= 0.3 and ivis[b] >= 0.3:
+                    pa = (int(warp[a][0] - x0), int(warp[a][1] - y0))
+                    pb = (int(warp[b][0] - x0), int(warp[b][1] - y0))
+                    cv2.line(crop, pa, pb, (200, 0, 200), 2, cv2.LINE_AA)
     for a, b in _BONES:
         if fp.vis[a] >= 0.3 and fp.vis[b] >= 0.3:
             pa = (int(fp.xy[a][0] - x0), int(fp.xy[a][1] - y0))
@@ -79,12 +108,33 @@ def _draw_closeup(frame, fp, phase, out_h=520):
             p = (int(fp.xy[i][0] - x0), int(fp.xy[i][1] - y0))
             cv2.circle(crop, p, 5 if i in hot else 3,
                        (0, 0, 255) if i in hot else (0, 255, 0), -1)
+    if ideal is not None:
+        cv2.putText(crop, "you=green  ideal=magenta", (8, 22),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
     scale = out_h / crop.shape[0]
     return cv2.resize(crop, (int(crop.shape[1] * scale), out_h))
 
 
+def _load_ideal():
+    """Ideal per-phase skeletons from the deployed profile -> {phase:(xy,vis)}."""
+    prof = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "app", "profile.json")
+    if not os.path.exists(prof):
+        return {}
+    sk = (json.load(open(prof, encoding="utf-8")) or {}).get("skeletons") or {}
+    out = {}
+    for phase, joints in sk.items():
+        if not joints:
+            continue
+        xy = np.array([[j["x"], j["y"]] for j in joints], float)
+        vis = np.array([j.get("visibility", 1.0) for j in joints], float)
+        out[phase] = (xy, vis)
+    return out
+
+
 def build_shot_closeups(session_dir, only_made=None, raw_dirs=None,
-                        handedness="auto", limit=None, pose_stride=2):
+                        handedness="auto", limit=None, pose_stride=2,
+                        overlay_ideal=False):
     """Generate phase closeups for a session's shots. `only_made`: True = makes
     only, False = misses only, None = all. Returns a list of shot dicts (in
     session order) with per-phase image paths + metrics. Cached on disk."""
@@ -96,9 +146,12 @@ def build_shot_closeups(session_dir, only_made=None, raw_dirs=None,
     from .skeleton import _phase_frames, _PRE, _POST
 
     raw_dirs = raw_dirs or [os.path.join("data", "raw", "Hoops"),
+                            os.path.join("data", "raw", "Camera 1"),
                             os.path.join("data", "raw")]
     cdir = os.path.join(session_dir, "closeups")
     os.makedirs(cdir, exist_ok=True)
+    suffix = "_ovl" if overlay_ideal else ""
+    ideal = _load_ideal() if overlay_ideal else {}
     df = pd.read_csv(os.path.join(session_dir, "session_shots.csv"))
 
     from .curate import apply_excludes
@@ -129,7 +182,7 @@ def build_shot_closeups(session_dir, only_made=None, raw_dirs=None,
             s = by_idx.get(int(row["shot_in_clip"]))
             if s is None:
                 continue
-            paths = {p: os.path.join(cdir, f"shot_{sn}_{p}.jpg") for p in _PHASE_ORDER}
+            paths = {p: os.path.join(cdir, f"shot_{sn}_{p}{suffix}.jpg") for p in _PHASE_ORDER}
             need = [p for p in _PHASE_ORDER if not os.path.exists(paths[p])]
             if need:
                 lo = max(0, int(s.frames[0]) - _PRE)
@@ -156,7 +209,8 @@ def build_shot_closeups(session_dir, only_made=None, raw_dirs=None,
                         ok, frame = cap.read()
                         if not ok:
                             continue
-                        img = _draw_closeup(frame, poses[f], p)
+                        img = _draw_closeup(frame, poses[f], p,
+                                            ideal=ideal.get(p) if overlay_ideal else None)
                         if img is not None:
                             cv2.imwrite(paths[p], img, [cv2.IMWRITE_JPEG_QUALITY, 88])
                 finally:

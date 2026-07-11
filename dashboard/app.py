@@ -1026,12 +1026,18 @@ def view_film_room():
     if not sds:
         st.info("No sessions built yet."); return
     sd = st.selectbox("Session", sds, key="fr_sess", format_func=_session_label)
-    which = st.radio("Show", ["makes", "misses", "all"], horizontal=True, key="fr_which")
+    c1, c2 = st.columns([2, 3])
+    which = c1.radio("Show", ["makes", "misses", "all"], horizontal=True, key="fr_which")
     only = {"makes": True, "misses": False, "all": None}[which]
+    overlay = c2.toggle("Overlay ideal form (magenta = your ideal, green = this rep)",
+                        key="fr_overlay",
+                        help="warps your profile's ideal load/release/follow onto each "
+                             "rep so you can see where you fall short")
     from shotlab.closeups import build_shot_closeups, film_room_html
     with st.spinner("Building closeups (first time per session re-runs pose per "
                     "shot — slow; cached after)…"):
-        cl = build_shot_closeups(os.path.join(OUT_DIR, sd), only_made=only)
+        cl = build_shot_closeups(os.path.join(OUT_DIR, sd), only_made=only,
+                                 overlay_ideal=overlay)
     if not cl:
         st.info("No shots for that filter yet."); return
     import streamlit.components.v1 as components
