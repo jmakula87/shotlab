@@ -17,6 +17,7 @@ import os
 import sys
 
 import altair as alt
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -465,7 +466,7 @@ def view_session():
                 "`python build_session.py --clips \"data/raw/Hoops/*.mp4\" --pose`")
         return
     with st.sidebar:
-        sd = st.selectbox("Session", sdirs)
+        sd = st.selectbox("Session", sdirs, format_func=_session_label)
     d = os.path.join(OUT_DIR, sd)
     raw_df = pd.read_csv(os.path.join(d, "session_shots.csv"))
     if raw_df.empty:
@@ -1024,7 +1025,7 @@ def view_film_room():
     sds = session_dirs()
     if not sds:
         st.info("No sessions built yet."); return
-    sd = st.selectbox("Session", sds, key="fr_sess")
+    sd = st.selectbox("Session", sds, key="fr_sess", format_func=_session_label)
     which = st.radio("Show", ["makes", "misses", "all"], horizontal=True, key="fr_which")
     only = {"makes": True, "misses": False, "all": None}[which]
     from shotlab.closeups import build_shot_closeups, film_room_html
@@ -1057,7 +1058,7 @@ def view_3d():
                 "--weights runs/detect/ball_finetune/weights/best.pt --out "
                 "data/out/<name>_3d`")
         return
-    sd = st.selectbox("Session", dirs, key="a3d_sess")
+    sd = st.selectbox("Session", dirs, key="a3d_sess", format_func=_session_label)
     from shotlab.analysis3d import Analysis3D
     a = Analysis3D.load(os.path.join(OUT_DIR, sd, "analysis3d.json"))
 
@@ -1192,7 +1193,7 @@ def view_make_audit():
     sds = session_dirs()
     if not sds:
         st.info("No sessions built yet."); return
-    sd = st.selectbox("Session", sds, key="audit_sess")
+    sd = st.selectbox("Session", sds, key="audit_sess", format_func=_session_label)
     d = os.path.join(OUT_DIR, sd)
     df = pd.read_csv(os.path.join(d, "session_shots.csv"))
     shots = []
@@ -1328,12 +1329,173 @@ def view_make_audit():
                 "likely to be non-shots or wrong calls).")
 
 
+# ---------------------------------------------------------------- shot explorer
+import datetime as _dt
+import re as _re
+
+# numeric measurables offered as filters/sorts, with friendly labels
+_MEASURABLES = [
+    ("release_angle_deg", "Release angle °"), ("entry_angle_deg", "Entry angle °"),
+    ("apex_height_ft", "Apex height ft"), ("knee_bend_deg", "Knee angle ° (low=deep)"),
+    ("elbow_angle_at_release_deg", "Elbow at release °"),
+    ("follow_through_hold_s", "Follow-through s"),
+    ("balance_drift_px_per_ht", "Balance drift"), ("release_vs_apex_s", "Release vs apex s"),
+    ("tempo_dip_to_release_s", "Tempo s"), ("jump_height_ft", "Jump height ft"),
+    ("flare_deg", "Elbow flare °"),
+]
+
+
+def _session_date(name):
+    m = _re.search(r"(20\d\d)[-_]?(\d\d)[-_]?(\d\d)", name)
+    if m:
+        try:
+            return _dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            pass
+    m = _re.search(r"_(\d\d)(\d\d)(?:_|$)", name)      # session_0710 -> Jul 10
+    if m:
+        try:
+            return _dt.date(2026, int(m.group(1)), int(m.group(2)))
+        except ValueError:
+            pass
+    return None
+
+
+def _session_label(name):
+    d = _session_date(name)
+    if not d:
+        return name.replace("session_", "")
+    tag = name.replace("session_", "").replace("_", " ")
+    tag = _re.sub(r"\b\d{4}-\d\d-\d\d\b|\b\d{6}\b|\b\d{4}\b", "", tag)   # drop date/time digits
+    tag = _re.sub(r"\s+", " ", tag).strip()
+    base = f"{d.strftime('%b')} {d.day}, {d.year}"
+    return f"{base} · {tag}" if tag else base
+
+
+def _shots_sig():
+    parts = []
+    for sd in session_dirs():
+        for fn in ("session_shots.csv", "make_truth.json", "flare_by_shot.json"):
+            p = os.path.join(OUT_DIR, sd, fn)
+            if os.path.exists(p):
+                parts.append(os.path.getmtime(p))
+    return tuple(parts)
+
+
+@st.cache_data(show_spinner="loading shots…")
+def _all_shots(_sig):
+    rows = []
+    for sd in session_dirs():
+        d = os.path.join(OUT_DIR, sd)
+        try:
+            df = pd.read_csv(os.path.join(d, "session_shots.csv"))
+        except Exception:
+            continue
+        tp = os.path.join(d, "make_truth.json")
+        truth = json.load(open(tp, encoding="utf-8")) if os.path.exists(tp) else {}
+        fp = os.path.join(d, "flare_by_shot.json")
+        flare = json.load(open(fp, encoding="utf-8")) if os.path.exists(fp) else {}
+        dobj = _session_date(sd)
+        for _, r in df.iterrows():
+            key = f"{r['clip']}|{int(r['shot_in_clip'])}"
+            t = truth.get(key)
+            if t == "notshot":
+                continue                                   # drop verified non-shots
+            made = (t == "make") if t in ("make", "miss") else bool(r.get("made"))
+            stem = str(r["clip"]).replace(".mp4", "")
+            vid = os.path.join(OUT_DIR, stem, "shots", f"shot_{int(r['shot_in_clip'])}_h264.mp4")
+            row = {k: r.get(k) for k in df.columns}
+            row.update(session=sd, date_label=_session_label(sd),
+                       date=str(dobj) if dobj else "", outcome=("make" if made else "miss"),
+                       made=made, verified=(t in ("make", "miss")),
+                       flare_deg=flare.get(key), video=vid,
+                       has_video=os.path.exists(vid), key=key)
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def view_explore():
+    st.subheader("🔎 Shot Explorer — filter every shot by any measurable")
+    df = _all_shots(_shots_sig())
+    if df.empty:
+        st.info("No shots yet. Build a session with build_session.py."); return
+    metrics = [(k, lab) for k, lab in _MEASURABLES if k in df and df[k].notna().any()]
+    mkeys = [k for k, _ in metrics]
+
+    with st.sidebar:
+        st.markdown("### Filters")
+        dates = sorted(df["date_label"].unique(),
+                       key=lambda s: df[df["date_label"] == s]["date"].iloc[0], reverse=True)
+        sel = st.multiselect("Session (date)", dates, default=dates,
+                             format_func=lambda s: s)
+        outc = st.multiselect("Outcome", ["make", "miss"], default=["make", "miss"])
+        moves = st.multiselect("Movement into shot",
+                               sorted(df["movement_dir"].dropna().unique()))
+        zones = st.multiselect("Court zone", sorted(df["zone"].dropna().unique()))
+        only_verified = st.checkbox("Verified make/miss only", value=False,
+                                    help="only shots whose make/miss you confirmed in the audit")
+
+    f = df[df["date_label"].isin(sel) & df["outcome"].isin(outc)]
+    if moves:
+        f = f[f["movement_dir"].isin(moves)]
+    if zones:
+        f = f[f["zone"].isin(zones)]
+    if only_verified:
+        f = f[f["verified"]]
+
+    c1, c2, c3 = st.columns([2, 1, 2])
+    sort_lab = c1.selectbox("Sort by", [lab for _, lab in metrics],
+                            index=0 if metrics else None)
+    sort_key = dict((lab, k) for k, lab in metrics).get(sort_lab)
+    asc = c2.radio("Order", ["high→low", "low→high"], horizontal=False) == "low→high"
+    if sort_key and f[sort_key].notna().any():
+        lo, hi = float(np.nanmin(f[sort_key])), float(np.nanmax(f[sort_key]))
+        if hi > lo:
+            rng = c3.slider(f"{sort_lab} range", lo, hi, (lo, hi))
+            f = f[f[sort_key].between(*rng) | f[sort_key].isna()]
+        f = f.sort_values(sort_key, ascending=asc, na_position="last")
+    st.caption(f"**{len(f)}** shots match  ·  {int((f['outcome']=='make').sum())} makes / "
+               f"{int((f['outcome']=='miss').sum())} misses  ·  click a row to watch it")
+
+    show = ["date_label", "outcome", "movement_dir", "zone"] + mkeys
+    disp = f[show].rename(columns=dict(metrics, date_label="date", movement_dir="movement",
+                                       outcome="result"))
+    ev = st.dataframe(disp.round(2), hide_index=True, use_container_width=True,
+                      on_select="rerun", selection_mode="single-row", height=340)
+
+    picks = ev.selection.rows if ev and ev.selection else []
+    if not picks:
+        st.info("👆 Click any row to load that shot's video + measurables.")
+        return
+    row = f.iloc[picks[0]]
+    st.markdown(f"### {row['outcome'].upper()}  ·  {row['date_label']}  ·  "
+                f"shot {int(row['shot_in_clip'])}  ·  {row.get('zone','')}")
+    cv, ci = st.columns([3, 2])
+    with cv:
+        if row["has_video"]:
+            st.video(row["video"])
+        else:
+            st.warning("This session's shot clips aren't rendered. Run "
+                       "`python tools/render_shots.py` on its clips.")
+    with ci:
+        st.metric("Result", row["outcome"].upper(),
+                  "✓ verified" if row["verified"] else "tracker guess")
+        cols = st.columns(2)
+        for i, (k, lab) in enumerate(metrics):
+            v = row.get(k)
+            if pd.notna(v):
+                cols[i % 2].metric(lab, f"{v:.1f}")
+
+
 # ---------------------------------------------------------------- main
 st.title("🏀 ShotLab")
-mode = st.sidebar.radio("View", ["Per-clip", "Session analytics", "3D analysis",
+mode = st.sidebar.radio("View", ["Shot Explorer", "Session analytics", "3D analysis",
                                  "Make/miss audit", "Film room", "Shot review",
-                                 "Compare shots", "Compare sessions", "Progress"])
-if mode == "Per-clip":
+                                 "Per-clip", "Compare shots", "Compare sessions",
+                                 "Progress"])
+if mode == "Shot Explorer":
+    view_explore()
+elif mode == "Per-clip":
     view_clip()
 elif mode == "Session analytics":
     view_session()
