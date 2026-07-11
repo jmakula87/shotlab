@@ -1493,14 +1493,92 @@ def view_explore():
                 cols[i % 2].metric(lab, f"{v:.1f}")
 
 
+def _shot_detail(row, metrics):
+    """Video + all measurables for one selected shot (shared by Explorer/Scatter)."""
+    st.markdown(f"### {row['outcome'].upper()}  ·  {row['date_label']}  ·  "
+                f"shot {int(row['shot_in_clip'])}  ·  {row.get('zone','')}")
+    cv, ci = st.columns([3, 2])
+    with cv:
+        if row["has_video"]:
+            st.video(row["video"])
+        else:
+            st.warning("This session's shot clips aren't rendered "
+                       "(`python tools/render_shots.py`).")
+    with ci:
+        st.metric("Result", row["outcome"].upper(),
+                  "✓ verified" if row["verified"] else "tracker guess")
+        cols = st.columns(2)
+        for i, (k, lab) in enumerate(metrics):
+            v = row.get(k)
+            if pd.notna(v):
+                cols[i % 2].metric(lab, f"{v:.1f}")
+
+
+def view_scatter():
+    st.subheader("📈 Shot scatter — plot any measurable against another")
+    st.caption("Each dot is a shot, colored make/miss. Spot relationships, then "
+               "click a dot to watch that shot.")
+    df = _all_shots(_shots_sig())
+    if df.empty:
+        st.info("No shots yet."); return
+    metrics = [(k, lab) for k, lab in _MEASURABLES if k in df and df[k].notna().any()]
+    labs = [lab for _, lab in metrics]
+    k_of = dict((lab, k) for k, lab in metrics)
+
+    with st.sidebar:
+        st.markdown("### Axes & filters")
+        xlab = st.selectbox("X axis", labs, index=labs.index("Elbow flare °")
+                            if "Elbow flare °" in labs else 0)
+        ylab = st.selectbox("Y axis", labs, index=1 if len(labs) > 1 else 0)
+        dates = sorted(df["date_label"].unique(),
+                       key=lambda s: df[df["date_label"] == s]["date"].iloc[0], reverse=True)
+        sel = st.multiselect("Session (date)", dates, default=dates[:1] or dates)
+        vonly = st.checkbox("Verified make/miss only", value=True)
+    xk, yk = k_of[xlab], k_of[ylab]
+    f = df[df["date_label"].isin(sel)].copy()
+    if vonly:
+        f = f[f["verified"]]
+    f = f[f[xk].notna() & f[yk].notna()].reset_index(drop=True)
+    if f.empty:
+        st.info("No shots with both metrics for that filter (try more sessions, or "
+                "uncheck 'verified only')."); return
+
+    f["_i"] = f.index
+    ch = (alt.Chart(f).mark_circle(size=110, opacity=0.75)
+          .encode(x=alt.X(f"{xk}:Q", title=xlab, scale=alt.Scale(zero=False)),
+                  y=alt.Y(f"{yk}:Q", title=ylab, scale=alt.Scale(zero=False)),
+                  color=alt.Color("outcome:N", scale=alt.Scale(
+                      domain=["make", "miss"], range=["#2a9d4a", "#c0392b"]),
+                      legend=alt.Legend(title="result")),
+                  tooltip=["date_label", "outcome", alt.Tooltip(f"{xk}:Q", title=xlab),
+                           alt.Tooltip(f"{yk}:Q", title=ylab)])
+          .add_params(alt.selection_point(name="pt", fields=["_i"], on="click"))
+          .properties(height=430))
+    ev = st.altair_chart(ch, use_container_width=True, on_select="rerun", key="scatterchart")
+    # correlation readout
+    import numpy as _np
+    r = float(_np.corrcoef(f[xk], f[yk])[0, 1]) if len(f) > 2 else float("nan")
+    st.caption(f"{len(f)} shots · correlation {xlab} vs {ylab}: **r = {r:+.2f}** "
+               f"(near 0 = unrelated). Click a dot to watch.")
+
+    sel_pts = (ev.selection.get("pt") if ev and ev.selection else None) or []
+    idxs = [p.get("_i") for p in sel_pts if isinstance(p, dict) and "_i" in p]
+    if idxs:
+        _shot_detail(f.iloc[int(idxs[0])], metrics)
+    else:
+        st.info("👆 Click a dot to load that shot.")
+
+
 # ---------------------------------------------------------------- main
 st.title("🏀 ShotLab")
-mode = st.sidebar.radio("View", ["Shot Explorer", "Session analytics", "3D analysis",
-                                 "Make/miss audit", "Film room", "Shot review",
-                                 "Per-clip", "Compare shots", "Compare sessions",
-                                 "Progress"])
+mode = st.sidebar.radio("View", ["Shot Explorer", "Shot scatter", "Session analytics",
+                                 "3D analysis", "Make/miss audit", "Film room",
+                                 "Shot review", "Per-clip", "Compare shots",
+                                 "Compare sessions", "Progress"])
 if mode == "Shot Explorer":
     view_explore()
+elif mode == "Shot scatter":
+    view_scatter()
 elif mode == "Per-clip":
     view_clip()
 elif mode == "Session analytics":
