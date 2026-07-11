@@ -32,6 +32,12 @@ def _pdf_bytes(d, _mtime):
     from export_pdf import build_session_pdf
     return build_session_pdf(d)
 
+
+@st.cache_data(show_spinner="building recap…")
+def _recap_bytes(d, _mtime, flare_path):
+    from session_recap_pdf import build
+    return build(d, flare_path)
+
 st.set_page_config(page_title="ShotLab", layout="wide")
 OUT_DIR = os.path.join(ROOT, "data", "out")
 
@@ -362,15 +368,25 @@ def _export_panel(d, sd):
     """Download a PDF / regenerate the HTML report for this session."""
     with st.container(border=True):
         st.subheader("📄 Export")
-        c = st.columns(2)
+        c = st.columns(3)
+        csv = os.path.join(d, "session_shots.csv")
         try:
-            csv = os.path.join(d, "session_shots.csv")
             pdf = _pdf_bytes(d, os.path.getmtime(csv))
             c[0].download_button("⬇️ PDF report", pdf, file_name=f"{sd}_report.pdf",
                                  mime="application/pdf", width="stretch")
         except Exception as e:                      # keep the page alive on any error
             c[0].caption(f"PDF unavailable: {e}")
-        if c[1].button("Rebuild HTML report", width="stretch"):
+        try:                                        # rich recap: stats + drivers + relationships
+            flarep = os.path.join(OUT_DIR, sd + "_3d", "analysis3d.json")
+            recap = _recap_bytes(d, os.path.getmtime(csv),
+                                 flarep if os.path.exists(flarep) else None)
+            c[1].download_button("⬇️ Rich recap", recap, file_name=f"{sd}_recap.pdf",
+                                 mime="application/pdf", width="stretch",
+                                 help="all stats + what tracks with makes + cross-metric "
+                                      "relationships (arc vs leg load / direction) + flare")
+        except Exception as e:
+            c[1].caption(f"recap unavailable: {e}")
+        if c[2].button("Rebuild HTML report", width="stretch"):
             try:
                 from export_report import main as export_html
                 export_html([d])
