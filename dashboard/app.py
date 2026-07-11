@@ -1063,6 +1063,46 @@ def view_3d():
             rule = alt.Chart(pd.DataFrame({"x": [fl["median_deg"]]})).mark_rule(
                 color="#d62728", size=2).encode(x="x:Q")
             st.altair_chart(chart + rule, use_container_width=True)
+
+        # ---- does flare track make/miss? ----
+        mm = (a.flare or {}).get("make_vs_miss")
+        if mm and mm.get("flare_make_median") is not None and mm.get("flare_miss_median") is not None:
+            st.markdown("#### Does flare track your makes?")
+            d, p = mm.get("cohens_d"), mm.get("p_perm")
+            k1, k2, k3 = st.columns(3)
+            k1.metric("Flare on MAKES", f"{mm['flare_make_median']:+.1f}°", f"{mm['n_make']} shots")
+            k2.metric("Flare on MISSES", f"{mm['flare_miss_median']:+.1f}°", f"{mm['n_miss']} shots")
+            gap = mm["flare_make_median"] - mm["flare_miss_median"]
+            k3.metric("Difference", f"{gap:+.1f}°",
+                      f"d={d}" if d is not None else "n/a")
+            if d is not None and abs(d) >= 0.4 and (p is None or p < 0.1):
+                st.info(f"Makes and misses **do** separate on flare "
+                        f"(d={d}, p={p}) — but this is exploratory: flare is "
+                        f"monocular/session-relative and make/miss is low-confidence, "
+                        f"cross-mapped between the two cameras by audio sync.")
+            else:
+                st.caption(f"No clear separation (d={d}, p={p}). On this sample your "
+                           f"flare doesn't distinguish makes from misses — it's fairly "
+                           f"**consistent** either way, so the arc (release/entry) is the "
+                           f"stronger make-driver here. Exploratory; low confidence.")
+
+        # ---- stills: SEE the flare ----
+        stills = [s for s in (a.flare.get("shots") or []) if s.get("still")]
+        if stills:
+            st.markdown("#### See it — release stills (elbow winging off the shoulder→wrist line)")
+            which = st.radio("Show", ["makes", "misses", "all"], horizontal=True, key="fl_still")
+            pick = [s for s in stills
+                    if which == "all" or (which == "makes" and s.get("made"))
+                    or (which == "misses" and s.get("made") is False)]
+            pick = sorted(pick, key=lambda s: abs(s.get("flare_deg", 0)), reverse=True)[:9]
+            base = os.path.join(OUT_DIR, sd)
+            cols = st.columns(3)
+            for i, s in enumerate(pick):
+                fp = os.path.join(base, s["still"])
+                if os.path.exists(fp):
+                    cols[i % 3].image(fp, caption=f"{s['flare_deg']:+.0f}° · "
+                                      f"{'make' if s.get('made') else 'miss' if s.get('made') is False else '?'}",
+                                      use_container_width=True)
     else:
         st.info("No flare computed (needs the close body-camera clip).")
 
