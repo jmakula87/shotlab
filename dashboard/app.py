@@ -1197,6 +1197,7 @@ def view_make_audit():
         shots.append({"clip": str(r["clip"]), "shot": int(r["shot_in_clip"]),
                       "made": bool(r["made"]) if pd.notna(r["made"]) else None,
                       "conf": r.get("make_conf"), "vid": vid,
+                      "form": r.get("shot_form", ""),
                       "key": f"{r['clip']}|{int(r['shot_in_clip'])}"})
     tpath = os.path.join(d, "make_truth.json")
     truth = json.load(open(tpath, encoding="utf-8")) if os.path.exists(tpath) else {}
@@ -1232,53 +1233,58 @@ def view_make_audit():
     with ci:
         pred = "MAKE" if s["made"] else ("miss" if s["made"] is False else "?")
         st.metric(f"Shot {s['shot']} · {s['clip'][-16:]}", f"predicted: {pred}",
-                  f"confidence: {s['conf']}")
-        opts = ["make", "miss", "can't tell"]
+                  f"confidence: {s['conf']}  ·  {s.get('form','')}")
+        # 'not a shot' is the key addition: the detector fires on dribbles/retrieves
+        labels = ["made", "missed", "NOT a shot (dribble/retrieve)", "can't tell"]
+        vals = ["make", "miss", "notshot", "unsure"]
         prev_truth = truth.get(s["key"])
-        default = opts.index(prev_truth) if prev_truth in opts else \
-            (0 if s["made"] else 1 if s["made"] is False else 2)
-        choice = st.radio("What actually happened?", opts, index=default,
-                          key=f"truth_{s['key']}")
+        default = vals.index(prev_truth) if prev_truth in vals else \
+            (0 if s["made"] else 1 if s["made"] is False else 3)
+        pick = st.radio("What actually happened?", labels, index=default,
+                        key=f"truth_{s['key']}")
+        choice = vals[labels.index(pick)]
         if st.button("💾 Save & next", key="audit_save", type="primary"):
             truth[s["key"]] = choice
             with open(tpath, "w", encoding="utf-8") as f:
                 json.dump(truth, f, indent=2)
             st.session_state["audit_idx"] = (idx + 1) % n; st.rerun()
         if prev_truth:
-            st.caption(f"your last answer: **{prev_truth}**"
-                       + ("  ✓ matches tracker" if (prev_truth == "make") == bool(s["made"])
-                          else "  ✗ tracker was wrong" if prev_truth in ("make", "miss") else ""))
+            tag = {"make": "made", "miss": "missed", "notshot": "NOT a shot",
+                   "unsure": "unsure"}.get(prev_truth, prev_truth)
+            st.caption(f"your last answer: **{tag}**")
 
     # ---- scoreboard ----
-    rev = {k: v for k, v in truth.items() if v in ("make", "miss") and k in by_key}
+    reviewed = {k: v for k, v in truth.items() if v in ("make", "miss", "notshot") and k in by_key}
     st.divider()
-    if rev:
-        correct = sum((v == "make") == bool(by_key[k]["made"]) for k, v in rev.items())
-        acc = 100 * correct / len(rev)
-        cmk = sum(1 for s in shots
-                  if (truth.get(s["key"]) if truth.get(s["key"]) in ("make", "miss")
-                      else ("make" if s["made"] else "miss")) == "make")
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Reviewed", f"{len(rev)}/{len(shots)}")
-        m2.metric("Tracker accuracy", f"{acc:.0f}%", f"{correct}/{len(rev)} correct")
-        m3.metric("Corrected make%", f"{100*cmk/len(shots):.0f}%",
-                  f"was {100*df['made'].mean():.0f}%")
-        # break accuracy down by the tracker's own confidence
-        rowss = []
-        for cf in ["medium", "low", "na"]:
-            sub = {k: v for k, v in rev.items() if by_key[k]["conf"] == cf}
-            if sub:
-                cc = sum((v == "make") == bool(by_key[k]["made"]) for k, v in sub.items())
-                rowss.append([cf, len(sub), f"{100*cc/len(sub):.0f}%"])
-        if rowss:
-            st.caption("Accuracy by the tracker's own confidence label:")
-            st.dataframe(pd.DataFrame(rowss, columns=["tracker conf", "reviewed",
-                         "accuracy"]), hide_index=True)
-        st.caption("Once you've reviewed enough, I can recompute make% and the "
-                   "make-driver correlations from your corrected labels.")
+    if reviewed:
+        nnot = sum(v == "notshot" for v in reviewed.values())
+        real = {k: v for k, v in reviewed.items() if v in ("make", "miss")}
+        correct = sum((v == "make") == bool(by_key[k]["made"]) for k, v in real.items())
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Reviewed", f"{len(reviewed)}/{len(shots)}")
+        m2.metric("NOT real shots", f"{nnot}",
+                  f"{100*nnot/len(reviewed):.0f}% of reviewed", delta_color="inverse")
+        if real:
+            m3.metric("Make/miss accuracy", f"{100*correct/len(real):.0f}%",
+                      f"{correct}/{len(real)} on real shots")
+            nmk = sum(v == "make" for v in real.values())
+            m4.metric("Real make%", f"{100*nmk/len(real):.0f}%",
+                      f"was {100*df['made'].mean():.0f}% (uncleaned)")
+        # projected clean counts
+        if nnot:
+            proj = len(shots) * (1 - nnot / len(reviewed))
+            st.warning(f"⚠ At this rate, ~{100*nnot/len(reviewed):.0f}% of the "
+                       f"'{len(shots)} shots' are actually dribbles/retrieves — the "
+                       f"real session is closer to **~{proj:.0f} shots**. Every stat, "
+                       f"make%, and driver in the recap is contaminated until these "
+                       f"are removed.")
+        st.caption("When you've reviewed enough (esp. the low-confidence ones), tell "
+                   "me — I'll drop the non-shots, recompute make% + drivers, and "
+                   "regenerate the recap on the clean set. Your answers are saved to "
+                   "make_truth.json so you can stop and resume.")
     else:
         st.info("No shots reviewed yet — start with the low-confidence ones (most "
-                "likely to be wrong).")
+                "likely to be non-shots or wrong calls).")
 
 
 # ---------------------------------------------------------------- main
