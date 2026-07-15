@@ -16,6 +16,10 @@ ultralytics>=8.3
 mediapipe>=0.10.30
 # Phase 3 spin uses only opencv (already above).
 
+# Visual make/miss model (shotlab/make_visual.py + tools/train_make_model.py).
+scikit-learn>=1.5
+joblib>=1.4
+
 # Voice tagging (optional): offline speech-to-text for tools/voicetag_session.py.
 # Also download a small model dir from https://alphacephei.com/vosk/models
 # (~50MB) and pass it via --model. Only needed if you narrate workouts.

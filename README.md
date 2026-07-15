@@ -74,6 +74,12 @@ data/out/session --model <vosk-model>` transcribes your audio and writes
 `felt_good` into the session, which `export_profile` then builds your ideal
 from. Needs the optional `vosk` dependency + a small offline model.
 
+**Privacy note (intentional):** the whole `app/` directory — including
+`app/profile.json` — is published to public GitHub Pages so the phone app can
+load it. The profile contains derived form metrics and normalized skeleton
+templates (angles/proportions), no video, images, or location. If that ever
+feels like too much, keep the profile out of `app/` and sideload it instead.
+
 ---
 
 ## Model choices (and why)
@@ -128,6 +134,6 @@ tools/                     dataset build/train, profile export, reports, calibra
 
 ## Tests
 ```bash
-python run_tests.py                 # 16 Python test files
-node tests/test_say.mjs             # (+ analyze / voice / live / feelcsv JS suites)
+python run_tests.py     # every tests/test_*.py + tests/test_*.mjs (needs node)
 ```
+CI runs the same suite on every push (`.github/workflows/tests.yml`).
