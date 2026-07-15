@@ -3,7 +3,9 @@
 > The canonical "everything" doc. README.md is for usage; this is the decision
 > log, filming guide, roadmap, and enhancement backlog. Update it as we go.
 
-Last updated: 2026-07-02 · Location: `C:\Users\jmaku\Desktop\ShotLab`
+Last updated: 2026-07-15 · Location: `C:\Users\jmaku\Desktop\ShotLab`
+(⚠️ the big 07-10/07-11 S8/3D/audit sessions are in git log but not yet
+written up here — this doc is current through 07-02 plus the 07-15 entry.)
 
 ---
 
@@ -193,6 +195,39 @@ re-exported (personal elbow ideal 117°). Full suite 16/16 + JS green.
    true early flight, not a regression. tests/test_profile 7/7.
 7. Smaller ideas left: goal-progress tracking, report emailing, ingest the app's
    feel-CSV into the desktop records (join on session/shot time).
+
+---
+
+## Session log 2026-07-15 — external-audit fixes (4 commits, all verified)
+An independent read-only audit flagged 3 correctness risks + hygiene; all
+claims verified against the code before fixing (severity re-ranked: VFR was
+the real data-corruptor; cache/chunk were real but narrower). Fixes:
+1. **VFR timing (the big one):** abs_time + the audio make/miss window now use
+   real container PTS (`session._real_time`, `video_io.frame_times_cached` —
+   cached one-grab()-pass per clip, keyed on video content). Frame/nominal-fps
+   drifted by whole seconds on long VFR clips → the swish/clank window could
+   miss the rim event entirely; audio is default-on and feeds make-drivers.
+   Slow-mo scaled playback→capture time; frame/fps fallback preserved.
+   ⚠️ **Every audio-fused make/miss label built before v20 is suspect on
+   long clips — rebuild sessions before trusting make-driver stats.**
+   (Local frame-diff metrics — tempo, follow-through — still use nominal fps;
+   bounded ~10% local error, accepted.)
+2. **Cache identity:** record sig now carries video content (size:mtime),
+   effective calibration ('auto' or values), and weights CONTENT (a retrain
+   re-exported to the same best_openvino_model path was invisible). Track
+   cache params carry video id too. 3rd instance of this footgun class —
+   content identity, not naming. All pre-v21 caches invalidate (intended).
+3. **Chunk seams:** detection windows now read `_CHUNK_OVERLAP`=600 frames
+   past their end + frame-range seam dedup (fuller arc wins). Disjoint windows
+   silently lost ~0.5-1% of shots (launch in one window, rim event in the
+   next) and could emit truncated straddlers with wrong release metrics.
+4. **Hygiene:** scikit-learn/joblib into requirements (+ pyyaml into lock);
+   `run_tests.py` now runs the 6 node suites too (33 files total);
+   `.github/workflows/tests.yml` runs the suite on every push (Pages was
+   deploying review-free); README test docs de-staled; explicit note that
+   publishing app/profile.json to Pages is intentional.
+_CACHE_VERSION 19→21. Suite 33/33 (27 py + 6 mjs). First push will exercise
+the new CI — check it goes green (mediapipe/ultralytics wheels on ubuntu).
 
 ---
 
