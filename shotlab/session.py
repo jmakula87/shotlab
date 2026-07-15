@@ -99,8 +99,8 @@ def _cache_path(video_path: str) -> str:
 # Bump when the record-building LOGIC changes in a way the schema/params don't
 # capture (e.g. a metric formula). The ShotRecord field set is folded in
 # automatically, so adding/removing a record field invalidates caches on its own.
-_CACHE_VERSION = 19   # v19: final-sweep fixes -- make/miss window bounded by TIME
-                      #      not samples, apex_above_rim from inliers, movement bh
+_CACHE_VERSION = 20   # v20: VFR fix -- abs_time + audio rim window from real
+                      #      container PTS, not frame/nominal-fps
 # NOTE: is_real is DETECTION-derived (fit/frames/rim), not pose -- ideally it'd be
 # recomputed at load time so a threshold tweak doesn't force a pose re-run. Deferred
 # (needs a full Calibration, not fully reconstructable from the detection cache).
@@ -121,9 +121,28 @@ def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
 
+def _real_time(frame, times, info) -> float:
+    """Real (capture-time) seconds of `frame` since clip start.
+
+    Uses the container's per-frame PTS when available: these phones record
+    VARIABLE frame rate (a Pixel clip measured 30fps then 24fps against a
+    nominal 27), so frame/nominal-fps drifts by whole seconds across a long
+    clip -- enough to point the audio make/miss window at silence and skew the
+    session timeline (2026-07-15 audit). PTS measure PLAYBACK time, so slow-mo
+    files (stored at 30fps playback) are scaled back to capture time -- audio
+    and wall clock both run in real time. Falls back to frame/fps when no
+    usable PTS exist."""
+    if times:
+        t = times.get(int(frame))
+        if t is not None:
+            cfps = getattr(info, "container_fps", 0.0) or info.fps
+            return float(t) * (cfps / info.fps) if info.fps else float(t)
+    return frame / info.fps
+
+
 def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
                         do_spin, with_pose, handedness, audio=None,
-                        shooter_height_ft=None) -> list[ShotRecord]:
+                        shooter_height_ft=None, times=None) -> list[ShotRecord]:
     """Build ShotRecords for a set of shots (pose + spin + make + zone). Shared by
     the whole-clip pass and each window of the long-clip chunker; frame indices in
     `shots`/`track` are absolute, so the timestamps come out right either way."""
@@ -153,7 +172,7 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
         real_ok, real_note = shot_quality(s, calib, info.fps)
         # release time = first tracked frame of the flight
         rel_frame = int(s.frames[0])
-        t_off = rel_frame / info.fps
+        t_off = _real_time(rel_frame, times, info)
         abs_t = (clip_start + _dt.timedelta(seconds=t_off)) if clip_start else None
 
         rec = ShotRecord(
@@ -215,7 +234,7 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
             # seconds after the real rim event, so the swish/clank window missed it
             # (audit D8). Fall back to flight end if closest approach is unknown.
             rim_f = mk.rim_frame if mk.rim_frame is not None else int(s.frames[-1])
-            rim_t = float(rim_f) / info.fps
+            rim_t = _real_time(rim_f, times, info)
             hint = audio_make_hint(audio[0], audio[1], rim_t)
             made, mconf = fuse_make(mk.made, mk.confidence, hint)
         rec.made, rec.make_conf = made, mconf
@@ -230,7 +249,8 @@ def _chunk_cache_path(video_path: str, start: int) -> str:
 
 def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
                      stride, chunk_frames, do_spin, with_pose, handedness,
-                     use_cache, sig, audio=None, shooter_height_ft=None):
+                     use_cache, sig, audio=None, shooter_height_ft=None,
+                     times=None):
     """Process a long clip in absolute frame WINDOWS so each window fits the
     background-job time cap and is cached on its own -- a kill resumes at the next
     window instead of re-detecting from frame 0.
@@ -265,7 +285,8 @@ def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
                                        clip_start, do_spin=do_spin,
                                        with_pose=with_pose, handedness=handedness,
                                        audio=audio,
-                                       shooter_height_ft=shooter_height_ft)
+                                       shooter_height_ft=shooter_height_ft,
+                                       times=times)
             os.makedirs(os.path.dirname(ccache), exist_ok=True)
             with open(ccache, "w", encoding="utf-8") as f:
                 json.dump({"sig": sig,
@@ -339,6 +360,11 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
 
     info = probe(video_path)
     clip_start = parse_clip_time(video_path)
+    # real per-frame PTS: these phones record VFR, so frame/nominal-fps drifts
+    # by seconds over a long clip (see _real_time). One cached grab() pass;
+    # None (no usable PTS) -> the frame/fps fallback.
+    from .video_io import frame_times_cached
+    times = frame_times_cached(video_path)
     # auto-stride: detect at ~40 effective fps (30fps->1, 120fps->3), and thin
     # very long clips further so a single clip fits the background-job time cap.
     if stride == "auto":
@@ -357,7 +383,7 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
             weights=weights or "yolo11n.pt", imgsz=imgsz, stride=stride,
             chunk_frames=int(chunk_frames), do_spin=do_spin, with_pose=with_pose,
             handedness=handedness, use_cache=use_cache, sig=sig, audio=audio,
-            shooter_height_ft=shooter_height_ft)
+            shooter_height_ft=shooter_height_ft, times=times)
         os.makedirs(os.path.dirname(cache), exist_ok=True)
         with open(cache, "w", encoding="utf-8") as f:
             json.dump({"sig": sig, "records": [r.row() for r in records]}, f, indent=2)
@@ -378,7 +404,8 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
     records = _records_from_shots(shots, track, video_path, calib, info,
                                   clip_start, do_spin=do_spin,
                                   with_pose=with_pose, handedness=handedness,
-                                  audio=audio, shooter_height_ft=shooter_height_ft)
+                                  audio=audio, shooter_height_ft=shooter_height_ft,
+                                  times=times)
 
     os.makedirs(os.path.dirname(cache), exist_ok=True)
     with open(cache, "w", encoding="utf-8") as f:

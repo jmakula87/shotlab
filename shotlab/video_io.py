@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from typing import Iterator
@@ -139,6 +140,46 @@ def frame_times(path: str, start: int = 0, stop: int | None = None) -> dict[int,
     finally:
         cap.release()
     return out
+
+
+def video_id(path: str) -> str:
+    """Content identity of a video file for cache signatures: size + mtime.
+    One stat() -- catches an in-place re-trim/re-transcode/overwrite that a
+    basename-keyed cache can't see. Missing file -> 'absent' (stable key)."""
+    try:
+        st = os.stat(path)
+        return f"{st.st_size}:{int(st.st_mtime)}"
+    except OSError:
+        return "absent"
+
+
+def frame_times_cached(path: str, out_dir: str = os.path.join("data", "out")
+                       ) -> dict[int, float] | None:
+    """`frame_times()` with a JSON cache next to the clip's other caches, keyed
+    on the video's content identity (the PTS scan is one grab() pass -- minutes
+    on a long clip -- and never changes for the same file). Returns None when
+    the container yields no usable PTS (all-zero / non-increasing), so callers
+    fall back to frame/fps; that verdict is cached too."""
+    stem = os.path.splitext(os.path.basename(path))[0]
+    cpath = os.path.join(out_dir, stem, f"{stem}_pts.json")
+    vid = video_id(path)
+    if os.path.exists(cpath):
+        try:
+            with open(cpath, encoding="utf-8") as f:
+                data = json.load(f)
+            if data.get("video") == vid:
+                ts = data["times"]
+                return {i: float(t) for i, t in enumerate(ts)} if ts else None
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            pass                       # corrupt/old cache -> rescan
+    times = frame_times(path)
+    vals = [times[k] for k in sorted(times)]      # frames scan in order from 0
+    usable = len(vals) >= 2 and vals[-1] > vals[0] > -1e-9 and max(vals) > 0
+    os.makedirs(os.path.dirname(cpath), exist_ok=True)
+    with open(cpath, "w", encoding="utf-8") as f:
+        json.dump({"video": vid,
+                   "times": [round(v, 4) for v in vals] if usable else []}, f)
+    return times if usable else None
 
 
 def is_variable_fps(path: str, tol: float = 0.15) -> tuple[bool, float]:

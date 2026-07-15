@@ -81,6 +81,68 @@ def test_records_populate_new_fields_without_pose():
     assert "shot_form" in row and "shot_setup" in row
 
 
+def test_real_time_uses_pts_and_falls_back():
+    from shotlab.session import _real_time
+    info = types.SimpleNamespace(fps=30.0, container_fps=30.0)
+    # no PTS map -> the old frame/fps behavior, exactly
+    assert _real_time(60, None, info) == 60 / 30.0
+    # a VFR clip: PTS say frame 60 is at 2.5s, not the nominal 2.0s
+    times = {60: 2.5}
+    assert _real_time(60, times, info) == 2.5
+    # frame missing from the map -> fallback, not a crash
+    assert _real_time(61, times, info) == 61 / 30.0
+    # slow-mo: PTS measure PLAYBACK time (stored 30fps); real capture time is
+    # scaled by container/capture -- 4s of playback = 1s of real 120fps capture
+    slomo = types.SimpleNamespace(fps=120.0, container_fps=30.0)
+    assert abs(_real_time(120, {120: 4.0}, slomo) - 1.0) < 1e-9
+    # info without container_fps (older callers/tests) -> scale of 1
+    bare = types.SimpleNamespace(fps=30.0)
+    assert _real_time(10, {10: 0.5}, bare) == 0.5
+
+
+def test_abs_time_and_audio_window_use_pts():
+    """The VFR fix end-to-end: abs_time comes from the PTS map, and the audio
+    make/miss window is timed on the PTS rim moment (not frame/nominal-fps)."""
+    import datetime as dt
+    shot, track, calib = _make_shot_and_track()
+    info = types.SimpleNamespace(fps=30.0, container_fps=30.0)
+    # PTS: the clip actually ran at 20fps against a nominal 30 -- by the rim
+    # frame the true time is ~1s later than frame/nominal-fps believes, which
+    # is beyond the audio window's +0.7s reach (the real failure mode).
+    times = {f: f / 20.0 for f in range(0, 80)}
+    start = dt.datetime(2026, 7, 15, 18, 0, 0)
+    recs = _records_from_shots([shot], track, "no_video.mp4", calib, info,
+                               clip_start=start, do_spin=False, with_pose=False,
+                               handedness="right", times=times)
+    t_off = (dt.datetime.fromisoformat(recs[0].abs_time) - start).total_seconds()
+    assert abs(t_off - 40 / 20.0) < 1e-6, t_off      # PTS time, not 40/30
+
+    # audio window: a loud clang placed at the PTS rim time (not the nominal
+    # time) must be found -> fused verdict flips the soft visual call to LOW
+    # conf. With frame/fps timing the window would sit ~0.5s early at rim
+    # frame ~59 -- put the clang beyond the window's +0.7s reach of that spot.
+    sr = 8000
+    n = sr * 6
+    quiet = np.random.default_rng(0).normal(0, 0.01, n)
+    rim_frame = 59                                   # last flight frame region
+    t_pts = rim_frame / 20.0                         # ~2.95s; nominal ~1.97s
+    clang = quiet.copy()
+    lo = int(t_pts * sr)
+    clang[lo:lo + sr // 10] += 0.9                   # sharp loud burst at PTS time
+    recs_pts = _records_from_shots(
+        [shot], track, "no_video.mp4", calib, info, clip_start=start,
+        do_spin=False, with_pose=False, handedness="right",
+        audio=(clang, sr), times=times)
+    from shotlab.audio import audio_make_hint
+    hint_at_pts = audio_make_hint(clang, sr, t_pts)
+    hint_at_nominal = audio_make_hint(clang, sr, rim_frame / 30.0)
+    # the burst is audible at the PTS time and NOT at the nominal time --
+    # i.e. the timing choice changes the verdict, and we now use the PTS one
+    assert hint_at_pts["made"] is False, hint_at_pts
+    assert hint_at_nominal["made"] is not False, hint_at_nominal
+    assert recs_pts[0].made is not None
+
+
 def _sig(**over):
     base = dict(detector_name="yolo", weights="best_openvino_model", imgsz=640,
                 stride="auto", max_frames=None, with_pose=True, with_spin="auto",
