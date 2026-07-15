@@ -226,8 +226,24 @@ the real data-corruptor; cache/chunk were real but narrower). Fixes:
    `.github/workflows/tests.yml` runs the suite on every push (Pages was
    deploying review-free); README test docs de-staled; explicit note that
    publishing app/profile.json to Pages is intentional.
-_CACHE_VERSION 19→21. Suite 33/33 (27 py + 6 mjs). First push will exercise
-the new CI — check it goes green (mediapipe/ultralytics wheels on ubuntu).
+_CACHE_VERSION 19→21. Suite 33/33 (27 py + 6 mjs). CI green on first run
+(only annotation: bump checkout/setup-* action versions sometime).
+
+**v21 REBUILD EXECUTED same day (both sessions, ~37 min total, log
+`data/out/rebuild_v21.log`):** 0703 114→120 raw shots, 0710 91→92. New
+detections are borderline candidates flipping in near the conf threshold
+(env drift vs July inference, NOT the seam fix — none sat at frame 7000) —
+mix of junk (auto-flagged) + 2 plausible real jumpers. **Labels carried over
+via NEW `tools/remap_shot_keys.py`** (frame-range overlap matching; snapshot
+first: `shot_map_pre_v21.json` + `session_shots_pre_v21.csv` per session):
+0710 make_truth 91/91 remapped (5 renumbered in warmup clip); 0703 exclude
+remapped (28 renumbered, 1 old borderline shot vanished). Downstream regen:
+make_pred (92 preds, 100% in-sample agreement w/ truth), flare_by_shot (80
+shots, same sync offsets), 0710 recap PDF (truth), 0703 report.html.
+**Corrected 0703 numbers (VFR-fixed audio + right excludes): make% 36→40.2%
+(37/92), fatigue trend now 32%→49% second half — the old fade story
+REVERSED; treat with the usual heuristic-label skepticism.** TO LABEL in the
+audit view: 0710 warmup-clip shot 20 + 0703's 7 new (mostly junk-flagged).
 
 ---
 
