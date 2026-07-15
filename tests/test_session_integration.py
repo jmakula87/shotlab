@@ -143,6 +143,52 @@ def test_abs_time_and_audio_window_use_pts():
     assert recs_pts[0].made is not None
 
 
+def _seam_shot(f0, f1):
+    """A minimal Shot spanning frames [f0, f1] (fit geometry irrelevant to the
+    seam-dedup logic under test)."""
+    fr = np.arange(f0, f1 + 1)
+    xs = np.linspace(300, 900, len(fr))
+    t = np.linspace(0, 1, len(fr))
+    ys = 500 - (1200 * t - 1200 * t**2) * 0.8
+    fit = fit_parabola_ransac(xs, ys)
+    return Shot(index=1, frames=fr, xs=xs, ys=ys, radii=np.full(len(fr), 9.0),
+                fit=fit, meta={})
+
+
+def test_chunk_windows_overlap_past_their_end():
+    from shotlab.session import _windows, _CHUNK_OVERLAP
+    win = _windows(21000, 7000)
+    # ownership spans stay disjoint + exhaustive (cache keys/resume unchanged)
+    assert [(w0, w1) for w0, w1, _ in win] == [(0, 7000), (7000, 14000),
+                                               (14000, 21000)]
+    # ...but each window DETECTS past its end, far enough to hold a whole shot
+    assert win[0][2] == 7000 + _CHUNK_OVERLAP
+    assert win[1][2] == 14000 + _CHUNK_OVERLAP
+    assert win[2][2] == 21000                    # clamped at the clip end
+    # short clip: single window, no overshoot
+    assert _windows(5000, 7000) == [(0, 5000, 5000)]
+
+
+def test_seam_dedup_keeps_one_full_arc():
+    """A shot straddling the 7000-frame seam: the first window (detecting to
+    7000+overlap) sees the full arc; the second window starts mid-flight and
+    sees a truncated tail. Exactly one shot must survive -- the full one --
+    and disjoint neighbors must pass through untouched."""
+    from shotlab.session import _merge_seam_pairs
+    before = _seam_shot(6800, 6860)              # a normal shot, window 1 only
+    full = _seam_shot(6950, 7010)                # straddles the seam, window 1
+    dup = _seam_shot(7000, 7010)                 # window 2's truncated view
+    after = _seam_shot(7300, 7360)               # a normal shot, window 2 only
+    pairs = _merge_seam_pairs([], [("r_before", before), ("r_full", full)])
+    pairs = _merge_seam_pairs(pairs, [("r_dup", dup), ("r_after", after)])
+    assert [r for r, _ in pairs] == ["r_before", "r_full", "r_after"]
+    # order independence at the seam: if the truncated view lands first, the
+    # fuller arc still wins (records + shots stay paired)
+    pairs2 = _merge_seam_pairs([], [("r_dup", dup)])
+    pairs2 = _merge_seam_pairs(pairs2, [("r_full", full)])
+    assert [r for r, _ in pairs2] == ["r_full"]
+
+
 def _sig(**over):
     base = dict(detector_name="yolo", weights="best_openvino_model", imgsz=640,
                 stride="auto", max_frames=None, with_pose=True, with_spin="auto",

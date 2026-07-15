@@ -99,8 +99,10 @@ def _cache_path(video_path: str) -> str:
 # Bump when the record-building LOGIC changes in a way the schema/params don't
 # capture (e.g. a metric formula). The ShotRecord field set is folded in
 # automatically, so adding/removing a record field invalidates caches on its own.
-_CACHE_VERSION = 20   # v20: VFR fix -- abs_time + audio rim window from real
+_CACHE_VERSION = 21   # v20: VFR fix -- abs_time + audio rim window from real
                       #      container PTS, not frame/nominal-fps
+                      # v21: chunk windows detect `_CHUNK_OVERLAP` past their
+                      #      end + seam dedup (boundary shots were lost)
 # NOTE: is_real is DETECTION-derived (fit/frames/rim), not pose -- ideally it'd be
 # recomputed at load time so a threshold tweak doesn't force a pose re-run. Deferred
 # (needs a full Calibration, not fully reconstructable from the detection cache).
@@ -257,6 +259,52 @@ def _chunk_cache_path(video_path: str, start: int) -> str:
     return os.path.join("data", "out", stem, f"{stem}_chunk_{start}.json")
 
 
+# Frames each detection window reads PAST its end. Disjoint windows silently
+# LOSE a shot whose launch sits at the end of one window and rim event at the
+# start of the next -- neither window sees the whole arc (2026-07-15 audit,
+# ~0.5-1% of shots at 7000-frame chunks). 600 frames = 20s at 30fps / 5s at
+# 120fps, both far longer than any launch->rim arc plus walk-back.
+_CHUNK_OVERLAP = 600
+
+
+def _windows(n_frames: int, chunk_frames: int, overlap: int = _CHUNK_OVERLAP):
+    """(w0, w1, stop) per window: [w0, w1) is the window's OWNERSHIP span (cache
+    key = w0, windows advance by chunk_frames), [w0, stop) is what it detects
+    over -- reaching `overlap` past w1 so a seam-straddling shot is seen whole
+    by the earlier window."""
+    ov = min(int(overlap), int(chunk_frames))
+    out = []
+    for w0 in range(0, n_frames, chunk_frames):
+        w1 = min(n_frames, w0 + chunk_frames)
+        out.append((w0, w1, min(n_frames, w1 + ov)))
+    return out
+
+
+def _merge_seam_pairs(kept: list, new_pairs: list, overlap: int = _CHUNK_OVERLAP
+                      ) -> list:
+    """Append window k+1's (record, shot) pairs onto `kept`, dropping seam
+    duplicates: a shot whose frame range intersects an already-kept shot is the
+    same flight seen by both windows (only possible inside the overlap zone).
+    The fuller arc wins -- the later window starts mid-flight at the seam, so
+    its walk-back is truncated and its metrics are the worse ones."""
+    for rec, s in new_pairs:
+        f0, f1 = int(s.frames[0]), int(s.frames[-1])
+        dup = None
+        for i in range(len(kept) - 1, -1, -1):
+            ks = kept[i][1]
+            k0, k1 = int(ks.frames[0]), int(ks.frames[-1])
+            if k1 < f0 - overlap:          # kept is time-ordered; stop early
+                break
+            if f0 <= k1 and k0 <= f1:
+                dup = i
+                break
+        if dup is None:
+            kept.append((rec, s))
+        elif len(s.frames) > len(kept[dup][1].frames):
+            kept[dup] = (rec, s)
+    return kept
+
+
 def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
                      stride, chunk_frames, do_spin, with_pose, handedness,
                      use_cache, sig, audio=None, shooter_height_ft=None,
@@ -272,11 +320,8 @@ def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
     from .detect_cache import (detect_window, save_detection, _params,
                                serialize_detection, deserialize_detection)
     n = info.n_frames
-    n_win = -(-n // chunk_frames)
-    all_records, merged_track, merged_shots = [], {}, []
-    for k in range(n_win):
-        w0 = k * chunk_frames
-        w1 = min(n, w0 + chunk_frames)
+    merged_track, pairs = {}, []
+    for w0, w1, stop in _windows(n, chunk_frames):
         ccache = _chunk_cache_path(video_path, w0)
         recs = None
         if use_cache and os.path.exists(ccache):
@@ -290,7 +335,7 @@ def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
                 recs = None                       # corrupt/old chunk -> redo
         if recs is None:
             track, shots = detect_window(video_path, weights, calib, int(stride),
-                                         w0, w1, imgsz=imgsz)
+                                         w0, stop, imgsz=imgsz)
             recs = _records_from_shots(shots, track, video_path, calib, info,
                                        clip_start, do_spin=do_spin,
                                        with_pose=with_pose, handedness=handedness,
@@ -303,8 +348,9 @@ def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
                            "detection": serialize_detection(track, shots, {}),
                            "records": [r.row() for r in recs]}, f)
         merged_track.update(track)
-        merged_shots.extend(shots)
-        all_records.extend(recs)
+        pairs = _merge_seam_pairs(pairs, list(zip(recs, shots)))
+    all_records = [p[0] for p in pairs]
+    merged_shots = [p[1] for p in pairs]
 
     # renumber shots 1..N across the whole clip (records + track-cache shots stay
     # in lock-step so the dashboard/render share one numbering)
