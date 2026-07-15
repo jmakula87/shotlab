@@ -27,20 +27,44 @@ def _path(video_path: str) -> str:
     return os.path.join("data", "out", stem, f"{stem}_track.json")
 
 
+def _weights_content_id(weights) -> str:
+    """size:mtime of the weights file (or the summed sizes + newest mtime of an
+    openvino export DIR). Catches a retrain/re-export into the same path, which
+    a path-based key can't see."""
+    p = str(weights)
+    try:
+        if os.path.isdir(p):
+            tot, mt = 0, 0
+            for name in sorted(os.listdir(p)):
+                fp = os.path.join(p, name)
+                if os.path.isfile(fp):
+                    st = os.stat(fp)
+                    tot += st.st_size
+                    mt = max(mt, int(st.st_mtime))
+            return f"{tot}:{mt}"
+        st = os.stat(p)
+        return f"{st.st_size}:{int(st.st_mtime)}"
+    except OSError:
+        return "absent"
+
+
 def _weights_id(weights) -> str:
     """Identity for a weights path in cache signatures. The BASENAME alone is
     ambiguous -- every training run exports a dir literally named
     best_openvino_model, so switching models would silently reuse the old
     model's cached detections. The last three path parts disambiguate
-    (e.g. ball_orange/weights/best_openvino_model)."""
+    (e.g. ball_orange/weights/best_openvino_model); the appended CONTENT id
+    (size:mtime) catches a retrain re-exported to the same path."""
     parts = os.path.normpath(str(weights)).split(os.sep)
-    return "/".join(parts[-3:])
+    return "/".join(parts[-3:]) + "@" + _weights_content_id(weights)
 
 
-def _params(weights, imgsz, stride, max_frames, calib) -> dict:
+def _params(video_path, weights, imgsz, stride, max_frames, calib) -> dict:
+    from .video_io import video_id
     return {"weights": _weights_id(weights), "imgsz": int(imgsz),
             "stride": int(stride), "max_frames": max_frames,
-            "rim": [round(calib.rim_x, 1), round(calib.rim_y, 1)]}
+            "rim": [round(calib.rim_x, 1), round(calib.rim_y, 1)],
+            "video": video_id(video_path)}
 
 
 def serialize_detection(track, shots, params) -> dict:
@@ -144,7 +168,7 @@ def detect_or_load(video_path, weights, calib, stride, max_frames, imgsz=640,
                    use_cache=True):
     """Return (track, shots). Loads the cached detection if params match, else
     runs YOLO detection + rim-anchored shots and caches the result."""
-    params = _params(weights, imgsz, stride, max_frames, calib)
+    params = _params(video_path, weights, imgsz, stride, max_frames, calib)
     if use_cache:
         loaded = _load(video_path)
         if loaded is not None and loaded[0] == params:

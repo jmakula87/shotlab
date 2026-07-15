@@ -162,6 +162,34 @@ def test_cache_sig_stable_and_param_sensitive():
     assert _sig(max_frames=8000) != _sig()
 
 
+def test_cache_sig_tracks_video_content_and_calib():
+    """2026-07-15 audit: the record cache is filed under the video's BASENAME,
+    so the signature must carry the video's content identity and the effective
+    calibration -- otherwise an in-place re-trim or a manual rim override
+    silently reuses stale records."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        clip = os.path.join(td, "PXL_x.mp4")
+        with open(clip, "wb") as f:
+            f.write(b"a" * 100)
+        s1 = _sig(video_path=clip)
+        # same file, same content -> same sig
+        assert _sig(video_path=clip) == s1
+        # content changed in place (same basename!) -> different sig
+        with open(clip, "wb") as f:
+            f.write(b"b" * 200)
+        assert _sig(video_path=clip) != s1
+    # explicit calibration is part of the identity; a different rim differs
+    from shotlab.court import Calibration
+    c1 = Calibration(session="t", image_w=1920, image_h=1080, rim_x=900.0,
+                     rim_y=200.0, rim_radius_px=18.0, shot_gate_px=120.0)
+    c2 = Calibration(session="t", image_w=1920, image_h=1080, rim_x=700.0,
+                     rim_y=200.0, rim_radius_px=18.0, shot_gate_px=120.0)
+    assert _sig(calib=c1) != _sig()            # explicit != auto
+    assert _sig(calib=c1) != _sig(calib=c2)    # rim moves -> new identity
+    assert _sig(calib=c1) == _sig(calib=c1)
+
+
 def test_cache_sig_tracks_record_schema():
     # the signature folds in the ShotRecord field set, so adding/removing a record
     # field invalidates old caches automatically. Verify the current schema's

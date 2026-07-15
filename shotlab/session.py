@@ -108,16 +108,26 @@ _CACHE_VERSION = 20   # v20: VFR fix -- abs_time + audio rim window from real
 
 def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
                       with_pose, with_spin, handedness, with_audio=False,
-                      shooter_height_ft=None) -> str:
-    """A signature for a clip's cached records. Any change to the record schema
-    OR the detection/pose params invalidates the cache, so a re-run after a code
-    change recomputes instead of silently returning stale, old-schema rows."""
+                      shooter_height_ft=None, video_path=None,
+                      calib=None) -> str:
+    """A signature for a clip's cached records. Any change to the record schema,
+    the detection/pose params, the VIDEO's content (size+mtime -- an in-place
+    re-trim/re-transcode keeps the basename the cache is filed under), the
+    weights' content (a retrain re-exported to the same path), or an explicit
+    calibration invalidates the cache, so a re-run recomputes instead of
+    silently returning stale rows. calib=None hashes as 'auto': auto-calibration
+    is deterministic given the video content, which the signature now carries."""
     from .detect_cache import _weights_id
+    from .video_io import video_id
     schema = ",".join(f.name for f in _dc_fields(ShotRecord))
+    calib_id = ("auto" if calib is None else ",".join(
+        str(round(float(v), 1)) for v in
+        (calib.rim_x, calib.rim_y, calib.rim_radius_px, calib.shot_gate_px)))
     raw = "|".join(str(x) for x in [
         _CACHE_VERSION, schema, detector_name, _weights_id(weights),
         imgsz, stride, max_frames, with_pose, with_spin, handedness, with_audio,
-        shooter_height_ft])
+        shooter_height_ft,
+        video_id(video_path) if video_path else "none", calib_id])
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
 
@@ -304,7 +314,7 @@ def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
     # whole-clip track cache, keyed as a full (max_frames=None) detection so
     # render_shots/compare load it instead of re-detecting the long clip
     save_detection(video_path, merged_track, merged_shots,
-                   _params(weights, imgsz, stride, None, calib))
+                   _params(video_path, weights, imgsz, stride, None, calib))
     return all_records
 
 
@@ -327,7 +337,8 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
                             imgsz=imgsz, stride=stride, max_frames=max_frames,
                             with_pose=with_pose, with_spin=with_spin,
                             handedness=handedness, with_audio=with_audio,
-                            shooter_height_ft=shooter_height_ft)
+                            shooter_height_ft=shooter_height_ft,
+                            video_path=video_path, calib=calib)
     if use_cache and os.path.exists(cache):
         try:
             with open(cache, encoding="utf-8") as f:

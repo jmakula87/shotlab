@@ -63,6 +63,37 @@ def test_old_cache_without_mask_self_heals():
     assert shots2[0].fit.inlier_mask.sum() < len(shot.frames)   # dropped the outlier
 
 
+def test_weights_id_tracks_content():
+    """A retrain re-exported to the SAME path (every export dir is literally
+    named best_openvino_model) must change the weights identity -- path parts
+    alone silently reuse the old model's detections (2026-07-15 audit)."""
+    import tempfile
+    import time
+    from shotlab.detect_cache import _weights_id
+    with tempfile.TemporaryDirectory() as td:
+        wdir = os.path.join(td, "ball_orange", "weights", "best_openvino_model")
+        os.makedirs(wdir)
+        with open(os.path.join(wdir, "model.bin"), "wb") as f:
+            f.write(b"x" * 1000)
+        a = _weights_id(wdir)
+        assert a.startswith("ball_orange/weights/best_openvino_model@"), a
+        assert _weights_id(wdir) == a                 # stable while unchanged
+        with open(os.path.join(wdir, "model.bin"), "wb") as f:
+            f.write(b"y" * 2000)                      # re-export, same path
+        assert _weights_id(wdir) != a
+        # a plain .pt file works the same way
+        pt = os.path.join(td, "best.pt")
+        with open(pt, "wb") as f:
+            f.write(b"z" * 10)
+        b = _weights_id(pt)
+        with open(pt, "wb") as f:
+            f.write(b"z" * 20)
+        assert _weights_id(pt) != b
+    # a missing path (e.g. stock weights ultralytics resolves elsewhere) is a
+    # stable, non-crashing key
+    assert _weights_id("no_such_weights.pt").endswith("@absent")
+
+
 if __name__ == "__main__":
     import traceback
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
