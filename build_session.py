@@ -144,15 +144,19 @@ def main(argv=None):
         print("No shots with timestamps found.")
         return 1
 
-    # Preserve USER-entered columns (feel tags) across rebuilds -- the records are
-    # rebuilt with felt_good=None, so without this a rebuild silently wipes the
-    # feel labels the dashboard / voicetag persisted into the CSV (they're tier-1
-    # of the profile's good-shot ladder; 2026-07-06 final sweep).
+    # Preserve USER-entered columns (feel tags + feel-review answers) across
+    # rebuilds -- the records are rebuilt with felt_good=None, so without this a
+    # rebuild silently wipes the labels the dashboard / voicetag / feel-review
+    # persisted into the CSV (they're tier-1 of the profile's good-shot ladder;
+    # 2026-07-06 final sweep). NOTE a re-DETECTION can renumber shot_in_clip --
+    # remap sidecars first (tools/remap_shot_keys.py), then re-apply the review.
+    from shotlab.feelreview import USER_REVIEW_COLS
     _csv = os.path.join(args.out, "session_shots.csv")
     if os.path.exists(_csv):
         old = pd.read_csv(_csv)
         keys = [c for c in ("clip", "shot_in_clip") if c in old.columns and c in df.columns]
-        user_cols = [c for c in ("felt_good", "felt_reasons") if c in old.columns]
+        user_cols = [c for c in ("felt_good", "felt_reasons", *USER_REVIEW_COLS)
+                     if c in old.columns]
         if keys and user_cols:
             df = df.drop(columns=[c for c in user_cols if c in df.columns], errors="ignore")
             df = df.merge(old[keys + user_cols], on=keys, how="left")

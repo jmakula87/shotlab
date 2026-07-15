@@ -28,11 +28,8 @@ from shotlab.detect_cache import _path, deserialize_detection
 from shotlab.sync import sync_clips
 from shotlab.video_io import frame_times, probe
 
-# wide clip <-> close clip pairing for the 07-10 two-camera session (filename order)
-PAIRS = [("PXL_20260710_175751234.mp4", "20260710_135805"),
-         ("PXL_20260710_180449842.mp4", "20260710_140431"),
-         ("PXL_20260710_181146426.mp4", "20260710_141132"),
-         ("PXL_20260710_181811930.mp4", "20260710_141758")]
+# wide clip <-> close clip pairing (single source: shotlab.feelreview)
+from shotlab.feelreview import DEFAULT_PAIRS as PAIRS
 
 
 def main():

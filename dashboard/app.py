@@ -1791,6 +1791,121 @@ def view_flare_review():
                "and rebuild your per-shot flare (and the Explorer/recap update).")
 
 
+# ---------------- feel review (both angles, feel + context + fault tags)
+def view_feel_review():
+    from shotlab.feelreview import (FAULTS, FEEL, MISS_DIR, MOVEMENT, SETUP,
+                                    apply_review, load_review,
+                                    review_candidates, save_entry)
+    st.subheader("🫀 Feel review — both angles, one shot at a time")
+    st.caption("Record what the cameras can't measure: how the shot FELT, its "
+               "context (movement/setup), camera-blind faults (guide hand!), "
+               "and the miss direction (short/long = depth). Verified "
+               "makes/misses only; every answer saves instantly, stop anytime.")
+    sds = session_dirs()
+    if not sds:
+        st.info("No sessions yet."); return
+    sd = st.selectbox("Session", sds, format_func=_session_label, key="fr_sess")
+    d = os.path.join(OUT_DIR, sd)
+    try:
+        df = pd.read_csv(os.path.join(d, "session_shots.csv"))
+    except Exception:
+        st.info("No shots in that session."); return
+    tp = os.path.join(d, "make_truth.json")
+    truth = json.load(open(tp, encoding="utf-8")) if os.path.exists(tp) else None
+    cands = review_candidates(df, truth)
+    if not cands:
+        st.info("No verified makes/misses to review here."); return
+    review = load_review(d)
+    n_done = sum(1 for c in cands if c["key"] in review)
+    st.progress(n_done / len(cands),
+                text=f"{n_done}/{len(cands)} reviewed"
+                     + ("" if truth else " (heuristic make/miss — no ground truth)"))
+
+    idx_key = f"fr_idx_{sd}"
+    if idx_key not in st.session_state:
+        nxt = next((i for i, c in enumerate(cands) if c["key"] not in review), 0)
+        st.session_state[idx_key] = nxt
+    labels = [f"{'✅' if c['key'] in review else '⬜'} "
+              f"{'make' if c['made'] else 'miss'} · {c['clip'][-12:-4]} "
+              f"#{c['shot_in_clip']}" for c in cands]
+    i = st.selectbox("Shot", range(len(cands)), key=f"fr_jump_{sd}",
+                     index=min(st.session_state[idx_key], len(cands) - 1),
+                     format_func=lambda k: labels[k])
+    c = cands[i]
+    stem = os.path.splitext(c["clip"])[0]
+    cdir = os.path.join(d, "review_clips")
+    wv = os.path.join(cdir, f"{stem}_s{c['shot_in_clip']:03d}_wide.mp4")
+    cv_ = os.path.join(cdir, f"{stem}_s{c['shot_in_clip']:03d}_close.mp4")
+    col_w, col_c = st.columns(2)
+    with col_w:
+        st.markdown("**Wide (arc/result)**")
+        st.video(wv) if os.path.exists(wv) else st.info(
+            "No clip — run `python tools/cut_review_clips.py --session " + d + "`")
+    with col_c:
+        st.markdown("**Close (body/form)**")
+        st.video(cv_) if os.path.exists(cv_) else st.info("No close-cam clip.")
+    row = df[(df["clip"].astype(str) == c["clip"])
+             & (df["shot_in_clip"] == c["shot_in_clip"])]
+    if len(row):
+        r = row.iloc[0]
+        st.caption(f"**{'MAKE' if c['made'] else 'MISS'}** · zone {r.get('zone')} "
+                   f"· release {r.get('release_angle_deg')}° "
+                   f"· knee {r.get('knee_bend_deg')}°")
+
+    prev = review.get(c["key"], {})
+    with st.form(f"fr_form_{c['key']}"):
+        f1, f2, f3 = st.columns(3)
+        feel = f1.radio("How did it feel?", FEEL, horizontal=True,
+                        index=FEEL.index(prev["feel"]) if prev.get("feel") in FEEL else 1)
+        mv_opts = ["—"] + MOVEMENT
+        movement = f2.radio("Movement", mv_opts, horizontal=True,
+                            index=mv_opts.index(prev.get("movement"))
+                            if prev.get("movement") in MOVEMENT else 0)
+        su_opts = ["—"] + SETUP
+        setup = f3.radio("Setup", su_opts, horizontal=True,
+                         index=su_opts.index(prev.get("setup"))
+                         if prev.get("setup") in SETUP else 0)
+        st.markdown("**Anything off?** (tick only what you noticed)")
+        tag_cols = st.columns(len(FAULTS))
+        tags = []
+        for col, (group, opts) in zip(tag_cols, FAULTS.items()):
+            col.markdown(f"*{group}*")
+            for t in opts:
+                if col.checkbox(t, value=t in prev.get("tags", []),
+                                key=f"fr_t_{c['key']}_{t}"):
+                    tags.append(t)
+        miss_dir = None
+        if not c["made"]:
+            md_opts = ["—"] + MISS_DIR
+            miss_dir = st.radio("Miss direction", md_opts, horizontal=True,
+                                index=md_opts.index(prev.get("miss_dir"))
+                                if prev.get("miss_dir") in MISS_DIR else 0)
+        note = st.text_input("Note (optional)", value=prev.get("note", ""))
+        if st.form_submit_button("💾 Save & next", type="primary"):
+            save_entry(d, c["key"], {
+                "feel": feel,
+                "movement": movement if movement != "—" else None,
+                "setup": setup if setup != "—" else None,
+                "tags": tags,
+                "miss_dir": (miss_dir if miss_dir and miss_dir != "—" else None),
+                "note": note.strip(),
+                "made": c["made"]})
+            review = load_review(d)
+            nxt = next((k for k in range(i + 1, len(cands))
+                        if cands[k]["key"] not in review),
+                       next((k for k in range(len(cands))
+                             if cands[k]["key"] not in review), i))
+            st.session_state[idx_key] = nxt
+            st.session_state.pop(f"fr_jump_{sd}", None)
+            st.rerun()
+
+    if n_done and st.button("📥 Apply reviews to session CSV "
+                            "(felt_good + context + tags)"):
+        n = apply_review(d)
+        st.success(f"Wrote {n} shots' review answers into session_shots.csv — "
+                   "profile export + feel correlation will use them.")
+
+
 # ---------------- form notes (watch full clips, rate each shot)
 def view_form_notes():
     st.subheader("📝 Form notes — watch full clips, rate each shot's form")
@@ -1870,7 +1985,8 @@ st.title("🏀 ShotLab")
 mode = st.sidebar.radio("View", ["Shot Explorer", "Shot scatter", "Shot chart",
                                  "Makes vs misses", "Closest to ideal",
                                  "Session analytics", "3D analysis", "Make/miss audit",
-                                 "Flare review", "Form notes", "Film room",
+                                 "Flare review", "Feel review", "Form notes",
+                                 "Film room",
                                  "Shot review", "Per-clip", "Compare shots",
                                  "Compare sessions", "Progress"])
 if mode == "Shot Explorer":
@@ -1893,6 +2009,8 @@ elif mode == "Make/miss audit":
     view_make_audit()
 elif mode == "Flare review":
     view_flare_review()
+elif mode == "Feel review":
+    view_feel_review()
 elif mode == "Form notes":
     view_form_notes()
 elif mode == "Film room":
