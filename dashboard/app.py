@@ -1838,56 +1838,59 @@ def view_feel_review():
     cv_ = os.path.join(cdir, f"{stem}_s{c['shot_in_clip']:03d}_close.mp4")
     col_w, col_c = st.columns(2)
     with col_w:
-        st.markdown("**Wide (arc/result)**")
-        st.video(wv) if os.path.exists(wv) else st.info(
+        st.video(wv, loop=True) if os.path.exists(wv) else st.info(
             "No clip — run `python tools/cut_review_clips.py --session " + d + "`")
     with col_c:
-        st.markdown("**Close (body/form)**")
-        st.video(cv_) if os.path.exists(cv_) else st.info("No close-cam clip.")
+        st.video(cv_, loop=True) if os.path.exists(cv_) else st.info("No close-cam clip.")
     row = df[(df["clip"].astype(str) == c["clip"])
              & (df["shot_in_clip"] == c["shot_in_clip"])]
     if len(row):
         r = row.iloc[0]
-        st.caption(f"**{'MAKE' if c['made'] else 'MISS'}** · zone {r.get('zone')} "
-                   f"· release {r.get('release_angle_deg')}° "
+        st.caption(f"wide · close — **{'MAKE' if c['made'] else 'MISS'}** "
+                   f"· zone {r.get('zone')} · release {r.get('release_angle_deg')}° "
                    f"· knee {r.get('knee_bend_deg')}°")
 
+    # the whole form lives right under the videos: pill rows, no scrolling
     prev = review.get(c["key"], {})
     with st.form(f"fr_form_{c['key']}"):
-        f1, f2, f3 = st.columns(3)
-        feel = f1.radio("How did it feel?", FEEL, horizontal=True,
-                        index=FEEL.index(prev["feel"]) if prev.get("feel") in FEEL else 1)
-        mv_opts = ["—"] + MOVEMENT
-        movement = f2.radio("Movement", mv_opts, horizontal=True,
-                            index=mv_opts.index(prev.get("movement"))
-                            if prev.get("movement") in MOVEMENT else 0)
-        su_opts = ["—"] + SETUP
-        setup = f3.radio("Setup", su_opts, horizontal=True,
-                         index=su_opts.index(prev.get("setup"))
-                         if prev.get("setup") in SETUP else 0)
-        st.markdown("**Anything off?** (tick only what you noticed)")
-        tag_cols = st.columns(len(FAULTS))
-        tags = []
-        for col, (group, opts) in zip(tag_cols, FAULTS.items()):
-            col.markdown(f"*{group}*")
-            for t in opts:
-                if col.checkbox(t, value=t in prev.get("tags", []),
-                                key=f"fr_t_{c['key']}_{t}"):
-                    tags.append(t)
+        r1 = st.columns([2, 3, 2, 3])
+        feel = r1[0].pills("Feel", FEEL, selection_mode="single",
+                           default=prev.get("feel") if prev.get("feel") in FEEL
+                           else "okay", key=f"fr_feel_{c['key']}")
+        movement = r1[1].pills("Movement", MOVEMENT, selection_mode="single",
+                               default=prev.get("movement")
+                               if prev.get("movement") in MOVEMENT else None,
+                               key=f"fr_mv_{c['key']}")
+        setup = r1[2].pills("Setup", SETUP, selection_mode="single",
+                            default=prev.get("setup")
+                            if prev.get("setup") in SETUP else None,
+                            key=f"fr_su_{c['key']}")
         miss_dir = None
         if not c["made"]:
-            md_opts = ["—"] + MISS_DIR
-            miss_dir = st.radio("Miss direction", md_opts, horizontal=True,
-                                index=md_opts.index(prev.get("miss_dir"))
-                                if prev.get("miss_dir") in MISS_DIR else 0)
-        note = st.text_input("Note (optional)", value=prev.get("note", ""))
-        if st.form_submit_button("💾 Save & next", type="primary"):
+            miss_dir = r1[3].pills("Miss direction", MISS_DIR,
+                                   selection_mode="single",
+                                   default=prev.get("miss_dir")
+                                   if prev.get("miss_dir") in MISS_DIR else None,
+                                   key=f"fr_md_{c['key']}")
+        r2 = st.columns(len(FAULTS))
+        tags = []
+        for col, (group, opts) in zip(r2, FAULTS.items()):
+            got = col.pills(f"Off — {group}", opts, selection_mode="multi",
+                            default=[t for t in prev.get("tags", []) if t in opts],
+                            key=f"fr_tg_{c['key']}_{group}")
+            tags.extend(got or [])
+        r3 = st.columns([5, 1])
+        note = r3[0].text_input("Note (optional)", value=prev.get("note", ""),
+                                label_visibility="collapsed",
+                                placeholder="Note (optional)")
+        if r3[1].form_submit_button("💾 Next", type="primary",
+                                    use_container_width=True):
             save_entry(d, c["key"], {
-                "feel": feel,
-                "movement": movement if movement != "—" else None,
-                "setup": setup if setup != "—" else None,
+                "feel": feel or "okay",
+                "movement": movement,
+                "setup": setup,
                 "tags": tags,
-                "miss_dir": (miss_dir if miss_dir and miss_dir != "—" else None),
+                "miss_dir": miss_dir,
                 "note": note.strip(),
                 "made": c["made"]})
             review = load_review(d)
