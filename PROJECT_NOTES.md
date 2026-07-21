@@ -199,6 +199,49 @@ re-exported (personal elbow ideal 117°). Full suite 16/16 + JS green.
 
 ---
 
+## Session log 2026-07-21 — first 07-20 two-cam session + GPU (DirectML) detection
+First run of a NEW session's footage (filmed 2026-07-20): two cameras, Pixel wide
+(`data/raw/Camera 1`, arc/makes) + S8 close (`data/raw/Camera 2`, body/flare), 5
+clips each, no calibration paper (scale from the ball + 5'10" height + court dims,
+as before). Excluded the first clip of each cam (a "moved a camera a smidge" setup
+clip). Ingested from 4 zips + 1 loose mp4.
+
+**Finding #1 — the wide camera was TOO FAR this session (filming rule #1).** The
+default pipeline (`--imgsz 640`, the OpenVINO CPU detector) found only **8 shots
+over ~18 min** with garbage arcs — apex heights of 0.5 ft and `apex_above_rim`
+down to **−1.57 ft** (below the rim; physically impossible). Proof it was missed
+shots, not a quiet court: a frame pulled from a 3-min "no-shot" gap shows the ball
+in the air by the rim (a real shot the 640 detector dropped). Root cause: at 640
+the ball (~20 px in the 1080p frame) shrinks to ~7 px after the model's downscale
+— below detection. The 0/8 make% is the weak geometric detector on junk arcs; not
+meaningful. **Lesson stands: get the wide cam closer/lower so the ball is bigger.**
+
+**Finding #2 — higher-res detection recovers shots AND fixes arc quality.** A/B on
+one window: 640 → 3 shots, **1280 → 8**. Full session at 1280: **8 → 11 shots**,
+and — bigger deal — apex heights went from impossible (0.5 ft) to **sane (2.5–4.0
+ft, matching real jumpers ~3.8 ft)**. So 1280 is a real lever, but 11 shots is
+still short of what he actually took — resolution helps, doesn't SOLVE far framing.
+Durable fixes: film closer, and/or a temporal tiny-ball tracker (TrackNet family).
+
+**Finding #3 — we are NOT CPU-bound; built the GPU path.** "CPU-only" was a
+software state, not the hardware: this box has a **Radeon RX 9070 XT (16 GB)** +
+Ryzen 9 7900X. The catch is AMD-on-Windows in a CUDA-first ecosystem (OpenVINO's
+GPU plugin is Intel-only; torch on Windows has no CUDA/ROCm). Reached the GPU via
+**DirectML**: exported the orange model to ONNX (`imgsz 1280`) and added an
+onnxruntime `DmlExecutionProvider` backend to `detect_yolo.py` (commit 060d9b7).
+**6.2 ms/frame on the GPU vs 121 ms on CPU = 19.6×.** Validated it matches the
+ultralytics `.pt` output on every clean detection; the two differ only on ONE
+sub-threshold dribble false-positive (a torch-vs-ONNX numeric tie-break, verified
+by eye — he's dribbling near the hoop in that frame — not a decode bug). Drops in
+with zero pipeline changes: just point `--weights` at the `.onnx`. This is what
+makes high-res / SAHI / TrackNet all cheap to run going forward.
+
+TODO next session: reshoot with the wide cam closer; run the S8 close-cam flare
+pass (`flare_report.py`/`analyze3d.py` still hardcoded to 0710 — parametrize for
+0720); evaluate TrackNet as the tiny-ball tracker. Full suite 35/35.
+
+---
+
 ## Session log 2026-07-15 — external-audit fixes (4 commits, all verified)
 An independent read-only audit flagged 3 correctness risks + hygiene; all
 claims verified against the code before fixing (severity re-ranked: VFR was
