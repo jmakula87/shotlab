@@ -236,9 +236,33 @@ by eye — he's dribbling near the hoop in that frame — not a decode bug). Dro
 with zero pipeline changes: just point `--weights` at the `.onnx`. This is what
 makes high-res / SAHI / TrackNet all cheap to run going forward.
 
+**Finding #4 — external consult (Codex + Fable) + recall experiments.** Both
+reviewers independently converged: the fix is a **track-before-detect
+architecture flip** (keep weak candidates at low conf, search whole rim-bound
+trajectories, let the `ballistic.py` verifier supply precision), not a better
+per-frame detector. Full synthesis in `process/BALLTRACK_CONSULT_2026_07_21.md`.
+Prototyped + MEASURED the two cheap levers on 0720:
+- **Corridor tiling (`--tile`, commit 98f327f):** native-res tiles so a far ball
+  keeps ~20px. REGRESSES — 11 → 2 shots. The orange model was fine-tuned on
+  DOWNSCALED balls, so native-scale balls detect in fewer frames at lower conf
+  (30 vs 47/120 sampled, conf 0.62 vs 0.72). Tiling is COUPLED to a native-scale
+  retrain; kept as opt-in infra, do NOT use on current weights.
+- **Conf floor (`--conf`):** 0.25 → 0.05 recovers +38% ball FRAMES but only
+  11 → 12 SHOTS — because the pipeline keeps one candidate/frame + coasts 4, so
+  extra low-conf blips just densify existing arcs (n_points 15 → 38), can't
+  stitch new shots across gaps. Confirms the flip is what's needed.
+
+**Consolidated: 640→8 (junk arcs) · 1280→11 (sane arcs, the sweet spot) ·
+tiled→2 · conf05→12+denser. Cheap knobs exhausted.** Real recall gains need
+EITHER (a) retrain the detector on native-scale court crops (~days, unlocks
+tiling + small-ball recall), or (b) the track-before-detect flip (~1-2 wk,
+scale-independent, reviewers' #1), or (c) film the wide cam CLOSER (free, biggest
+lever). AMD-on-Windows update: ROCm PyTorch preview now supports the RX 9070 XT
+for offline training/labeling jobs (keep DirectML for production).
+
 TODO next session: reshoot with the wide cam closer; run the S8 close-cam flare
 pass (`flare_report.py`/`analyze3d.py` still hardcoded to 0710 — parametrize for
-0720); evaluate TrackNet as the tiny-ball tracker. Full suite 35/35.
+0720); pick the retrain-vs-track-before-detect direction. Full suite 35/35.
 
 ---
 
