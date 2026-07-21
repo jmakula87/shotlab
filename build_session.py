@@ -93,6 +93,15 @@ def main(argv=None):
                     help="your height (e.g. 5'10\" or 5.83) -> body-scaled, "
                          "honest release/jump heights instead of ~2.5x-hot "
                          "rim-scaled ones")
+    ap.add_argument("--tile", action="store_true",
+                    help="native-resolution corridor tiling. ⚠️ REGRESSES recall "
+                         "on the current downscale-trained model (measured 11->2 "
+                         "shots); only useful after a native-scale retrain.")
+    ap.add_argument("--conf", type=float, default=0.25,
+                    help="ball-detection confidence floor (default 0.25). Lower "
+                         "(e.g. 0.05) recovers ~38%% more ball frames for the "
+                         "physics/rim gates to filter -- the track-before-detect "
+                         "lever.")
     args = ap.parse_args(argv)
 
     shooter_ft = parse_height(args.shooter_height)
@@ -134,7 +143,9 @@ def main(argv=None):
                             with_spin=(False if args.no_spin else "auto"),
                             handedness=args.handedness,
                             use_cache=not args.no_cache, with_audio=args.audio,
-                            shooter_height_ft=shooter_ft)
+                            shooter_height_ft=shooter_ft,
+                            tiles="auto" if args.tile else None,
+                            conf=args.conf)
         print(f"  {os.path.basename(c)}: {len(recs)} shots")
         all_records.extend(recs)
 

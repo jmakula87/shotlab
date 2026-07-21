@@ -59,10 +59,13 @@ def _weights_id(weights) -> str:
     return "/".join(parts[-3:]) + "@" + _weights_content_id(weights)
 
 
-def _params(video_path, weights, imgsz, stride, max_frames, calib) -> dict:
+def _params(video_path, weights, imgsz, stride, max_frames, calib, tiles=None,
+            conf=0.25) -> dict:
     from .video_io import video_id
     return {"weights": _weights_id(weights), "imgsz": int(imgsz),
             "stride": int(stride), "max_frames": max_frames,
+            "tiles": tiles if isinstance(tiles, str) else tiles,
+            "conf": round(float(conf), 3),
             "rim": [round(calib.rim_x, 1), round(calib.rim_y, 1)],
             "video": video_id(video_path)}
 
@@ -152,30 +155,33 @@ def _load(video_path):
     return data["params"], track, shots
 
 
-def detect_window(video_path, weights, calib, stride, start, stop, imgsz=640):
+def detect_window(video_path, weights, calib, stride, start, stop, imgsz=640,
+                  tiles=None, conf=0.25):
     """Detect ball + rim-anchored shots in a FRAME WINDOW [start, stop). Frame
     indices stay absolute. Uncached (the long-clip chunker caches the resulting
     records itself). Returns (track, shots)."""
     from .phase1_ball.pipeline import run_phase1
     from .phase1_ball.detect_yolo import YoloBallDetector
-    det = YoloBallDetector(weights=weights, ball_class=0, conf=0.25, imgsz=imgsz)
+    det = YoloBallDetector(weights=weights, ball_class=0, conf=conf, imgsz=imgsz,
+                           tiles=tiles)
     res = run_phase1(video_path, detector=det, calib=calib, stride=int(stride),
                      start_frame=int(start), max_frames=int(stop))
     return res.track, res.shots
 
 
 def detect_or_load(video_path, weights, calib, stride, max_frames, imgsz=640,
-                   use_cache=True):
+                   use_cache=True, tiles=None, conf=0.25):
     """Return (track, shots). Loads the cached detection if params match, else
     runs YOLO detection + rim-anchored shots and caches the result."""
-    params = _params(video_path, weights, imgsz, stride, max_frames, calib)
+    params = _params(video_path, weights, imgsz, stride, max_frames, calib, tiles, conf)
     if use_cache:
         loaded = _load(video_path)
         if loaded is not None and loaded[0] == params:
             return loaded[1], loaded[2]
     from .phase1_ball.pipeline import run_phase1
     from .phase1_ball.detect_yolo import YoloBallDetector
-    det = YoloBallDetector(weights=weights, ball_class=0, conf=0.25, imgsz=imgsz)
+    det = YoloBallDetector(weights=weights, ball_class=0, conf=conf, imgsz=imgsz,
+                           tiles=tiles)
     res = run_phase1(video_path, detector=det, calib=calib, stride=int(stride),
                      max_frames=max_frames)
     save_detection(video_path, res.track, res.shots, params)

@@ -14,7 +14,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from shotlab.phase1_ball.detect_yolo import _letterbox
+from shotlab.phase1_ball.detect_yolo import _letterbox, corridor_tiles
 
 
 def _map_back(px, py, r, dw, dh):
@@ -54,8 +54,31 @@ def test_radius_scales_by_inverse_ratio():
     assert abs(w_square / r - w_square * 1920 / 1280) < 1e-6
 
 
+def test_corridor_tiles_cover_with_ball_safe_overlap():
+    """1920 into a 1280 model -> 2 native-width tiles that (a) each equal the
+    model width, (b) together cover [0,w], (c) overlap by >> a ball so no shot is
+    lost at a seam. Breaks if the tiling downscales (tile != model width) or
+    leaves a gap/thin seam a ball could straddle un-detected in both tiles."""
+    tiles = corridor_tiles(1920, 1080, 1280)
+    assert len(tiles) == 2, tiles
+    assert all(x1 - x0 == 1280 for x0, _, x1, _ in tiles), tiles   # native width
+    assert tiles[0][0] == 0 and tiles[-1][2] == 1920, tiles        # full coverage
+    overlap = tiles[0][2] - tiles[1][0]                            # 1280 - 640
+    assert overlap > 100, overlap                                  # >> ~20px ball
+    assert all(y0 == 0 and y1 == 1080 for _, y0, _, y1 in tiles)   # full height
+
+
+def test_corridor_single_tile_when_frame_fits():
+    """No tiling when the frame already fits the model width (don't upscale-pad
+    for nothing). Breaks if it ever splits a small frame."""
+    assert corridor_tiles(1280, 720, 1280) == [(0, 0, 1280, 720)]
+    assert corridor_tiles(960, 540, 1280) == [(0, 0, 960, 540)]
+
+
 if __name__ == "__main__":
     test_letterbox_preserves_aspect_and_centers_pad()
     test_box_maps_back_to_original_pixel()
     test_radius_scales_by_inverse_ratio()
+    test_corridor_tiles_cover_with_ball_safe_overlap()
+    test_corridor_single_tile_when_frame_fits()
     print("ok")

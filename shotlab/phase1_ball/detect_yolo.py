@@ -53,6 +53,31 @@ def _letterbox(img, new_h, new_w, color=(114, 114, 114)):
     return im, r, dw, dh
 
 
+def corridor_tiles(w, h, tile_w):
+    """Native-resolution horizontal tiles covering a `w`x`h` frame with tiles of
+    width `tile_w` (the model's input width). Idea: letterboxing a 1920px frame
+    into a 1280 model shrinks a 20px ball to ~13px, but a `tile_w`-wide crop feeds
+    the model at ratio 1.0 (no downscale) so the ball keeps its native pixels.
+    Tiles overlap so a ball near a seam lands whole in at least one tile; a
+    cross-tile NMS dedups the overlap. Full height (one row) because h (1080) <
+    tile_w (1280) already letterboxes 1:1.
+
+    ⚠️ MEASURED 2026-07-21: this HURTS with the current orange model. It was
+    fine-tuned on DOWNSCALED balls (~13px); fed native ~20px balls it detects in
+    FEWER frames at LOWER conf (clip-2 sample: 30 vs 47 frames, conf 0.62 vs 0.72
+    -> the session went 11 shots -> 2 with --tile). Tiling and retraining are
+    COUPLED: this only pays off once the detector is retrained on native-scale
+    court crops (consult idea #3). Kept as opt-in infra for that retrain; do NOT
+    enable --tile on the current weights."""
+    if w <= tile_w:
+        return [(0, 0, w, h)]
+    import math
+    overlap = tile_w // 4                          # >> a ball; a seam-straddler
+    n = math.ceil((w - overlap) / (tile_w - overlap))  # 1920/1280 -> 2 tiles
+    xs = [round(i * (w - tile_w) / (n - 1)) for i in range(n)]  # evenly spaced
+    return [(x, 0, x + tile_w, h) for x in xs]
+
+
 class YoloBallDetector(BaseDetector):
     name = "yolo"
 
@@ -62,7 +87,8 @@ class YoloBallDetector(BaseDetector):
                  conf: float = 0.20,
                  imgsz: int = 960,
                  device: str | None = None,
-                 roi: tuple[int, int, int, int] | None = None):
+                 roi: tuple[int, int, int, int] | None = None,
+                 tiles=None):
         """
         weights:    path to a .pt model (auto-downloads known names).
         ball_class: class id to keep; None = keep all detections.
@@ -70,18 +96,25 @@ class YoloBallDetector(BaseDetector):
         imgsz:      inference size; >=960 helps small-ball recall.
         roi:        optional (x0,y0,x1,y1) crop (the shooting lane) to cut
                     false positives and speed up CPU inference.
+        tiles:      None (whole frame), 'auto' (native-res corridor tiling --
+                    detect on model-width crops so a far ball keeps its pixels;
+                    built lazily from the first frame), or an explicit list of
+                    (x0,y0,x1,y1) boxes. Ignores `roi` when set.
         """
         self.ball_class = ball_class
         self.conf = conf
         self.imgsz = imgsz
         self.device = device
         self.roi = roi
+        self.tiles = tiles
+        self._tile_boxes = None if tiles == "auto" else tiles
 
         # ONNX weights -> onnxruntime (DirectML GPU, CPU fallback). Anything else
         # -> ultralytics (.pt / OpenVINO dir), the CPU path.
         self.backend = "onnx" if str(weights).lower().endswith(".onnx") else "ultralytics"
         if self.backend == "onnx":
             self._init_onnx(weights)
+            self._model_w = self._in_w
         else:
             try:
                 from ultralytics import YOLO
@@ -90,6 +123,7 @@ class YoloBallDetector(BaseDetector):
                     "ultralytics is required for the YOLO backend: "
                     "pip install ultralytics") from e
             self._model = YOLO(weights)
+            self._model_w = self.imgsz
 
     def _init_onnx(self, weights):
         try:
@@ -109,14 +143,41 @@ class YoloBallDetector(BaseDetector):
         self.active_provider = self._sess.get_providers()[0]
 
     def detect(self, frame_idx, frame_bgr):
-        x0 = y0 = 0
-        img = frame_bgr
+        H, W = frame_bgr.shape[:2]
+        if self.tiles == "auto" and self._tile_boxes is None:
+            self._tile_boxes = corridor_tiles(W, H, self._model_w)
+        if self._tile_boxes:
+            cands = []
+            for (tx0, ty0, tx1, ty1) in self._tile_boxes:
+                cands.extend(self._detect_region(frame_idx, frame_bgr,
+                                                 tx0, ty0, tx1, ty1))
+            return self._merge_nms(cands)
         if self.roi is not None:
             x0, y0, x1, y1 = self.roi
-            img = frame_bgr[y0:y1, x0:x1]
+        else:
+            x0, y0, x1, y1 = 0, 0, W, H
+        return self._detect_region(frame_idx, frame_bgr, x0, y0, x1, y1)
+
+    def _detect_region(self, frame_idx, frame_bgr, x0, y0, x1, y1):
+        img = frame_bgr[y0:y1, x0:x1]
         if self.backend == "onnx":
             return self._detect_onnx(frame_idx, img, x0, y0)
+        return self._detect_ultra(frame_idx, img, x0, y0)
 
+    def _merge_nms(self, cands, iou=0.45):
+        """Cross-tile dedup: a ball in a tile overlap is detected twice; keep the
+        higher-conf box. Same NMS the per-region decode uses."""
+        import cv2
+        if not cands:
+            return cands
+        boxes = [[c.cx - c.r, c.cy - c.r, 2 * c.r, 2 * c.r] for c in cands]
+        scores = [c.conf for c in cands]
+        idx = cv2.dnn.NMSBoxes(boxes, scores, self.conf, iou)
+        out = [cands[i] for i in np.array(idx).flatten()]
+        out.sort(key=lambda c: c.conf, reverse=True)
+        return out
+
+    def _detect_ultra(self, frame_idx, img, x0, y0):
         res = self._model.predict(img, imgsz=self.imgsz, conf=self.conf,
                                   device=self.device, verbose=False)[0]
         out = []
