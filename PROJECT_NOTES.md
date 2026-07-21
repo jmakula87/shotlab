@@ -3,9 +3,10 @@
 > The canonical "everything" doc. README.md is for usage; this is the decision
 > log, filming guide, roadmap, and enhancement backlog. Update it as we go.
 
-Last updated: 2026-07-15 · Location: `C:\Users\jmaku\Desktop\ShotLab`
-(⚠️ the big 07-10/07-11 S8/3D/audit sessions are in git log but not yet
-written up here — this doc is current through 07-02 plus the 07-15 entry.)
+Last updated: 2026-07-21 · Location: `C:\Users\jmaku\Desktop\ShotLab`
+(Session logs now written up through 07-15; the 07-03 → 07-11 S8/3D/audit arc
+was backfilled 07-21 from git. New footage expected shortly — rebuild sessions
+with the current pipeline before trusting any pre-v21 make-driver stats.)
 
 ---
 
@@ -244,6 +245,138 @@ shots, same sync offsets), 0710 recap PDF (truth), 0703 report.html.
 (37/92), fatigue trend now 32%→49% second half — the old fade story
 REVERSED; treat with the usual heuristic-label skepticism.** TO LABEL in the
 audit view: 0710 warmup-clip shot 20 + 0703's 7 new (mostly junk-flagged).
+
+---
+
+## Session log 2026-07-11 — the make-label reckoning + visual make/miss + form-labeling views
+The day the make-driver story got falsified and rebuilt honestly.
+- **User audited all 91 shots of 0710 → the make labels were garbage.** Ground
+  truth: **17 non-shots (19% tracker false positives), 74 real shots, real make%
+  49%** (tracker had said 24%), and the old geometric make/miss classifier was
+  **49% accurate = a coin flip.** The 07-10 recap's "higher arc + deeper legs =
+  makes" story was a **pure artifact**: the tracker labeled cleanly-tracked high
+  arcs as makes (easy to follow through the rim), manufacturing a fake arc→make
+  correlation. On verified labels every arc/knee driver **collapses or flips**
+  (release +0.64→−0.19, entry +0.57→−0.24, apex +0.54→−0.35, knee −0.53→+0.19);
+  only **BALANCE survives** (steadier base = makes, d=−0.51 p=0.10) and nothing
+  is significant. `session_recap_pdf --truth` drops non-shots + uses your labels
+  ("VERIFIED BY YOU"); dashboard recap auto-uses `make_truth.json` ("✓verified").
+  ⚠️ **Lesson burned in: never report a make-driver off tracker labels — verify
+  the outcomes first.**
+- **Visual make/miss detector — 87%, up from 49%** (`shotlab/make_visual.py`,
+  `models/make_visual.joblib`). User's insight ("a human reads it instantly, the
+  signal IS there") was right; a Fable pass found the tracked ball is the wrong
+  thing to watch — the human cues are the **net whipping** and the ball dropping
+  **through/below** the rim vs caroming to the **side**. HSV + frame-differencing
+  in a rim-anchored ROI, CPU-only, no ball tracking at the rim → 7 features →
+  gradient boosting on the audited labels. **5-fold AUC 0.967 / acc 90.7%;
+  leave-one-clip-out AUC 0.942 / acc 86.5%** (vs 0.49 geometric, 0.61 audio).
+  Wired into the audit view (auto-label + uncertain-first ordering).
+- **Shot Explorer + viewing tools** (dashboard): filter every shot by any
+  measurable with date-labeled dropdowns; **elbow flare joined onto wide shots**
+  (per-shot flare in the explorer); **form-vs-ideal skeleton overlay** in the
+  film room (your rep vs your own ideal); **shot scatter** (plot any measurable
+  vs another, click a dot to watch); shot chart, makes-vs-misses, closest-to-ideal.
+- **Flare review view + auto-reject bent-arm frames.** Root cause of bogus high
+  flare: `refine_release_frame` now snaps each wrist-apex candidate to the nearby
+  most-extended-elbow frame and **drops candidates whose elbow never reaches ~145°**
+  (gathers/pumps read artificially flared — 0710 shot 18's −22° was a bent
+  gather). Each reading carries `elbow_deg`. Plus a **Flare review** audit view
+  (flag bad readings, recompute) and a **Form-notes view** (watch the full-clip
+  overlay, rate each shot good/ok/bad + note → `form_notes.json`, eye-rated form
+  as future labels).
+
+---
+
+## Session log 2026-07-10 — ⭐ the Galaxy S8 arrives; monocular 3D + 2-camera flare land
+**The second camera showed up and the whole 3D stack came online.** An adversarial
+Fable review overturned the earlier "wide camera is too far, must re-shoot"
+conclusion — **3 of 4 blockers were misdiagnosed** and fixable on existing footage.
+- **3D foundation** (`arc3d.py`, `ballistic.py`, `charuco.py`): VFR time-base fix
+  (Pixel clips are variable frame rate — nominal 27fps was really 30→24 mid-clip;
+  assuming constant 30 inflated reconstructed gravity 1.56× and auto-rejected good
+  arcs). Single-camera **metric arc from the ball's known diameter** (X,Y in feet,
+  focal-free, built-in gravity self-check) + a **gravity-constrained ballistic
+  fit** (fits P0,V0 of a projectile with accel pinned to g through sparse/gappy
+  pixel points; reproj + radius-consistency = independent honesty gates). Coarse
+  **ChArUco** board the far camera can actually resolve (fine checkerboard got 0
+  detections).
+- **W7 monocular 3D elbow flare:** exposed MediaPipe's metric `world` landmarks
+  (33×3, meters, hip-origin) — a 3D estimate we were already discarding. On the
+  close S8 clip: **flare median −9.5° (sd 3.5, n=21)**, agreeing with the 2D
+  image-plane estimate (−10.4°). Session-relative + model-biased → LOW-MED conf.
+- **W4 camera-tilt self-cal:** recover the wide camera's pitch/roll from the
+  physics of ≥2 arcs alone (no rim/board) — synthetic true 18/4° → 17.1/4.3°,
+  rmse 0.69px. Unlocks absolute depth + true release angle.
+- **3D analysis pipeline + dashboard view** (`analysis3d.py`, `tools/analyze3d.py`
+  → `analysis3d.json`): the focal-free per-radius gravity check was too noisy at
+  the far ball's size (0/10 passed), so the "clean arc" gate switched to the
+  **ballistic reprojection** (<5px), stable at small ball size. Then a dense
+  orange detector made dribble+shot+retrieve one continuous run → gap-splitting
+  merged shots; fixed by reusing the standard **rim-anchored** shots from the
+  detection cache. Result on 0710's 4 clips: **91 shots → 27 clean arcs**, apex
+  above release median **3.8 ft** (2.9–4.8), reproj 1.3–4.3px. Apex = the
+  unambiguous trustworthy metric; horizontal channel still mixes L/R with
+  toward-rim depth until W4 tilt is applied.
+- **2-camera flare-vs-make** (`tools/flare_report.py`): audio-sync each (wide,
+  close) pair, measure flare at each release + render an annotated still, time-map
+  to the wide clip's outcome. 159 releases, 94 matched. **FINDING: flare does NOT
+  track make/miss** — makes −10.9 vs misses −9.8 (d −0.28, perm p 0.31). Flare is
+  a **consistent habit** (~−10° either way); the **arc is the stronger driver.**
+- **Rich session recap PDF** (`tools/session_recap_pdf.py`): 5-page recap (stats,
+  make/miss drivers with Cohen's d + permutation p, cross-metric relationships,
+  flare + takeaways). ⚠️ Its 0710 findings were computed on **tracker labels** and
+  were **overturned the next day** (see 07-11) — kept here only as the cautionary
+  example.
+- **Make/miss audit view** (dashboard): verify the tracker's calls against ground
+  truth, "NOT a shot" option (detector fires on dribbles/retrieves), auto-flag
+  suspected non-shots, real-time per-shot clips extended past the rim with the rim
+  drawn. This is the tool that produced the 07-11 reckoning.
+
+---
+
+## Session log 2026-07-07 — test-suite hardening + scaled-print calibration
+- **Hollow-guard hardening:** made the test guards actually **mutation-die** —
+  several were passing against broken code (asserting nothing that would fail if
+  the logic regressed). The suite now bites.
+- **`calibrate_rig --square-in`:** support a scaled checkerboard print (measure the
+  real printed square, pass it in) so the mono/stereo focal solve stays honest
+  when the board didn't print at exactly 6.000in.
+
+---
+
+## Session log 2026-07-05/06 — two audit passes + the v17→v19 rebuild ladder
+A concentrated correctness campaign (independent audit → fixes → rebuild →
+redeploy, repeated). Batches:
+- **Release detection & honest labeling** (07-05): fixed release-frame detection,
+  plugged curation leaks, made low-confidence readings label themselves.
+- **Second audit pass** (07-06): gate **false-confident releases** + shared-artifact
+  gating (stop trusting a cached artifact that a later stage invalidated).
+- **Data-correctness batch:** fixed **RANSAC-inlier corruption** + gated physically
+  **impossible values** so junk can't reach the stats.
+- **Pipeline batch:** auto-flag **phantom shots**, fix zone-release, catch **config
+  staleness** (stale config silently changing results).
+- **Medium/low batch:** more robust make/miss + audio timing + **2-cam roll** +
+  **layup reclassification** (layups were polluting the jumper pool).
+- **App + coaching batches:** stop the live app **nagging on the wrong things**;
+  point coaching at his **real make-drivers**.
+- **Final sweep:** caught **4 self-inflicted regressions** + real misses before
+  redeploy.
+- **Rebuild ladder:** profile redeployed from the **v17** (phantom-cleaned pool),
+  **v18** (make/miss + layup reclass), and **v19** (make/miss window fix) rebuilds
+  in turn — each rebuild re-derives the profile from the cleaned shot pool, not by
+  hand-editing the profile.
+
+---
+
+## Session log 2026-07-03 — release target, calibration gating, "Scan me" enrollment
+- **Textbook ~52° release target** added; **arc angles gated on calibration** (don't
+  report an arc angle in degrees unless the camera geometry supports it).
+- **App "Scan me" enrollment:** stand whole-body-in-frame ~3s and the live app
+  **locks onto YOU**, not passers-by / objects / you rebounding — the fix for the
+  live app chasing the wrong person. (Now step 7 of the filming checklist.)
+- **Filming checklist** written up (lessons through 07-03) — see the top of this
+  doc.
 
 ---
 
