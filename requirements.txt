@@ -20,6 +20,16 @@ mediapipe>=0.10.30
 scikit-learn>=1.5
 joblib>=1.4
 
+# GPU ball detection (optional). Export the detector to ONNX
+# (YOLO('best.pt').export(format='onnx', imgsz=1280)) and pass the .onnx as
+# --weights; shotlab/phase1_ball/detect_yolo.py then runs it via onnxruntime.
+# On an AMD/Windows box (no CUDA) install the DirectML build -- it reaches the
+# Radeon GPU and is ~20x faster than CPU at imgsz 1280. NVIDIA: onnxruntime-gpu.
+# Plain onnxruntime also works (CPU). Only one of these; the .pt/OpenVINO CPU
+# path needs none of them.
+# onnxruntime-directml>=1.20   # AMD/Intel GPU on Windows (DmlExecutionProvider)
+onnx>=1.16
+
 # Voice tagging (optional): offline speech-to-text for tools/voicetag_session.py.
 # Also download a small model dir from https://alphacephei.com/vosk/models
 # (~50MB) and pass it via --model. Only needed if you narrate workouts.
