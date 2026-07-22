@@ -40,18 +40,22 @@ backfilled from git.)
 
 ## ⭐ NEXT SESSION PICKUP (2026-07-22 night)
 **Where we are:** Step-1 of the TrackNet plan is DONE and it redirected the plan.
-Two measurements (`process/step1_gate_results.txt`, `process/step1a_oracle_ceiling.txt`):
-the detector already sees the ball 99%, and giving the tracker PERFECT detection
-recovers *fewer* shots — so **detection is not the bottleneck; segmentation /
-attempt-detection is.** TrackNet, tiling, and the low-conf-cloud+RANSAC Step-2 recipe
-are all OFF the table. The `assemble_track` velocity/reset bug fix is committed
-(35/35 green). All committed through `68cb7d3`; **NOT pushed.**
+Three measurements now (`process/step1_gate_results.txt`, `..._oracle_ceiling.txt`,
+`..._rim_oracle_ceiling.txt`): the detector already sees the ball 99% → TrackNet/tiling
+stay OFF the table (robust). The oracle-ceiling story is messier: gap-based `segment_shots`
+said perfect detection recovers *fewer* shots, but the 07-22-night rim-anchored follow-up
+(production `detect_shots_to_rim`) **flips that sign** (+2 oracle, +1 free cloud) — so the
+"detection HURTS / cloud regresses" claim was a segmenter artifact and is RETRACTED. On
+single-digit counts it's **inconclusive, not reversed**: attempt-detection / film-closer is
+still the primary lever, but the low-conf-cloud+RANSAC Step-2 is no longer disproven. The
+`assemble_track` velocity/reset bug fix is committed (35/35 green). Committed through
+`68cb7d3` + this session's follow-up; **NOT pushed.**
 
-**Recommended next move:** FILM CLOSER (free, biggest lever) → re-run the pipeline
-(~30–40 min) → check shot count/arcs. Only if closer footage still falls short, build
-attempt-detection/segmentation (~3–5 days). Optional hard-number follow-up: re-run the
-1a oracle through rim-anchored `detect_shots_to_rim` (needs a 0720 calibration) to size
-the attempt-detection prize.
+**Recommended next move (unchanged priority, one cheap addition):** FILM CLOSER (free,
+biggest lever) → re-run the pipeline (~30–40 min) → check shot count/arcs. CHEAP parallel
+win now provable: wire the conf-0.01 cloud through the now-fixed tracker and re-measure on a
+FULL clip (not just labeled windows) — the rim follow-up suggests a small free gain. Only if
+closer footage still falls short, build attempt-detection/segmentation (~3–5 days).
 
 **⚠️ Gotchas:** (1) ONNX-DirectML inference runs under SYSTEM python, not `.venv_*`.
 (2) Machine had 6 silent power-losses in 5 days (suspect PSU transients on the 9070 XT)
@@ -254,16 +258,34 @@ likely trigger. TODO for user: check PSU wattage/age + GPU temps under load.
 - **1a oracle ceiling (`tools/exp_oracle_ceiling.py` → `process/step1a_oracle_ceiling.txt`):**
   ran the REAL `assemble_track`+segmenter four ways — baseline(YOLO@0.25)=**6** shots,
   cloud(@0.01)=**3**, ORACLE(GT center injected, detector never misses)=**4**,
-  oracle+4px=**3**. **Perfect detection DECREASED shot count; more candidates HURT.**
-  Root cause: ball-PRESENCE ≠ ball-in-FLIGHT (one clip = 692 present frames of
-  dribble/hold), so the limiter is **attempt-detection / segmentation**, not recall.
-  ⚠️ confound: used `segment_shots` (gap-split fallback); production uses rim-anchored
-  `detect_shots_to_rim` when calibrated — direction robust, exact counts segmenter-specific.
+  oracle+4px=**3**. Through THIS segmenter perfect detection DECREASED the count.
+  Root cause hypothesis: ball-PRESENCE ≠ ball-in-FLIGHT (one clip = 692 present frames of
+  dribble/hold), so the limiter looked like **attempt-detection / segmentation**, not recall.
+  ⚠️ confound flagged at the time: used `segment_shots` (gap-split fallback); production
+  uses rim-anchored `detect_shots_to_rim`. I claimed the DIRECTION was robust — **it is not
+  (see the 07-22 night follow-up below), so that claim is RETRACTED.**
+- **1a-rim follow-up (`tools/exp_oracle_ceiling_rim.py` → `process/step1a_rim_oracle_ceiling.txt`,
+  07-22 night):** same four candidate streams, but segmented with the PRODUCTION rim-anchored
+  `detect_shots_to_rim` (rim auto-detected per clip, median over the decoded labeled frames).
+  baseline=**2**, cloud(@0.01)=**3 (+1)**, ORACLE=**4 (+2)**, oracle+4px=**3 (+1)**. The oracle
+  delta **flips sign** vs the gap-based run (−2 → +2): the "perfect detection HURTS / cloud
+  regresses" result was an **artifact of `segment_shots` merging flights**, not a system
+  property. ⚠️ BUT the counts are single-digit, 3 clips, within labeled footage only, over
+  sparse labeled-only tracks with an auto-rim — **too thin to decide either way.** Honest net:
+  the negative Step-2 claim is *unsupported*, not *reversed*. The big-lever conclusion
+  (attempt-detection / film-closer) is unchanged; what dies is the specific "cloud regresses,
+  off the table" sub-claim.
 
-**⛔ REVISED DECISION (commits 073fe95, 68cb7d3):** do NOT build the plan's Step-2
-recipe (low-conf cloud + parabola-RANSAC over the cloud) — it regresses here. The
-whole detector-fusion plan aimed at the wrong bottleneck. **Levers: (1) FILM CLOSER
-(free, biggest), (2) attempt-detection/segmentation.** Fixed the reviewer-flagged
+**⛔ REVISED DECISION (commits 073fe95, 68cb7d3) — PARTIALLY SOFTENED 07-22 night:** the
+plan's Step-2 recipe (low-conf cloud + parabola-RANSAC) was declared dead because it
+"regresses" — but that rested on the gap-based segmenter. Through the production rim-anchored
+segmenter the free conf-0.01 cloud shows a small **positive** (+1), so **Step-2 is NOT proven
+to regress; it is UNPROVEN on thin data.** Do not build the full RANSAC-fusion machinery yet,
+but the cheap move — wire the conf-0.01 cloud through the now-fixed tracker and re-measure on a
+FULL clip (not just labeled windows) — is back on the table. The
+whole detector-fusion plan still aimed at the wrong PRIMARY bottleneck. **Levers: (1) FILM CLOSER
+(free, biggest), (2) attempt-detection/segmentation, (3) cheap: turn the conf-0.01 cloud ON and
+re-measure.** Fixed the reviewer-flagged
 `assemble_track` velocity bug (per-frame velocity now divided by the gap it spanned)
 + a dead-code reset bug (resets were bridging velocity across shots); 35/35 test files
 green — correct regardless of the plan pivot. **⚠️ RUNTIME: ONNX-DirectML inference

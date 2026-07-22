@@ -1,0 +1,17 @@
+provider: DmlExecutionProvider
+
+          clip  labeled GTballs         rim(x,y,r,gate) | base cloud oracle orc+n   (shots)
+PXL_20260720_151519220      863     692        (1134,470,16,90) |    2     2      3     2
+PXL_20260720_152319112      331     190        (1306,462,19,90) |    0     1      1     1
+PXL_20260720_153054813      146      39         (972,469,20,90) |    0     0      0     0
+----------------------------------------------------------------------------------------
+         TOTAL     1340     921                         |    2     3      4     3
+
+DELTA vs baseline:  cloud(@0.01) +1   ORACLE +2   oracle+4px +1
+
+INTERPRETATION (rim-anchored / production segmenter):
+  ORACLE delta ~ 0 -> a perfect detector buys ~no extra shots through the
+     shipping segmenter either -> the lever is attempt-detection/film-closer,
+     NOT detection or temporal fusion. Confirms 1a on the production path.
+  ORACLE delta > 0 -> the gap-based 1a UNDERSOLD the prize; a better detector
+     does buy shots once segmentation is rim-anchored -> reconsider fusion.
