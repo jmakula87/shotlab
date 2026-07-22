@@ -258,6 +258,22 @@ freeze-10, 40 ep, mAP50>0.1 sanity gate, ONNX export), `process/KAGGLE_TRAINING.
 (the per-session loop: label → pack → upload → Run All → download → verify vs the
 CPU-trained `ball_human` golden). Inference stays local on the AMD GPU.
 
+**First real run (2026-07-22, verified end-to-end).** Kaggle T4, 40 epochs,
+`ball_gpu_kaggle`. Loop proven: trained in cloud → downloaded → runs locally on the
+RX 9070 XT via DirectML at **4.6 ms/frame**. Notebook needed two live fixes now
+committed: recursive dataset glob (Kaggle nests at `/kaggle/input/datasets/<user>/
+<slug>/`) + the phone-verify / internet-toggle gates are Kaggle-account steps.
+⚠️ **Honest head-to-head vs `ball_human` (12-ep interrupted CPU) on the 227-img
+ground-truth val set: basically a WASH.** Kaggle: mAP50 0.936 / mAP50-95 0.742 /
+P 0.904 / R 0.861. ball_human: mAP50 0.940 / mAP50-95 0.720 / P 0.827 / R 0.875.
+Kaggle wins precision + box localization; ball_human a hair more recall; mAP50 tied
+within noise (120 instances). **Takeaway: more epochs did NOT lift recall → far-ball
+recall is a DATA (more labels) problem, not a compute problem — consistent with the
+prior finding. The cloud pipeline's value is a safe/repeatable retrain, not a recall
+jump.** `ball_gpu_kaggle` is a reasonable new canonical (better precision, fully
+trained, no freeze baggage). NOT yet promoted — pending a far-ball-specific check on
+the real 07-20 clip if desired.
+
 ---
 
 ## Session log 2026-07-22 (later) — ⛔ GPU-training FREEZE post-mortem
