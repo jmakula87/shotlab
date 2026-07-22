@@ -13,10 +13,11 @@ on the 9070 XT at imgsz 1280 in ~3 min/epoch (steady state) vs ~10 min on the
 Ryzen 9 7900X. Numerically equivalent to real BN (reduction-order differences
 only); pretrained BN weights + running stats + state-dict keys are preserved.
 
-Call maybe_apply(device) once before building the model. It is a no-op on CPU and
-on non-ROCm torch (so the same train script runs unpatched on the CPU env). Remove
-this once AMD ships a ROCm-Windows build whose MIOpen BN kernels compile for
-gfx1201 -- then native MIOpen BN is faster.
+Call maybe_apply(device) once before building the model. It is a no-op on CPU, on
+non-ROCm torch (so the same train script runs unpatched on the CPU env), and on
+non-Windows (Linux ROCm incl. WSL2 compiles BN natively -- see WSL_ROCM_SETUP.md).
+Remove this once AMD ships a ROCm-Windows build whose MIOpen BN kernels compile
+for gfx1201 -- then native MIOpen BN is faster there too.
 """
 
 from __future__ import annotations
@@ -30,9 +31,15 @@ def maybe_apply(device) -> bool:
     global _applied
     if _applied:
         return True
+    import platform
     import torch
     # only on a real GPU device and only when torch is a ROCm build
     if str(device).lower() in ("cpu", "", "none") or getattr(torch.version, "hip", None) is None:
+        return False
+    # The MIOpen BN-compile bug (ROCm/ROCm #6150) is specific to the ROCm-for-
+    # WINDOWS HIP SDK packaging. Linux ROCm (incl. WSL2) compiles BN fine, so the
+    # patch is unnecessary there and the pure-torch BN would only be slower.
+    if platform.system() != "Windows":
         return False
     import torch.nn as nn
 
