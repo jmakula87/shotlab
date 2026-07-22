@@ -46,7 +46,17 @@ def assemble_track(cands_by_frame: dict[int, list[BallCandidate]],
 
     chosen: dict[int, BallCandidate] = {}
     prev = prev_prev = None
-    prev_f = None
+    prev_f = prev_prev_f = None
+
+    def seed(f: int, cands: list[BallCandidate]) -> BallCandidate:
+        """Start a fresh one-point arc from the most confident detection."""
+        nonlocal prev, prev_prev, prev_f, prev_prev_f
+        best = max(cands, key=lambda c: c.conf)
+        chosen[f] = best
+        # a fresh arc has a single point: next frame gates on position, not
+        # velocity, so prev_prev MUST stay None (not the previous shot's tail).
+        prev, prev_prev, prev_f, prev_prev_f = best, None, f, None
+        return best
 
     for f in sorted(cands_by_frame):
         cands = cands_by_frame.get(f, [])
@@ -54,35 +64,36 @@ def assemble_track(cands_by_frame: dict[int, list[BallCandidate]],
             continue
 
         gap = (f - prev_f) if prev_f is not None else None
-        reset = prev is None or (gap is not None and gap > max_coast)
+        if prev is None or (gap is not None and gap > max_coast):
+            seed(f, cands)
+            continue
 
-        if reset:
-            # start a fresh arc from the most confident detection
-            best = max(cands, key=lambda c: c.conf)
-            prev_prev = None
+        if prev_prev is not None:
+            # constant-velocity prediction. Velocity is measured PER FRAME
+            # (divide by the gap it spanned) then scaled to this frame's gap, so
+            # irregularly spaced detections under coasting still predict right.
+            dt_prev = max(1, prev_f - prev_prev_f)
+            step = f - prev_f
+            vx = (prev.cx - prev_prev.cx) / dt_prev
+            vy = (prev.cy - prev_prev.cy) / dt_prev
+            pred_x = prev.cx + vx * step
+            pred_y = prev.cy + vy * step
         else:
-            if prev_prev is not None:
-                # constant-velocity prediction, time-scaled across any small gap
-                step = max(1, f - prev_f)
-                vx = (prev.cx - prev_prev.cx)
-                vy = (prev.cy - prev_prev.cy)
-                pred_x = prev.cx + vx * step
-                pred_y = prev.cy + vy * step
-            else:
-                pred_x, pred_y = prev.cx, prev.cy
-            best, bestd = None, gate_px
-            for c in cands:
-                d = np.hypot(c.cx - pred_x, c.cy - pred_y)
-                score = d - 30 * c.conf       # prefer confident, nearby blobs
-                if score < bestd:
-                    bestd, best = score, c
-            if best is None:
-                # gate rejected everything -> treat as a fresh seed
-                best = max(cands, key=lambda c: c.conf)
-                prev_prev = None
+            pred_x, pred_y = prev.cx, prev.cy
+
+        best, bestd = None, gate_px
+        for c in cands:
+            d = np.hypot(c.cx - pred_x, c.cy - pred_y)
+            score = d - 30 * c.conf       # prefer confident, nearby blobs
+            if score < bestd:
+                bestd, best = score, c
+        if best is None:
+            # gate rejected everything -> treat as a fresh seed
+            seed(f, cands)
+            continue
 
         chosen[f] = best
-        prev_prev, prev, prev_f = prev, best, f
+        prev_prev, prev, prev_prev_f, prev_f = prev, best, prev_f, f
 
     return chosen
 

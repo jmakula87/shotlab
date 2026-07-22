@@ -1,5 +1,31 @@
 # Plan: better flight-ball tracking (REVISED after Codex + Fable review, 2026-07-22)
 
+> ## ✅ STEP-1 GATE RESULT (2026-07-22) — TrackNet is OFF the table; fix the tracker.
+> Experiment 1b/1c (`tools/exp_subthreshold_signal.py`, full output
+> `process/step1_gate_results.txt`) run over the 921 labeled ball-present frames of
+> the 0720 session (system-python ONNX-DirectML detector):
+> - Detector hit-rate: **99%** at conf 0.01 (98% far / 100% mid / 99% close); 95% at
+>   the pipeline's conf 0.25. Motion detector 15% (not the lever).
+> - **Of the 46 frames the current pipeline (plain@0.25) misses, plain@0.01 recovers
+>   85% (67% of the far misses).** Tiling adds nothing (tiled@0.01 == plain@0.01).
+>   Motion recovers 0%.
+>
+> **Decision per the plan's own rule (HIGH recovery ⇒ signal exists sub-threshold):**
+> - ❌ **Step 4 (TrackNet/WASB) NOT justified** — the detector already sees the ball;
+>   a temporal model would recover shots the detector produces at low confidence.
+> - ❌ **Tiling not the lever** on this footage (no gain over plain@0.01).
+> - ✅ **Go to Step 2 — fix the tracker.** The greedy `assemble_track` discards the
+>   low-conf detections holding 85% of the misses.
+> - ⚠️ Caveat: 921 frames from the deliberately-badly-filmed 0720 session; far bucket
+>   has only 3 misses. 1a (oracle ceiling on the real tracker, well-filmed sessions)
+>   still worth running to size the shots-recovered prize before the full Step-2 build.
+>
+> **Started:** `assemble_track` velocity + reset bugs FIXED (track.py) — per-frame
+> velocity now divided by the gap it spanned; resets now actually start a one-point
+> arc instead of bridging velocity across shots. 35/35 test files green. Remaining
+> Step-2 work (low-conf candidate cloud + parabola-RANSAC assembly + physics gap-ROI
+> re-detection) is unstarted.
+
 > **Both reviewers: the original "build TrackNet + fusion" draft was OVER-SCOPED.**
 > Verdict = **measure-first, then build the CHEAPEST thing that works — which is
 > almost certainly a TRACKER fix, not a new model.** TrackNet/WASB is a last resort,

@@ -1,0 +1,24 @@
+provider: DmlExecutionProvider
+  PXL_20260720_151519220: evaluated 692 present frames
+  PXL_20260720_152319112: evaluated 190 present frames
+  PXL_20260720_153054813: evaluated 39 present frames
+
+=== overall hit-rate on 921 labeled ball-present frames ===
+config          all      far      mid    close
+plain@0.01      99%      98%    100%     99%
+plain@0.1       97%      94%     96%     98%
+plain@0.25      95%      94%     87%     97%
+tiled@0.01      99%      98%    100%     99%
+tiled@0.1       96%      96%     88%     97%
+tiled@0.25      93%      92%     83%     95%
+motion          15%       6%      8%     17%
+
+=== recovery of the 46 frames the CURRENT pipeline (plain@0.25) MISSES ===
+(of those, 3 are far r<=12)
+  plain@0.01   recovers   85% of all misses     67% of far misses
+  tiled@0.01   recovers   85% of all misses     67% of far misses
+  tiled@0.25   recovers   20% of all misses      0% of far misses
+  motion       recovers    0% of all misses      0% of far misses
+
+INTERPRETATION: high recovery => signal exists, TRACKER is the bottleneck
+                near-zero    => real logit-level floor, temporal model justified
