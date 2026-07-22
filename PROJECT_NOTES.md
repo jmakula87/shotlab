@@ -54,15 +54,19 @@ lever = verified-rim + segmenter repair, NOT "film closer"** — with a perfect 
 Step-1 section). Tracker velocity/reset fix is correct but has ZERO test coverage. Committed
 through `68cb7d3` + this session (`b7bdf2d` + docs/reviews); **NOT pushed.**
 
-**Recommended next move (both reviewers, independently) — THE DECISIVE EXPERIMENT:** a
-full-clip, HAND-COUNTED attempt evaluation (~1hr owner time). Owner watches the 3 clips FRESH
-(do NOT seed the list from current detections), logs every attempt (frame, make/miss,
-rim-reached vs airball) + ONE manually-verified rim. Then run 5 staged ablations
-(baseline→tracker→segmenter; GT-oracle-TRACK; GT-windows→arc-fit) and report **matched recall +
-precision** per stage → isolates detection vs tracking vs segmentation with real denominators.
-Only AFTER that: the cheap segmenter bug-fixes + cloud@0.01, judged against real numbers.
-⚠️ owner decision pending: build this harness on the existing 3 clips, vs re-film with a LOCKED
-tripod first (the 110px rim spread says the current footage has a moving-camera problem).
+**THE DECISIVE EXPERIMENT — HARNESS IS BUILT (commit b8ae653), waiting on the ~1hr hand-count.**
+Owner chose "build on existing 3 clips." Runbook: `process/EVAL_HARNESS_RUNBOOK.md`. Three steps
+(SYSTEM python): (1) `python -X utf8 tools/hand_count.py --clip <clip>` — watch FRESH, log every
+attempt (m=make, n=miss, b=airball) → `process/handcount/<clip>_attempts.csv`; (2)
+`tools/verify_rim.py --clip <clip>` — click ONE rim, or add frame-ranged rims for clip1's
+camera-move (add pos1 @f0, navigate to the move, add pos2) → `config/rim_<clip>.json`; (3)
+`tools/eval_ablations.py --clip <clip>` — detects once @0.01 (baseline=filter≥0.25), segments per
+rim through the PRODUCTION `detect_shots_to_rim`, MATCHES to the hand count, prints precision +
+recall split rim-reached/airball. C1/C2 runnable now; C3-C5 (oracle-track etc.) stubbed pending
+dense GT. Reading guide + "what each result implies" in the runbook. AFTER real numbers exist:
+the 5 cheap segmenter bug-fixes (`court.py:225-291`) + cloud@0.01, judged against them — NOT
+before. Harness validated end-to-end on real GT (5 shots w/ 2 frame-ranged rims incl. the
+bounce-back pair); `tests/test_eval_harness.py` covers the matcher/rims/CSV (36/36 suite green).
 
 **⚠️ Gotchas:** (1) ONNX-DirectML inference runs under SYSTEM python, not `.venv_*`.
 (2) Machine had 6 silent power-losses in 5 days (suspect PSU transients on the 9070 XT)
