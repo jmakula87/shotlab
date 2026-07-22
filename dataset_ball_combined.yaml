@@ -1,0 +1,12 @@
+# Combined ball dataset: close-ball (existing, ~46px) + native far-ball (0720,
+# ~20px + copy-paste 12-26px). Trains one model across a RANGE of ball scales so
+# it detects both close AND far balls -- and so --tile (native crops) pays off.
+# Ultralytics finds labels by swapping /images/ -> /labels/ in each path.
+train:
+  - C:/Users/jmaku/Desktop/ShotLab/dataset_ball/images/train
+  - C:/Users/jmaku/Desktop/ShotLab/dataset_ball_native/images/train
+val:
+  - C:/Users/jmaku/Desktop/ShotLab/dataset_ball/images/val
+  - C:/Users/jmaku/Desktop/ShotLab/dataset_ball_native/images/val
+nc: 1
+names: ['ball']
