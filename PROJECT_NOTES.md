@@ -39,23 +39,30 @@ backfilled from git.)
    otherwise). The close 2nd camera (S8) is the real form-detail fix.
 
 ## ⭐ NEXT SESSION PICKUP (2026-07-22 night)
-**Where we are:** Step-1 of the TrackNet plan is DONE and it redirected the plan.
-Three measurements now (`process/step1_gate_results.txt`, `..._oracle_ceiling.txt`,
-`..._rim_oracle_ceiling.txt`): the detector already sees the ball 99% → TrackNet/tiling
-stay OFF the table (robust). The oracle-ceiling story is messier: gap-based `segment_shots`
-said perfect detection recovers *fewer* shots, but the 07-22-night rim-anchored follow-up
-(production `detect_shots_to_rim`) **flips that sign** (+2 oracle, +1 free cloud) — so the
-"detection HURTS / cloud regresses" claim was a segmenter artifact and is RETRACTED. On
-single-digit counts it's **inconclusive, not reversed**: attempt-detection / film-closer is
-still the primary lever, but the low-conf-cloud+RANSAC Step-2 is no longer disproven. The
-`assemble_track` velocity/reset bug fix is committed (35/35 green). Committed through
-`68cb7d3` + this session's follow-up; **NOT pushed.**
+**Where we are:** Step-1 of the TrackNet plan is DONE, and a DUAL ADVERSARIAL REVIEW
+(Codex + Fable, owner-requested "push further") retired the oracle experiment family as a
+sizing tool. Settled facts: detector sees the ball 99% inside labeled windows → TrackNet/tiling
+stay OFF the table. The gap-based "perfect detection HURTS / cloud regresses" headline was a
+`segment_shots` artifact → RETRACTED (mechanism proven). BUT the rim follow-up's `+2` is also
+untrustworthy: the labeled-window design is **selection-biased** (labels seeded only from
+already-detected shots → blind to the detection prize) and every number is an **unmatched raw
+count** (no precision/FP; the `+2` includes a bounce-back false positive). The rim is a
+**material confound** (auto-rim vs cached differ 110/225/59px; real shots span a 110px x-spread
+within one clip → tripod moved / a single per-clip `Calibration` is wrong). **Biggest EVIDENCED
+lever = verified-rim + segmenter repair, NOT "film closer"** — with a perfect track the production
+`detect_shots_to_rim` still drops ~half the rim-reaching shots via 5 cheap-fix defects (see the
+Step-1 section). Tracker velocity/reset fix is correct but has ZERO test coverage. Committed
+through `68cb7d3` + this session (`b7bdf2d` + docs/reviews); **NOT pushed.**
 
-**Recommended next move (unchanged priority, one cheap addition):** FILM CLOSER (free,
-biggest lever) → re-run the pipeline (~30–40 min) → check shot count/arcs. CHEAP parallel
-win now provable: wire the conf-0.01 cloud through the now-fixed tracker and re-measure on a
-FULL clip (not just labeled windows) — the rim follow-up suggests a small free gain. Only if
-closer footage still falls short, build attempt-detection/segmentation (~3–5 days).
+**Recommended next move (both reviewers, independently) — THE DECISIVE EXPERIMENT:** a
+full-clip, HAND-COUNTED attempt evaluation (~1hr owner time). Owner watches the 3 clips FRESH
+(do NOT seed the list from current detections), logs every attempt (frame, make/miss,
+rim-reached vs airball) + ONE manually-verified rim. Then run 5 staged ablations
+(baseline→tracker→segmenter; GT-oracle-TRACK; GT-windows→arc-fit) and report **matched recall +
+precision** per stage → isolates detection vs tracking vs segmentation with real denominators.
+Only AFTER that: the cheap segmenter bug-fixes + cloud@0.01, judged against real numbers.
+⚠️ owner decision pending: build this harness on the existing 3 clips, vs re-film with a LOCKED
+tripod first (the 110px rim spread says the current footage has a moving-camera problem).
 
 **⚠️ Gotchas:** (1) ONNX-DirectML inference runs under SYSTEM python, not `.venv_*`.
 (2) Machine had 6 silent power-losses in 5 days (suspect PSU transients on the 9070 XT)
@@ -259,8 +266,11 @@ likely trigger. TODO for user: check PSU wattage/age + GPU temps under load.
   ran the REAL `assemble_track`+segmenter four ways — baseline(YOLO@0.25)=**6** shots,
   cloud(@0.01)=**3**, ORACLE(GT center injected, detector never misses)=**4**,
   oracle+4px=**3**. Through THIS segmenter perfect detection DECREASED the count.
-  Root cause hypothesis: ball-PRESENCE ≠ ball-in-FLIGHT (one clip = 692 present frames of
-  dribble/hold), so the limiter looked like **attempt-detection / segmentation**, not recall.
+  ⚠️ **FABRICATION CORRECTED (dual-review 07-22 night):** an earlier note explained clip1's
+  692 present frames as "dribble/hold" — FALSE. `make_label_task.py:44-49` builds labels ONLY
+  from each already-detected shot's flight window ±12 frames, so those 692 frames are ~20
+  flight-window clusters (sizes up to 118), NOT dribble/hold. The real reason perfect detection
+  didn't help was the segmenter artifact below, not "presence≠flight."
   ⚠️ confound flagged at the time: used `segment_shots` (gap-split fallback); production
   uses rim-anchored `detect_shots_to_rim`. I claimed the DIRECTION was robust — **it is not
   (see the 07-22 night follow-up below), so that claim is RETRACTED.**
@@ -271,21 +281,42 @@ likely trigger. TODO for user: check PSU wattage/age + GPU temps under load.
   delta **flips sign** vs the gap-based run (−2 → +2): the "perfect detection HURTS / cloud
   regresses" result was an **artifact of `segment_shots` merging flights**, not a system
   property. ⚠️ BUT the counts are single-digit, 3 clips, within labeled footage only, over
-  sparse labeled-only tracks with an auto-rim — **too thin to decide either way.** Honest net:
-  the negative Step-2 claim is *unsupported*, not *reversed*. The big-lever conclusion
-  (attempt-detection / film-closer) is unchanged; what dies is the specific "cloud regresses,
-  off the table" sub-claim.
+  sparse labeled-only tracks with an auto-rim — **too thin to decide either way.**
 
-**⛔ REVISED DECISION (commits 073fe95, 68cb7d3) — PARTIALLY SOFTENED 07-22 night:** the
-plan's Step-2 recipe (low-conf cloud + parabola-RANSAC) was declared dead because it
-"regresses" — but that rested on the gap-based segmenter. Through the production rim-anchored
-segmenter the free conf-0.01 cloud shows a small **positive** (+1), so **Step-2 is NOT proven
-to regress; it is UNPROVEN on thin data.** Do not build the full RANSAC-fusion machinery yet,
-but the cheap move — wire the conf-0.01 cloud through the now-fixed tracker and re-measure on a
-FULL clip (not just labeled windows) — is back on the table. The
-whole detector-fusion plan still aimed at the wrong PRIMARY bottleneck. **Levers: (1) FILM CLOSER
-(free, biggest), (2) attempt-detection/segmentation, (3) cheap: turn the conf-0.01 cloud ON and
-re-measure.** Fixed the reviewer-flagged
+**⭐⭐ DUAL ADVERSARIAL REVIEW (Codex + Fable, 07-22 night, owner-requested "push further";
+verbatim in `process/reviews/2026-07-22_step1_oracle_*.md`). Both converged independently:**
+1. **Retraction SOUND** (Fable proved the mechanism: a perfect GT-only track through `segment_shots`
+   drops all 3 certain makes — the gap-based path only ever segmented BECAUSE the detector missed
+   frames that isolated the arcs).
+2. **The whole labeled-window design is SELECTION-BIASED and cannot size any prize.** Labels come
+   only from previously-DETECTED shots (`make_label_task.py:44-49`), so a missed shot yields no
+   window — "99% recall" is conditional recall inside already-found regions, structurally blind to
+   the detection prize. And every number is an UNMATCHED raw count (no attempt IDs, no precision/FP),
+   so counts can't tell a recovered shot from a false positive. The rim `+2` includes a **bounce-back
+   FP** (clip1 win7 2nd rim event) and its losses include **truncation artifacts** → honest delta ≈ +1-with-an-FP.
+3. **Rim is a MATERIAL CONFOUND (adjudicated: Codex right, Fable's validation was necessary-not-sufficient).**
+   Auto-rim vs full-clip cached rim differ 110/225/59px (≫ 90px gate). My own label probe: within clip1
+   real shots approach x≈1130 (early windows) AND x≈1244 (late) — a **110px within-clip spread** → the
+   tripod moved / multiple positions; a single per-clip `Calibration` is wrong for this footage, and
+   `baseline=2` is calibration-driven, not a stable production number.
+4. **Biggest EVIDENCED lever = verified-rim + segmenter repair, NOT "film closer."** With a *perfect*
+   track the production `detect_shots_to_rim` still drops ~half the rim-reaching shots via 5 cheap-fix
+   defects: walk-back crossing detection gaps + `seen_launch` dedup, gather-poisoned RANSAC
+   (`min_inliers_frac=0.5`), hard-coded 200px `launch_drop` (not rim-scaled), the 78° hard gate on the
+   data boundary, and no bounce re-approach suppression (all `court.py:225-291`). Separately the 90px
+   rim gate makes airballs invisible **by design** (attempt-detection can't count them).
+5. **Tracker fix is CORRECT but has ZERO test coverage** (`grep assemble_track tests/` → nothing).
+6. **"Film closer is the biggest lever" is NOT SUPPORTED** by this evaluation (both reviewers). It helps
+   tiny wholly-missed balls + pose, but perfect detection still loses half the shots inside the segmenter.
+
+**⛔ DECISION (07-22 night, post-dual-review): the Step-1 oracle experiment family is RETIRED as a
+sizing tool — it measures a selection-biased, unmatched mixture.** The single decisive next experiment
+(both reviewers, independently): a **full-clip, hand-counted attempt evaluation** — owner watches the
+3 clips fresh (NOT seeded from detections), logs every attempt (frame, make/miss, rim-reached vs airball)
++ ONE manually-verified rim; then run 5 staged ablations (baseline→tracker→segmenter, GT-oracle-TRACK,
+GT-windows→arc-fit) and report **matched recall + precision** per stage. That isolates detection vs
+tracking vs segmentation with real denominators (~1hr owner time). The cheap segmenter bug-fixes (item 4)
+and cloud@0.01 are judged AGAINST that, not against single-digit counts. Fixed the reviewer-flagged
 `assemble_track` velocity bug (per-frame velocity now divided by the gap it spanned)
 + a dead-code reset bug (resets were bridging velocity across shots); 35/35 test files
 green — correct regardless of the plan pivot. **⚠️ RUNTIME: ONNX-DirectML inference
