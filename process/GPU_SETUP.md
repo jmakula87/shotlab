@@ -163,12 +163,14 @@ detections; training correctness is far more sensitive.
 ## TL;DR going forward
 - **Detection → GPU by default (SAFE):** `export(format='onnx')`, use the `.onnx`
   via DirectML. This path is proven and did NOT cause the freeze.
-- **Training → GPU: ⛔ ON HOLD (froze the machine 2026-07-22).** Do not re-run the
-  ROCm path as-is. Use **CPU training** (`--device cpu`) as the safe default until
-  the freeze mitigations land (Codex+Fable consult pending). If GPU training is
-  retried, the fallbacks are, in order of reliability: WSL2 + Linux ROCm; a much
-  smaller batch run ALONE (no concurrent CPU job). **torch-directml is ruled out
-  — it silently computes wrong gradients (box/dfl loss = 0); see §2.**
+- **Training → CLOUD (chosen 2026-07-22, Codex+Fable consult).** Occasional YOLO
+  fine-tuning goes to **free cloud CUDA (Kaggle)** — most-tested path, ~30-60 min,
+  zero freeze risk. See `KAGGLE_TRAINING.md` (`tools/pack_kaggle_dataset.py` +
+  `kaggle/shotlab_train.ipynb`). **CPU** (`--device cpu`, ~11 min/epoch) is the
+  offline fallback. **WSL2+Linux ROCm** is an optional local-GPU side-quest
+  (`WSL_ROCM_SETUP.md`), not the default. **Native-Windows ROCm is REJECTED** —
+  AMD's own 7.2 docs state "No ML training support" on Windows, and it froze the
+  box. **torch-directml is ruled out** — silent wrong gradients (box/dfl=0); see §2.
 - Detection env: only `onnxruntime-directml` (NOT plain `onnxruntime`) — see the
   regression box in §1.
 - Keep `.venv_rocm713`; it's the (currently unsafe) ROCm training env.

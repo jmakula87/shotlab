@@ -1,14 +1,25 @@
-# WSL2 + Linux ROCm — correct GPU training for ShotLab (RX 9070 XT / gfx1201)
+# WSL2 + Linux ROCm — OPTIONAL local-GPU training for ShotLab (RX 9070 XT / gfx1201)
 
-The reliable route to **correct** GPU training after the two Windows dead-ends
-(native ROCm-Windows froze the box; torch-directml silently zeroed the loss — see
-`GPU_SETUP.md`). Linux ROCm on WSL2 has mature MIOpen and no silent-op problem.
+> ⚠️ **NOT the chosen path (2026-07-22).** The Codex+Fable consult
+> (`GPU_TRAINING_CONSULT_2026_07_22.md`) concluded that for OCCASIONAL fine-tuning,
+> **free cloud CUDA (Kaggle) is the better default** — see `KAGGLE_TRAINING.md`.
+> This WSL2+ROCm route is kept as an **optional local-capability side-quest**: use
+> it only if you want fully-local GPU training and are willing to spend the setup
+> time. Time-box the first attempt (~90 min); if the smoke test fails, use cloud
+> rather than starting another ROCm debugging campaign.
 
-**Compatibility confirmed (2026-07-22):** ROCm **7.2** officially supports the
-RX 9070 XT (gfx1201) on WSL2 via the ROCDXG/`librocdxg` path, on Ubuntu 24.04 /
-22.04, with AMD Adrenalin ≥ 26.1.1 for WSL2. This box: driver `32.0.31021.5001`
-(2026-06-27, recent enough), 103 GB free on C:, Windows build 26200,
-virtualization on. Sources in the session log.
+Linux ROCm on WSL2 has mature MIOpen and no silent-op problem (unlike Directml),
+and — because GPU work is scheduled through `dxgkrnl` — a compute hang is more
+likely a TDR reset than the full hard-lock the native path caused. It is **not**
+proven immune, though: WSL still traverses `/dev/dxg` + the Windows display driver,
+and if the freeze was a PSU transient (unresolved — see `GPU_SETUP.md`) WSL draws
+the same watts.
+
+**Compatibility (2026-07-22):** the RX 9070 XT (gfx1201) is supported on WSL2 via
+the ROCDXG/`librocdxg` path. ⚠️ **Production ROCDXG is ROCm 7.2.1 + AMD Adrenalin
+26.2.2** (NOT base 7.2 / 26.1.1 — do not mix the legacy runtime-swap steps with the
+ROCDXG setup). Ubuntu 24.04 / 22.04. This box: driver `32.0.31021.5001`
+(2026-06-27), 103 GB free, Windows build 26200, virtualization on.
 
 ---
 
@@ -54,6 +65,15 @@ amdgpu-install -y --usecase=wsl,rocm --no-dkms   # --no-dkms: WSL uses the Windo
 rocminfo | grep -E 'gfx|Name'                    # must show gfx1201
 ```
 `--usecase=wsl` pulls the ROCDXG runtime that bridges to the Windows driver.
+⚠️ The 7.2 deb above is the base-7.2 path; for **production ROCDXG use the 7.2.1**
+`amdgpu-install` from AMD's 7.2.1 ROCDXG howto (verify the current `.deb` name from
+that page — do not assume). Extra gotchas before you start (from the consult,
+`GPU_TRAINING_CONSULT_2026_07_22.md`): do NOT set `HSA_OVERRIDE_GFX_VERSION`
+(RDNA3 advice; breaks gfx1201); after `pip install ultralytics` re-verify
+`torch.__version__` still says `+rocm` (it can clobber the ROCm torch); set a
+`.wslconfig` memory cap; there's no `rocm-smi` in WSL (use
+`torch.cuda.memory_allocated()`); and the first-epoch MIOpen JIT can look like a
+hang for minutes — don't kill it.
 
 ## STEP 3 — ME: PyTorch for ROCm + the WSL libhsa swap (the classic gotcha)
 

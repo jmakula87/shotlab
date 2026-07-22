@@ -9,10 +9,12 @@ Last updated: 2026-07-22 · Location: `C:\Users\jmaku\Desktop\ShotLab`
 conflict). ⛔ **GPU TRAINING IS ON HOLD**: the ROCm path hard-locked the whole
 machine on 2026-07-22 and its "verified" speed claim was unsubstantiated;
 **torch-directml training was tested and RULED OUT (silent wrong gradients)** —
-see the 07-22 evening log below and `process/GPU_SETUP.md`. CPU training is the
-safe fallback; WSL2+Linux ROCm is the only reliable correct-GPU-training route.
-Far-ball recall fixed via native-scale retrain on human labels. Session logs
-current through 07-22; the 07-03 → 07-11 S8/3D/audit arc was backfilled from git.)
+see the 07-22 evening logs below and `process/GPU_SETUP.md`. **GPU-training path
+(Codex+Fable consult): free cloud CUDA (Kaggle) — `process/KAGGLE_TRAINING.md`**;
+CPU is the offline fallback; WSL2+ROCm is a parked optional side-quest; native-
+Windows ROCm rejected. Far-ball recall fixed via native-scale retrain on human
+labels. Session logs current through 07-22; the 07-03 → 07-11 S8/3D/audit arc was
+backfilled from git.)
 
 ---
 
@@ -228,10 +230,33 @@ dfl=3.01` vs DirectML `box=0.0 cls=0.20 dfl=0.0`. The TaskAlignedAssigner produc
 about localization. Not a crash — silent numerical corruption, which is worse.
 Ruled out; details + reproducers (`scratchpad/dml_*.py`) in `GPU_SETUP.md` §2.
 
-**Standing conclusion for GPU training:** CPU training (correct, ~11 min/epoch) is
-the working default; **WSL2 + Linux ROCm** is the only reliable route to *correct*
-GPU training on this box. ROCm-on-Windows still on hold (froze the box); torch-
-directml dead. GPU *detection* via `.onnx`/DirectML remains the proven, safe win.
+**Standing conclusion for GPU training (UPDATED — see evening-2 log below):** after
+a Codex+Fable consult, the chosen path is **free cloud CUDA (Kaggle)**, not local
+ROCm. CPU is the offline fallback; WSL2+ROCm is a parked optional side-quest;
+native-Windows ROCm is REJECTED (AMD: "No ML training support" on Windows). GPU
+*detection* via `.onnx`/DirectML remains the proven, safe local win.
+
+---
+
+## Session log 2026-07-22 (evening-2) — GPU-training consult → CLOUD (Kaggle) chosen
+Owner pushed back on WSL2+ROCm ("is there no better option?") and asked for a
+Codex+Fable dual review. **Both converged: for OCCASIONAL nano-model fine-tuning,
+free cloud CUDA beats WSL2+ROCm** on reliability-to-effort (most-tested path, ~30-60
+min, zero freeze risk, no monkeypatches). Native-Windows ROCm REJECTED (AMD's own
+7.2 docs: "No ML training support"; and our notes already show the MIOpen bug hits
+7.2.1 too). WSL2 downgraded to optional side-quest. Consult record + adjudication:
+`process/GPU_TRAINING_CONSULT_2026_07_22.md`.
+
+**Corrections the review forced:** (1) the freeze post-mortem's "NOT hardware" was
+over-confident — a PSU power-transient under full CPU+GPU load was never ruled out
+(if so, WSL wouldn't help; cloud sidesteps it). (2) WSL runbook version fix: ROCDXG
+is ROCm **7.2.1 + Adrenalin 26.2.2**, not base 7.2.
+
+**Built the Kaggle path:** `tools/pack_kaggle_dataset.py` (→ 884 MB zip: both real
+dirs + base weights, verified), `kaggle/shotlab_train.ipynb` (yolo11n, imgsz 1280,
+freeze-10, 40 ep, mAP50>0.1 sanity gate, ONNX export), `process/KAGGLE_TRAINING.md`
+(the per-session loop: label → pack → upload → Run All → download → verify vs the
+CPU-trained `ball_human` golden). Inference stays local on the AMD GPU.
 
 ---
 
@@ -251,8 +276,13 @@ session from the Windows event log + run artifacts; hardware is fine.
 **Root cause = ROCm-Windows GPU compute deadlock, not hardware.** Event log:
 - **Kernel-Power 41** + Event 6008 "previous shutdown at 10:10:08 was unexpected"
   → hard lock exactly as GPU epoch 1 started.
-- **No WHEA-Logger events** → NOT thermal / PSU / PCIe / hardware. GPU reports
-  Status OK after reboot; no damage.
+- **No WHEA-Logger events** → no *logged* machine-check (argues against thermal/
+  PCIe). GPU reports Status OK after reboot; no damage.
+  ⚠️ **CORRECTION (Fable consult 2026-07-22):** "NOT hardware" was over-confident.
+  A **PSU power-transient** under simultaneous full CPU+GPU load (RDNA4 spikes +
+  7900X full-load) would ALSO produce a WHEA-less hard lock and was never isolated.
+  If the cause is power, WSL2 wouldn't protect the box (same silicon/watts) — which
+  is a further reason the training path went to **cloud**, not local GPU.
 - **No TDR (Event 4101 "display driver stopped responding") and no BSOD/minidump**
   → the GPU wedged so completely Windows couldn't reset the driver or write a dump.
   Classic full ROCm-Windows compute hang (RX 9070 XT / gfx1201, 7.13 *preview*
