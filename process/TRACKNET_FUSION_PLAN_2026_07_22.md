@@ -22,9 +22,43 @@
 >
 > **Started:** `assemble_track` velocity + reset bugs FIXED (track.py) — per-frame
 > velocity now divided by the gap it spanned; resets now actually start a one-point
-> arc instead of bridging velocity across shots. 35/35 test files green. Remaining
-> Step-2 work (low-conf candidate cloud + parabola-RANSAC assembly + physics gap-ROI
-> re-detection) is unstarted.
+> arc instead of bridging velocity across shots. 35/35 test files green.
+>
+> ## ⭐ STEP-1a ORACLE CEILING (2026-07-22) — DETECTION IS NOT THE LEVER; SEGMENTATION IS.
+> `tools/exp_oracle_ceiling.py` (output `process/step1a_oracle_ceiling.txt`): ran the
+> REAL `assemble_track` + segmenter over the 1340 labeled 0720 frames, four ways —
+> baseline (YOLO@0.25), cloud (YOLO@0.01), **oracle** (baseline + a conf-0.99
+> candidate at the GROUND-TRUTH center on every ball-present frame = detector never
+> misses), oracle+4px. Shots recovered (TOTAL over 3 clips):
+> **baseline 6 · cloud 3 · ORACLE 4 · oracle+4px 3.**
+> - **Perfect detection did NOT increase shots — it DECREASED them (4 < 6); the
+>   low-conf cloud was worse (3).** More/denser candidates *hurt*.
+> - Combined with the 1b gate (detector already sees the ball 99%), the prize from a
+>   better detector or a temporal model is **~zero or negative here.**
+> - ⚠️ CONFOUND: 1a used `segment_shots` (the gap-split FALLBACK); production
+>   `run_phase1` uses rim-anchored `detect_shots_to_rim` when calibrated. Gap-split is
+>   known-fragile to dense tracks (memory: "naive gap-splitting FAILS with a dense
+>   detector → runs merge → only 1 clean arc; FIX = rim-anchored"). So the exact
+>   counts are segmenter-specific — but the DIRECTION (more detection ≠ more shots)
+>   is robust and matches 1b.
+> - **ROOT CAUSE it exposes:** ball-PRESENCE ≠ ball-in-FLIGHT (clip 1 has 692 present
+>   frames — dribble/hold/retrieve, not one shot). Flooding the greedy tracker with
+>   true positions can't help because the limiter is telling *flight* from *presence*
+>   = **attempt detection / segmentation**, exactly the reviewers' "separate
+>   attempt-COUNT from arc-ELIGIBILITY."
+>
+> ## ⛔ REVISED DECISION (after 1a+1b together)
+> - ❌ **Do NOT build the Step-2 recipe as written** (low-conf candidate cloud +
+>   parabola-RANSAC over the cloud). 1a shows adding candidates to the current
+>   greedy tracker + segmenter REGRESSES shot count. The detector-fusion emphasis of
+>   this whole plan is aimed at the wrong bottleneck.
+> - ✅ **The lever is SEGMENTATION / attempt-detection** (rim/release/audio-anchored
+>   "was this an attempt?"), plus **filming closer** (the free, biggest lever per all
+>   prior notes — cleaner flight, bigger ball, fewer presence-vs-flight ambiguities).
+> - The `assemble_track` velocity/reset fix stays (correct regardless).
+> - Clean follow-up if we still want a hard number: re-run the 1a oracle through
+>   rim-anchored `detect_shots_to_rim` (needs a 0720 calibration) to size the
+>   attempt-detection prize specifically — but detector work is off the table.
 
 > **Both reviewers: the original "build TrackNet + fusion" draft was OVER-SCOPED.**
 > Verdict = **measure-first, then build the CHEAPEST thing that works — which is

@@ -1,0 +1,17 @@
+provider: DmlExecutionProvider
+
+          clip  labeled GTballs | base cloud oracle orc+n   (shots)
+PXL_20260720_151519220      863     692 |    3     2      3     2
+PXL_20260720_152319112      331     190 |    3     1      1     1
+PXL_20260720_153054813      146      39 |    0     0      0     0
+----------------------------------------------------------------------
+         TOTAL     1340     921 |    6     3      4     3
+
+DELTA vs baseline:  cloud(@0.01) -3   ORACLE -2   oracle+4px -3
+
+INTERPRETATION:
+  ORACLE delta  = ceiling of shots a perfect detector/temporal model buys.
+  cloud delta   = shots the CURRENT detector already sees sub-threshold that
+                  the (now-fixed) tracker can stitch -> cheap Step-2 win.
+  oracle+4px    = how much of the ceiling survives realistic localization noise.
+  If ORACLE delta ~ 0 -> detection isn't the bottleneck here; lever = film closer.
