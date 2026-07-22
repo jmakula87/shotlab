@@ -35,3 +35,6 @@ Thumbs.db
 
 # generated native-scale training set (regenerate: tools/make_dataset_native.py)
 dataset_ball_native/
+dataset_ball_labeled/
+dataset_clean_train.txt
+dataset_clean_val.txt

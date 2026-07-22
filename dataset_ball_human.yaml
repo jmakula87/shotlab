@@ -1,0 +1,12 @@
+# Human-labeled ball dataset: real small far-flight balls + real hard negatives
+# (from the browser labeler, 2026-07-22) + the existing close-ball set. All REAL
+# -- no synthetic copy-paste (that poisoned the first retrain). One model across
+# every real scale (small far -> big close) + true negatives (orange shirt, rim).
+train:
+  - C:/Users/jmaku/Desktop/ShotLab/dataset_ball/images/train
+  - C:/Users/jmaku/Desktop/ShotLab/dataset_ball_labeled/images/train
+val:
+  - C:/Users/jmaku/Desktop/ShotLab/dataset_ball/images/val
+  - C:/Users/jmaku/Desktop/ShotLab/dataset_ball_labeled/images/val
+nc: 1
+names: ['ball']

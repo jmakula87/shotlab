@@ -1,0 +1,4 @@
+train: C:\Users\jmaku\Desktop\ShotLab/dataset_clean_train.txt
+val: C:\Users\jmaku\Desktop\ShotLab/dataset_clean_val.txt
+nc: 1
+names: ["ball"]

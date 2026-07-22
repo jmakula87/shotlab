@@ -28,6 +28,10 @@ def main(argv=None):
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--name", default="ball_finetune")
     ap.add_argument("--device", default="cpu")
+    ap.add_argument("--freeze", type=int, default=None,
+                    help="freeze the first N layers (preserve a good base model's "
+                         "appearance features; adapt only the head to new scale)")
+    ap.add_argument("--mosaic", type=float, default=1.0)
     args = ap.parse_args(argv)
 
     from ultralytics import YOLO
@@ -39,9 +43,10 @@ def main(argv=None):
         batch=args.batch,
         device=args.device,
         name=args.name,
+        freeze=args.freeze,     # None = full fine-tune; N = keep base features
         patience=15,            # early stop if val plateaus
         # augmentation that helps a small single-class set:
-        mosaic=1.0, close_mosaic=10,
+        mosaic=args.mosaic, close_mosaic=10,
         hsv_h=0.02, hsv_s=0.5, hsv_v=0.4,   # color jitter (your ball is red/blue)
         fliplr=0.5, scale=0.5, translate=0.1,
         degrees=5.0,
