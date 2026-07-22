@@ -13,7 +13,9 @@ see the 07-22 evening logs below and `process/GPU_SETUP.md`. **GPU-training path
 (Codex+Fable consult): free cloud CUDA (Kaggle) — `process/KAGGLE_TRAINING.md`**;
 CPU is the offline fallback; WSL2+ROCm is a parked optional side-quest; native-
 Windows ROCm rejected. Far-ball recall fixed via native-scale retrain on human
-labels. Session logs current through 07-22; the 07-03 → 07-11 S8/3D/audit arc was
+labels. **Step-1 gate DONE 07-22 night: detection is not the bottleneck, segmentation
+is — TrackNet/tiling/candidate-cloud all off the table; lever = film closer. See the
+NEXT SESSION PICKUP below.** Session logs current through 07-22; the 07-03 → 07-11 S8/3D/audit arc was
 backfilled from git.)
 
 ---
@@ -36,7 +38,29 @@ backfilled from git.)
 8. Same camera position session-to-session (metrics aren't cross-comparable
    otherwise). The close 2nd camera (S8) is the real form-detail fix.
 
-## NEXT SESSION PICKUP (2026-07-02)
+## ⭐ NEXT SESSION PICKUP (2026-07-22 night)
+**Where we are:** Step-1 of the TrackNet plan is DONE and it redirected the plan.
+Two measurements (`process/step1_gate_results.txt`, `process/step1a_oracle_ceiling.txt`):
+the detector already sees the ball 99%, and giving the tracker PERFECT detection
+recovers *fewer* shots — so **detection is not the bottleneck; segmentation /
+attempt-detection is.** TrackNet, tiling, and the low-conf-cloud+RANSAC Step-2 recipe
+are all OFF the table. The `assemble_track` velocity/reset bug fix is committed
+(35/35 green). All committed through `68cb7d3`; **NOT pushed.**
+
+**Recommended next move:** FILM CLOSER (free, biggest lever) → re-run the pipeline
+(~30–40 min) → check shot count/arcs. Only if closer footage still falls short, build
+attempt-detection/segmentation (~3–5 days). Optional hard-number follow-up: re-run the
+1a oracle through rim-anchored `detect_shots_to_rim` (needs a 0720 calibration) to size
+the attempt-detection prize.
+
+**⚠️ Gotchas:** (1) ONNX-DirectML inference runs under SYSTEM python, not `.venv_*`.
+(2) Machine had 6 silent power-losses in 5 days (suspect PSU transients on the 9070 XT)
+— watch PSU/temps before long GPU runs. Detail: session log 2026-07-22 (night) below +
+`process/TRACKNET_FUSION_PLAN_2026_07_22.md`.
+
+---
+
+## NEXT SESSION PICKUP (2026-07-02) — HISTORICAL
 State (end of a big 07-02 session, all pushed): wrist-apex release in the metric
 path; jump height ankle-based + physics-gated; **orange-ball detector retrained**
 (hit rate 37→83% on held-out clip, new canonical weights
@@ -204,6 +228,49 @@ re-exported (personal elbow ideal 117°). Full suite 16/16 + JS green.
    true early flight, not a regression. tests/test_profile 7/7.
 7. Smaller ideas left: goal-progress tracking, report emailing, ingest the app's
    feel-CSV into the desktop records (join on session/shot time).
+
+---
+
+## Session log 2026-07-22 (night) — Step-1 GATE run: TrackNet OFF, detection is NOT the lever + machine-crash diagnosis
+Resumed after an unexpected machine restart. Two threads:
+
+**🖥️ Restart diagnosis (Windows event log).** 6 unclean shutdowns in 5 days
+(Event 6008/41), escalating: 3 on 7/18, 2 on 7/22 (10:10 AM + 4:42 PM). EVERY one:
+`BugcheckCode=0` (no BSOD), no MEMORY.DMP/minidump/LiveKernelReport, no WHEA, no
+GPU-TDR, `PowerButtonTimestamp=0` = silent instantaneous power-loss / hard hang,
+NOT a software crash. Tight correlation with the RX 9070 XT work that ramped up
+7/17–7/22. **Leading suspect: PSU tripping OCP on the 9070 XT's power TRANSIENTS**
+(secondary: thermal, or unstable EXPO/PBO). Two multi-minute sustained GPU/DirectML
+sweeps ran CLEAN today → not "any GPU load"; transient spikes (idle→load) are the
+likely trigger. TODO for user: check PSU wattage/age + GPU temps under load.
+
+**✅ Step-1 GATE experiments run (the whole point of the revised TrackNet plan).**
+- **1b/1c (`tools/exp_subthreshold_signal.py` → `process/step1_gate_results.txt`):**
+  over the 921 labeled ball-present frames, the detector hits **99% @conf0.01**
+  (98% far), 95% @0.25; of the 46 frames the pipeline (plain@0.25) MISSES, plain@0.01
+  recovers **85%** — tiling adds nothing (tiled@0.01==plain@0.01), motion 0%.
+  ⇒ signal is present sub-threshold; the TRACKER, not the detector, is the limiter.
+  **❌ TrackNet/WASB and tiling are OFF the table.**
+- **1a oracle ceiling (`tools/exp_oracle_ceiling.py` → `process/step1a_oracle_ceiling.txt`):**
+  ran the REAL `assemble_track`+segmenter four ways — baseline(YOLO@0.25)=**6** shots,
+  cloud(@0.01)=**3**, ORACLE(GT center injected, detector never misses)=**4**,
+  oracle+4px=**3**. **Perfect detection DECREASED shot count; more candidates HURT.**
+  Root cause: ball-PRESENCE ≠ ball-in-FLIGHT (one clip = 692 present frames of
+  dribble/hold), so the limiter is **attempt-detection / segmentation**, not recall.
+  ⚠️ confound: used `segment_shots` (gap-split fallback); production uses rim-anchored
+  `detect_shots_to_rim` when calibrated — direction robust, exact counts segmenter-specific.
+
+**⛔ REVISED DECISION (commits 073fe95, 68cb7d3):** do NOT build the plan's Step-2
+recipe (low-conf cloud + parabola-RANSAC over the cloud) — it regresses here. The
+whole detector-fusion plan aimed at the wrong bottleneck. **Levers: (1) FILM CLOSER
+(free, biggest), (2) attempt-detection/segmentation.** Fixed the reviewer-flagged
+`assemble_track` velocity bug (per-frame velocity now divided by the gap it spanned)
++ a dead-code reset bug (resets were bridging velocity across shots); 35/35 test files
+green — correct regardless of the plan pivot. **⚠️ RUNTIME: ONNX-DirectML inference
+runs under the SYSTEM python (`AppData\Local\Microsoft\WindowsApps\python.exe`,
+onnxruntime 1.24.4 + DmlExecutionProvider), NOT the `.venv_*` envs (those are
+torch/ROCm training envs, no onnxruntime).** Full detail in
+`process/TRACKNET_FUSION_PLAN_2026_07_22.md`.
 
 ---
 

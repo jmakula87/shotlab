@@ -75,6 +75,11 @@ open the HTML, confirm (Enter) / fix (click) / reject (N) each frame, Save →
 (`train_ball.py --freeze 10`, real labels, no synthetic aug). ~15-20 min of
 labeling per session measurably improves recall on your court + ball.
 
+> **Note (measured 2026-07-22):** on far footage the detector already sees the ball
+> ~99% of the time — recall is *not* the current bottleneck. Missing shots come from
+> segmentation (telling flight from dribbling/holding), and the real fix is **filming
+> closer**. See `process/TRACKNET_FUSION_PLAN_2026_07_22.md`.
+
 ---
 
 ## Your shooting profile — what it's built on
