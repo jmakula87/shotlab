@@ -38,3 +38,4 @@ dataset_ball_native/
 dataset_ball_labeled/
 dataset_clean_train.txt
 dataset_clean_val.txt
+.venv-rocm/
