@@ -34,6 +34,15 @@ def main(argv=None):
     ap.add_argument("--mosaic", type=float, default=1.0)
     args = ap.parse_args(argv)
 
+    # GPU on AMD/Windows: MIOpen can't compile BatchNorm for gfx1201, so route BN
+    # through pure-torch primitives (conv stays on the GPU). No-op on CPU/non-ROCm.
+    import os, sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from tools.rocm_bn_patch import maybe_apply
+    on_rocm_gpu = maybe_apply(args.device)
+    # ROCm-Windows preview is unstable with AMP; force it off there.
+    amp = not on_rocm_gpu
+
     from ultralytics import YOLO
     model = YOLO(args.base)
     model.train(
@@ -42,6 +51,7 @@ def main(argv=None):
         imgsz=args.imgsz,
         batch=args.batch,
         device=args.device,
+        amp=amp,
         name=args.name,
         freeze=args.freeze,     # None = full fine-tune; N = keep base features
         patience=15,            # early stop if val plateaus

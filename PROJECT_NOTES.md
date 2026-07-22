@@ -3,10 +3,16 @@
 > The canonical "everything" doc. README.md is for usage; this is the decision
 > log, filming guide, roadmap, and enhancement backlog. Update it as we go.
 
-Last updated: 2026-07-21 · Location: `C:\Users\jmaku\Desktop\ShotLab`
-(Session logs now written up through 07-15; the 07-03 → 07-11 S8/3D/audit arc
-was backfilled 07-21 from git. New footage expected shortly — rebuild sessions
-with the current pipeline before trusting any pre-v21 make-driver stats.)
+Last updated: 2026-07-22 · Location: `C:\Users\jmaku\Desktop\ShotLab`
+(GPU is the default for **detection** — DirectML/ONNX, proven, re-verified
+5.1 ms/frame after fixing a silent CPU-fallback regression on 07-22 (onnxruntime
+conflict). ⛔ **GPU TRAINING IS ON HOLD**: the ROCm path hard-locked the whole
+machine on 2026-07-22 and its "verified" speed claim was unsubstantiated;
+**torch-directml training was tested and RULED OUT (silent wrong gradients)** —
+see the 07-22 evening log below and `process/GPU_SETUP.md`. CPU training is the
+safe fallback; WSL2+Linux ROCm is the only reliable correct-GPU-training route.
+Far-ball recall fixed via native-scale retrain on human labels. Session logs
+current through 07-22; the 07-03 → 07-11 S8/3D/audit arc was backfilled from git.)
 
 ---
 
@@ -196,6 +202,128 @@ re-exported (personal elbow ideal 117°). Full suite 16/16 + JS green.
    true early flight, not a regression. tests/test_profile 7/7.
 7. Smaller ideas left: goal-progress tracking, report emailing, ingest the app's
    feel-CSV into the desktop records (join on session/shot time).
+
+---
+
+## Session log 2026-07-22 (evening) — GPU inference regression FIXED + torch-directml training ruled out
+Picked up the "use the GPU for ShotLab" thread. Two concrete outcomes:
+
+**⭐ Fixed a silent GPU-inference regression (the real win).** The main env had
+**both** `onnxruntime` (CPU) and `onnxruntime-directml` installed — a later
+`torch` pulled in the plain CPU package, which shadows the DirectML build and
+drops `DmlExecutionProvider`. Detection had **silently fallen back to CPU (~20×
+slower) with no error.** Uninstalled both, reinstalled only `onnxruntime-directml`
+→ **re-verified 5.1 ms/inference at imgsz 1280 on the RX 9070 XT.** Guard rule +
+verify snippet added to `process/GPU_SETUP.md` §1. (Rule: never `pip install
+onnxruntime` plain into the detection env.)
+
+**⛔ torch-directml training — tested end-to-end, RULED OUT (silent wrongness).**
+Built isolated `.venv_directml` (py3.12, torch 2.4.1 + torch-directml 0.2.5),
+monkeypatched ultralytics `select_device` to accept the `privateuseone` device,
+added CPU-fallback shims for unimplemented ops (`unique(return_counts)`,
+`bincount`, `scatter_add_`). A full epoch DOES run on the GPU (~4.2 it/s) — **but
+the gradients are corrupt.** Same batch, CPU vs DirectML: CPU `box=3.26 cls=5.15
+dfl=3.01` vs DirectML `box=0.0 cls=0.20 dfl=0.0`. The TaskAlignedAssigner produces
+**zero positive matches** on DirectML → the model would "train" and learn nothing
+about localization. Not a crash — silent numerical corruption, which is worse.
+Ruled out; details + reproducers (`scratchpad/dml_*.py`) in `GPU_SETUP.md` §2.
+
+**Standing conclusion for GPU training:** CPU training (correct, ~11 min/epoch) is
+the working default; **WSL2 + Linux ROCm** is the only reliable route to *correct*
+GPU training on this box. ROCm-on-Windows still on hold (froze the box); torch-
+directml dead. GPU *detection* via `.onnx`/DirectML remains the proven, safe win.
+
+---
+
+## Session log 2026-07-22 (later) — ⛔ GPU-training FREEZE post-mortem
+The ROCm GPU-training run **hard-locked the entire machine.** Diagnosed the next
+session from the Windows event log + run artifacts; hardware is fine.
+
+**What happened (timeline):**
+- 07:53 — `ball_human` CPU retrain started (30 epochs, batch 8) — the valuable work.
+- 09:59 — `gpu_yolo_smoke` GPU test launched (batch 16, imgsz 1280, device 0). No
+  `results.csv`, empty `weights/` → never finished an epoch.
+- 10:06 — CPU retrain reached epoch 12, **still running**.
+- 10:08 — full `ball_human_gpu` ROCm run launched (batch **48**, imgsz 1280, 40 ep).
+- **10:10:08 — system hard-locked** (last training write was `labels.jpg` at 10:09).
+- 10:36:50 — manual power cycle (frozen ~27 min).
+
+**Root cause = ROCm-Windows GPU compute deadlock, not hardware.** Event log:
+- **Kernel-Power 41** + Event 6008 "previous shutdown at 10:10:08 was unexpected"
+  → hard lock exactly as GPU epoch 1 started.
+- **No WHEA-Logger events** → NOT thermal / PSU / PCIe / hardware. GPU reports
+  Status OK after reboot; no damage.
+- **No TDR (Event 4101 "display driver stopped responding") and no BSOD/minidump**
+  → the GPU wedged so completely Windows couldn't reset the driver or write a dump.
+  Classic full ROCm-Windows compute hang (RX 9070 XT / gfx1201, 7.13 *preview*
+  wheels — the immature path GPU_SETUP.md already warned about).
+- **Aggravating factor:** the batch-48 GPU job was launched *while the CPU retrain
+  was still running* → heavy CPU+RAM pressure stacked under a fresh ROCm job.
+
+**Honesty correction:** PROJECT_NOTES + GPU_SETUP claimed GPU training was verified
+at "~3 min/epoch." **No GPU run ever wrote a `results.csv`** — both attempts
+produced nothing and the second froze the box. That claim was an extrapolation
+from the first-epoch iteration rate; corrected in both docs.
+
+**What survived:** `ball_human` (CPU) has `best.pt` + `last.pt` on disk (reached
+epoch 12 of 30 before the freeze — interrupted but usable). The 1340 human labels
++ the labeling pipeline are committed and safe. Nothing lost, no hardware damage.
+
+**Standing rule going forward:** GPU *inference* (DirectML/ONNX) is safe and stays
+default. GPU *training* is ON HOLD — do not re-run the ROCm batch-48 config, and
+never concurrent with a CPU job. CPU training is the safe default. Mitigations
+(TDR watchdog / batch / isolation / WSL2-ROCm) under external consult →
+`process/GPU_FREEZE_CONSULT_2026_07_22.md`.
+
+---
+
+## Session log 2026-07-22 — native-scale retrain, human-in-the-loop labeling, GPU training
+Continuation of the far-ball recall work. The chain: cheap knobs are exhausted
+(1280 is the detection sweet spot) → the real fix is teaching the detector the
+small far-ball SCALE it never trained on (existing balls median 46px from close
+footage; the 0720 far ball is ~20px).
+
+**Retrain recipe — one failure, then the fix.**
+- ⛔ First attempt (`ball_native`): full fine-tune + 800 copy-paste-aug images
+  (43% of data, paste artifacts) + 300 negatives → washed out the orange model's
+  appearance → detection got WORSE at every threshold. High val mAP was
+  misleading (val was easy aug/close images, not real far balls).
+- ✅ Fix = **freeze the backbone (`--freeze 10`, preserve appearance features,
+  adapt only the head) + REAL labels + NO synthetic aug.** `ball_native2` (frozen,
+  real auto-track crops): **+49% ball-frames plain, +74% tiled, higher conf, and
+  `--tile` finally HELPS** (native-scale training unlocked corridor tiling).
+- Added `--freeze`/`--mosaic` to `tools/train_ball.py`; `tools/make_dataset_native.py`
+  builds native 1280×1080 crops (ball keeps ~20px).
+
+**⭐ Human-in-the-loop labeling — the breakthrough (owner's idea).** Owner's
+insight: the far ball MUST be small (you can't film-closer out of it — the whole
+flight + rim have to stay in frame), so the detector can't auto-label the frames
+it misses. Built `tools/make_label_task.py` (**Mode 1** — physics-assisted: per
+detected shot, fit linear-x/quadratic-y, PREDICT the ball on every flight frame
+incl. gaps + margin, emit a self-contained HTML; user confirms Enter / fixes
+click / rejects N; ~80% auto). **Owner labeled all 1340 frames → 921 ball + 419
+no-ball.** `tools/ingest_labels.py` → native tiles + YOLO boxes (present) +
+empty-label hard negatives (absent). Labels saved to `data/labels/ball_labels_0720.json`
+(force-added — irreplaceable). `ball_human` = frozen retrain on 575 close + 1194
+human (incl. 312 real negatives). This is the repeatable loop: ~15-20 min of
+labeling per session → a measurably better model on YOUR court + ball.
+
+**⭐ GPU training UNLOCKED (see `process/GPU_SETUP.md`).** The box has an RX 9070
+XT but PyTorch training on AMD/Windows was blocked. Two Codex+Fable consults
+(`process/BALLTRACK_CONSULT_2026_07_21.md` is the earlier one) traced it to a
+KNOWN bug: MIOpen can't JIT-compile BatchNorm for gfx1201 on ROCm-Windows (HIPRTC
+`'type_traits' file not found`, ROCm/ROCm #6150) — present in both 7.2.1 AND the
+7.13.0 preview. Everything else works incl. CONVOLUTION. **Fix: route BatchNorm
+through pure-torch primitives** (`tools/rocm_bn_patch.py`, auto-applied by
+`train_ball.py` on a ROCm GPU device) — conv stays GPU-accelerated, MIOpen BN
+never called. Setup: isolated Py3.12 `.venv_rocm713` (main env is 3.13, too new
+for ROCm) + AMD ROCm 7.13 wheels. GPU inference (DirectML) was already the ~20×
+win. ⚠️ **CORRECTION (see the freeze post-mortem below):** the GPU-*training*
+claim in this paragraph — "yolo11n @1280 trains ~3 min/epoch on the GPU" — was an
+extrapolation from the first-epoch iteration rate, **NOT a completed epoch**. No
+GPU training run ever finished an epoch, and the batch-48 attempt **hard-locked
+the machine**. GPU training is UNVERIFIED and on hold; detection via the `.onnx`
+stays the default, training falls back to CPU.
 
 ---
 

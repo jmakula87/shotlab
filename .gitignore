@@ -39,3 +39,5 @@ dataset_ball_labeled/
 dataset_clean_train.txt
 dataset_clean_val.txt
 .venv-rocm/
+.venv_rocm713/
+.venv_directml/

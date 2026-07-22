@@ -49,7 +49,31 @@ python tools/export_pdf.py    data/out/session      # report.pdf
 
 Key flags: `--shooter-height` gives honest body-scaled jump/release heights;
 `--audio` (default on) fuses rim sound into make/miss; `--chunk-frames` makes
-long clips resumable within a job time cap.
+long clips resumable within a job time cap; `--tile` = native-resolution corridor
+tiling (only useful with a native-scale-trained detector); `--conf` = detection
+confidence floor (default 0.25).
+
+## Running on the AMD GPU (RX 9070 XT) — full setup in `process/GPU_SETUP.md`
+
+- **Detection → GPU (default):** export a trained detector to ONNX
+  (`YOLO('.../best.pt').export(format='onnx', imgsz=1280)`) and pass the `.onnx`
+  as `--weights` — it runs via onnxruntime-DirectML (~20× vs CPU). Works in the
+  normal Python 3.13 env.
+- **Training → CPU (default, safe):** `tools/train_ball.py ... --device cpu`
+  (~11 min/epoch, correct). GPU training is **on hold**: the ROCm-on-Windows path
+  hard-locked the machine (2026-07-22) and torch-directml was tested and ruled out
+  (it silently computes wrong gradients). The reliable correct-GPU-training route
+  is WSL2 + Linux ROCm. See `process/GPU_SETUP.md` for the full state and runbook.
+
+## Improving the far-ball detector with your own labels
+
+The far ball is small (the whole flight + rim must stay in frame), so the detector
+misses hard frames. Close the loop by labeling them:
+`python tools/make_label_task.py --clips "data/raw/Camera 1/PXL_*.mp4" --exclude <setup-clip> --out data/out/label_task.html`,
+open the HTML, confirm (Enter) / fix (click) / reject (N) each frame, Save →
+`python tools/ingest_labels.py --labels ~/Downloads/ball_labels.json` → retrain
+(`train_ball.py --freeze 10`, real labels, no synthetic aug). ~15-20 min of
+labeling per session measurably improves recall on your court + ball.
 
 ---
 
