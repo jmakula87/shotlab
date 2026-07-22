@@ -271,8 +271,23 @@ within noise (120 instances). **Takeaway: more epochs did NOT lift recall → fa
 recall is a DATA (more labels) problem, not a compute problem — consistent with the
 prior finding. The cloud pipeline's value is a safe/repeatable retrain, not a recall
 jump.** `ball_gpu_kaggle` is a reasonable new canonical (better precision, fully
-trained, no freeze baggage). NOT yet promoted — pending a far-ball-specific check on
-the real 07-20 clip if desired.
+trained, no freeze baggage).
+
+**Far-ball test done (raw 07-20 wide clip, 1920x1080, 200 frames paired,
+`scratchpad/farball_compare.py`).** ⚠️ First finding: the 146 human-labeled val
+tiles are CROPS where the ball is LARGE (median 131px, all >50px) — they do NOT
+represent the small-far-ball challenge, so ~0.94 mAP on them is misleading. On the
+RAW wide frames the two models are **essentially identical**: both 66% frames-with-
+ball, mean conf 0.58; paired both=126 / kaggle-only=6 / human-only=7 / neither=61.
+Kaggle caught a marginally smaller ball (32px vs 48px min). **Confirms: more epochs
+≠ better far-ball recall.** The binding constraint is PIXELS ON TARGET — smallest
+detectable ball ~32px, and the wide cam only shot 1080p. **Top levers (ranked):
+(1) film the wide cam in 4K (doubles ball px, biggest free win); (2) label the
+frames the model MISSES during flight, not easy ones; (3) inference-time tiling
+(`--tile`) on the far corridor; (4) motion-based tracking (TrackNet) as the real
+architectural step if 1-3 plateau.** Recommend promoting `ball_gpu_kaggle` canonical
+(equal recall, better precision, fully trained). More epochs / bigger GPU won't help
+recall — it's a data+resolution problem, now cheap to iterate via the Kaggle loop.
 
 ---
 
