@@ -299,9 +299,15 @@ sub-30px balls) — recall is data-bound; (2) more pixels on the ball at CAPTURE
 the camera as close as the arc allows; 4K ONLY WITH tiling; (3) tiling situationally,
 per-session, only for genuinely-far/tiny-ball footage; (4) motion-based tracking
 (TrackNet) as the real architectural step to break the ~28px single-frame floor.**
-Nothing at inference (tiling / more epochs / bigger GPU) breaks that floor. Recommend
-promoting `ball_gpu_kaggle` canonical (equal recall, better precision, fully trained).
+Nothing at inference (tiling / more epochs / bigger GPU) breaks that floor.
 Tiling/resolution/framing are ALL local — none touch the Kaggle training step.
+
+**✅ `ball_gpu_kaggle` PROMOTED to canonical detector (2026-07-22).** Weights
+`runs/detect/ball_gpu_kaggle/weights/best.{pt,onnx}` (onnx = the DirectML GPU path,
+4.6 ms/frame). Updated the weights references in README examples + `dashboard/app.py`
+(analyze3d help) from the old `ball_orange`/`ball_finetune` to
+`ball_gpu_kaggle/weights/best.onnx --imgsz 1280`. (runs/ is gitignored, so the weight
+files live locally + in the Kaggle output, not the repo — same as all prior models.)
 
 ---
 

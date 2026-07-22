@@ -31,14 +31,14 @@ today (elbow bend, knee, tempo, follow-through, balance); elbow flare needs the
 ```bash
 pip install -r requirements.txt
 
-# one clip, quick look
+# one clip, quick look  (canonical detector: ball_gpu_kaggle, runs on the AMD GPU via DirectML)
 python analyze.py data/raw/clip.mp4 --detector yolo \
-    --weights runs/detect/ball_orange/weights/best_openvino_model --imgsz 640 --pose
+    --weights runs/detect/ball_gpu_kaggle/weights/best.onnx --imgsz 1280 --pose
 
 # a whole session (many clips -> one timeline: fatigue, zones, make%, shot map)
 python build_session.py --clips "data/raw/Hoops/PXL_*.mp4" \
-    --detector yolo --weights runs/detect/ball_orange/weights/best_openvino_model \
-    --imgsz 640 --stride 2 --chunk-frames 7000 --pose \
+    --detector yolo --weights runs/detect/ball_gpu_kaggle/weights/best.onnx \
+    --imgsz 1280 --stride 2 --chunk-frames 7000 --pose \
     --shooter-height 5'10" --out data/out/session
 
 # dashboard (overlay video + analytics) and a shareable report

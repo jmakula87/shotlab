@@ -1061,7 +1061,7 @@ def view_3d():
     if not dirs:
         st.info("No 3D analysis yet. Build one with:\n\n"
                 "`python tools/analyze3d.py --wide <wide.mp4> --close <close.mp4> "
-                "--weights runs/detect/ball_finetune/weights/best.pt --out "
+                "--weights runs/detect/ball_gpu_kaggle/weights/best.onnx --out "
                 "data/out/<name>_3d`")
         return
     sd = st.selectbox("Session", dirs, key="a3d_sess", format_func=_session_label)
