@@ -280,14 +280,28 @@ represent the small-far-ball challenge, so ~0.94 mAP on them is misleading. On t
 RAW wide frames the two models are **essentially identical**: both 66% frames-with-
 ball, mean conf 0.58; paired both=126 / kaggle-only=6 / human-only=7 / neither=61.
 Kaggle caught a marginally smaller ball (32px vs 48px min). **Confirms: more epochs
-≠ better far-ball recall.** The binding constraint is PIXELS ON TARGET — smallest
-detectable ball ~32px, and the wide cam only shot 1080p. **Top levers (ranked):
-(1) film the wide cam in 4K (doubles ball px, biggest free win); (2) label the
-frames the model MISSES during flight, not easy ones; (3) inference-time tiling
-(`--tile`) on the far corridor; (4) motion-based tracking (TrackNet) as the real
-architectural step if 1-3 plateau.** Recommend promoting `ball_gpu_kaggle` canonical
-(equal recall, better precision, fully trained). More epochs / bigger GPU won't help
-recall — it's a data+resolution problem, now cheap to iterate via the Kaggle loop.
+≠ better far-ball recall.** The binding constraint is PIXELS ON TARGET — a hard
+detection floor of ~28-32px; balls smaller vanish.
+
+⚠️ **Two over-claims CORRECTED empirically (2026-07-22):**
+- **"4K = biggest free win" was WRONG on its own.** Inference resizes every frame to
+  imgsz 1280, so a far ball is the same FRACTION of frame either way: 1080p 20px and
+  4K 40px BOTH shrink to ~13px at 1280. 4K only helps IF paired with tiling (or a
+  higher imgsz) so the native pixels survive.
+- **Tiling is NOT a guaranteed win.** Ran plain vs `tiles="auto"` on the raw 07-20
+  clip via the real `YoloBallDetector`+Kaggle ONNX (`scratchpad/tile_compare.py`,
+  DirectML): **net +0** (both 62% detect, tiled-only=10 / plain-only=10, floor
+  31px→28px only). Reason: that clip's ball is MEDIUM (median ~80px), no tiny-ball
+  problem to solve; tiling costs ~2x compute for nothing when the ball isn't tiny.
+
+**Honest levers (ranked): (1) label the frames the model MISSES during flight (the
+sub-30px balls) — recall is data-bound; (2) more pixels on the ball at CAPTURE — get
+the camera as close as the arc allows; 4K ONLY WITH tiling; (3) tiling situationally,
+per-session, only for genuinely-far/tiny-ball footage; (4) motion-based tracking
+(TrackNet) as the real architectural step to break the ~28px single-frame floor.**
+Nothing at inference (tiling / more epochs / bigger GPU) breaks that floor. Recommend
+promoting `ball_gpu_kaggle` canonical (equal recall, better precision, fully trained).
+Tiling/resolution/framing are ALL local — none touch the Kaggle training step.
 
 ---
 
