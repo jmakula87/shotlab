@@ -59,10 +59,35 @@ def _weights_id(weights) -> str:
     return "/".join(parts[-3:]) + "@" + _weights_content_id(weights)
 
 
+# Pipeline source files whose logic affects cached detection/records. A change to
+# any of these invalidates caches (params alone can't -- a code edit with unchanged
+# params would otherwise be served stale; found in the 2026-07-23 review).
+_CODE_FILES = [
+    "court.py", "arc.py", "make.py", "make_visual.py", "scale.py", "shottype.py",
+    "session.py", "detect_cache.py",
+    "phase1_ball/pipeline.py", "phase1_ball/track.py", "phase1_ball/track_beam.py",
+    "phase1_ball/rim_recovery.py", "phase1_ball/detect_yolo.py",
+]
+
+
+def _code_hash() -> str:
+    """A short hash of the pipeline source files; changes when any of them is edited."""
+    import hashlib
+    base = os.path.dirname(os.path.abspath(__file__))     # shotlab/
+    h = hashlib.md5()
+    for rel in _CODE_FILES:
+        try:
+            with open(os.path.join(base, rel), "rb") as f:
+                h.update(f.read())
+        except OSError:
+            h.update(b"MISSING:" + rel.encode())
+    return h.hexdigest()[:12]
+
+
 def _params(video_path, weights, imgsz, stride, max_frames, calib, tiles=None,
             conf=0.25, use_beam=False) -> dict:
     from .video_io import video_id
-    return {"weights": _weights_id(weights), "imgsz": int(imgsz),
+    return {"weights": _weights_id(weights), "imgsz": int(imgsz), "code": _code_hash(),
             "stride": int(stride), "max_frames": max_frames,
             "tiles": tiles if isinstance(tiles, str) else tiles,
             "conf": round(float(conf), 3),

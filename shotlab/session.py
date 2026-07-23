@@ -120,14 +120,14 @@ def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
     calibration invalidates the cache, so a re-run recomputes instead of
     silently returning stale rows. calib=None hashes as 'auto': auto-calibration
     is deterministic given the video content, which the signature now carries."""
-    from .detect_cache import _weights_id
+    from .detect_cache import _weights_id, _code_hash
     from .video_io import video_id
     schema = ",".join(f.name for f in _dc_fields(ShotRecord))
     calib_id = ("auto" if calib is None else ",".join(
         str(round(float(v), 1)) for v in
         (calib.rim_x, calib.rim_y, calib.rim_radius_px, calib.shot_gate_px)))
     raw = "|".join(str(x) for x in [
-        _CACHE_VERSION, schema, detector_name, _weights_id(weights),
+        _CACHE_VERSION, _code_hash(), schema, detector_name, _weights_id(weights),
         imgsz, stride, max_frames, with_pose, with_spin, handedness, with_audio,
         shooter_height_ft, tiles, round(float(conf), 3), bool(use_beam),
         (os.path.basename(make_model) if make_model else "geom"),
