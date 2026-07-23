@@ -9,12 +9,11 @@ moves only a few times, so clicking the rim is cheap and removes the confound.
 
 GUI (a window opens on the clip):
   navigate:  d/a = +/-1 frame,  e/q = +/-30,  c/z = +/-300,  g = jump to frame#
-  set rim:   left-click the rim CENTER, then left-click the rim EDGE (radius)
-  add:       ENTER = add the clicked rim, active FROM the current frame to clip
-             end (a later-added rim supersedes it for later frames -> that's how
-             you encode a camera move: add position 1 at frame 0, then navigate
-             to where it moved and add position 2 there)
-  r = clear clicks   x = delete last added   s = save   ESC/Q-window = quit
+  set rim:   left-click the rim CENTER, then left-click the rim EDGE (radius).
+             The rim is ADDED as soon as both clicks land (no ENTER). It covers
+             from the current frame to clip end; add a 2nd rim later in the clip
+             only if the camera moved mid-clip (it supersedes for later frames).
+  r = clear a half-click   x = delete last added rim   s = save   ESC/close = save & quit
 Headless (no GUI): --rim X Y --radius R [--f0 N]   appends one entry, f0..end.
 
 Usage:
@@ -84,15 +83,21 @@ def gui(clip):
                        (0, 255, 0), 2)
             cv2.circle(disp, (int(c.rim_x), int(c.rim_y)),
                        int(c.shot_gate_px), (0, 180, 0), 1)
-        for i, (cx, cy) in enumerate(state["clicks"]):
-            cv2.circle(disp, (cx, cy), 4, (0, 0, 255), -1)
-        pend = ""
+        # AUTO-COMMIT: as soon as center+edge are clicked, add the rim (no ENTER
+        # needed -- clicking then 's' used to silently save nothing).
         if len(state["clicks"]) == 2:
             (cx, cy), (ex, ey) = state["clicks"]
-            rad = int(((ex - cx) ** 2 + (ey - cy) ** 2) ** 0.5)
-            cv2.circle(disp, (cx, cy), rad, (0, 0, 255), 2)
-            pend = f" pending ({cx},{cy}) r={rad}"
-        txt = f"f {state['frame']}/{info.n_frames}  rims={len(doc['rims'])}{pend}"
+            rad = ((ex - cx) ** 2 + (ey - cy) ** 2) ** 0.5
+            f0 = 0 if not doc["rims"] else state["frame"]   # first rim covers frame 0
+            doc = rs.add_rim(clip, info.width, info.height, rim_x=cx, rim_y=cy,
+                             rim_radius_px=rad, f0=f0, f1=None,
+                             note=f"manual @f{state['frame']}")
+            state["clicks"] = []
+            print(f"added rim ({cx},{cy}) r={rad:.0f} from frame {f0} "
+                  f"-- press 's' or close the window to save")
+        for i, (cx, cy) in enumerate(state["clicks"]):
+            cv2.circle(disp, (cx, cy), 4, (0, 0, 255), -1)
+        txt = f"f {state['frame']}/{info.n_frames}  rims={len(doc['rims'])} (click center+edge to add)"
         cv2.putText(disp, txt, (12, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
                     (255, 255, 255), 2)
         cv2.imshow(win, disp)
@@ -114,19 +119,8 @@ def gui(clip):
                                             int(input("jump to frame #: "))))
             except (ValueError, EOFError):
                 pass
-        elif k in (13, 10) and len(state["clicks"]) == 2:   # ENTER = add
-            (cx, cy), (ex, ey) = state["clicks"]
-            rad = ((ex - cx) ** 2 + (ey - cy) ** 2) ** 0.5
-            # the FIRST rim always covers from frame 0 (there is no earlier rim);
-            # only a later camera position starts at the current frame.
-            f0 = 0 if not doc["rims"] else state["frame"]
-            doc = rs.add_rim(clip, info.width, info.height, rim_x=cx, rim_y=cy,
-                             rim_radius_px=rad, f0=f0, f1=None,
-                             note=f"manual @f{state['frame']}")
-            state["clicks"] = []
-            print(f"added rim ({cx},{cy}) r={rad:.0f} covering from frame {f0}")
         elif k == ord('s'):
-            p = rs.save_rims(doc); print(f"saved {p}")
+            p = rs.save_rims(doc); print(f"saved {p} ({len(doc['rims'])} rim(s))")
     cap.release()
     cv2.destroyAllWindows()
     if doc["rims"]:
