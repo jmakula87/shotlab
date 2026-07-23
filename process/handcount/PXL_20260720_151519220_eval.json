@@ -51,5 +51,20 @@
       "recall_airball": 1,
       "n_airball": 1
     }
-  ]
+  ],
+  "make_miss": {
+    "n_matched": 32,
+    "geometric": {
+      "correct": 14,
+      "na": 13,
+      "make_hit": 6,
+      "make_tot": 15
+    },
+    "visual": {
+      "correct": 28,
+      "na": 0,
+      "make_hit": 14,
+      "make_tot": 15
+    }
+  }
 }

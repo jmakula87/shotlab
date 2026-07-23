@@ -4,13 +4,13 @@
   "image_h": 1080,
   "rims": [
     {
-      "rim_x": 616.0,
-      "rim_y": 232.0,
-      "rim_radius_px": 12.206555615733702,
+      "rim_x": 615.5,
+      "rim_y": 231.0,
+      "rim_radius_px": 35.62653505464712,
       "shot_gate_px": 90.0,
       "f0": 0,
       "f1": null,
-      "note": "manual @f4334"
+      "note": "manual edge-to-edge @f4334"
     }
   ]
 }

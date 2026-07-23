@@ -5,13 +5,13 @@
   "conditions": [
     {
       "condition": "C1 baseline@0.25 (greedy)",
-      "produced": 15,
-      "tp": 15,
+      "produced": 14,
+      "tp": 14,
       "fp": 0,
-      "fn": 21,
+      "fn": 22,
       "precision": 1.0,
-      "recall_all": 0.4166666666666667,
-      "recall_rim": 0.4166666666666667,
+      "recall_all": 0.3888888888888889,
+      "recall_rim": 0.3888888888888889,
       "recall_airball": 0,
       "n_airball": 0
     },
@@ -41,15 +41,30 @@
     },
     {
       "condition": "C4 greedy u beam (production candidate)",
-      "produced": 29,
-      "tp": 29,
+      "produced": 28,
+      "tp": 28,
       "fp": 0,
-      "fn": 7,
+      "fn": 8,
       "precision": 1.0,
-      "recall_all": 0.8055555555555556,
-      "recall_rim": 0.8055555555555556,
+      "recall_all": 0.7777777777777778,
+      "recall_rim": 0.7777777777777778,
       "recall_airball": 0,
       "n_airball": 0
     }
-  ]
+  ],
+  "make_miss": {
+    "n_matched": 28,
+    "geometric": {
+      "correct": 18,
+      "na": 4,
+      "make_hit": 11,
+      "make_tot": 14
+    },
+    "visual": {
+      "correct": 14,
+      "na": 0,
+      "make_hit": 4,
+      "make_tot": 14
+    }
+  }
 }

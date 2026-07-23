@@ -171,6 +171,73 @@ def _union(a, b, tol=25):
     return out
 
 
+def score_make(clip, raw, rim_doc, attempts, tol=30):
+    """Score make/miss against the hand-count's true outcomes on matched shots.
+    Runs the production union path to get Shot objects + track, matches each to an
+    attempt, and compares BOTH the geometric `classify_make` (production default)
+    and the learned `make_visual` model (if present) to ground truth. Make/miss was
+    unmeasured until 2026-07-23 despite the hand-count carrying the answer."""
+    from shotlab.phase1_ball.track import assemble_track
+    from shotlab.court import detect_shots_to_rim
+    from shotlab.phase1_ball.pipeline import _union_beam, _rim_frame
+    from shotlab.make import classify_make
+    n_frames = max(raw) + 1
+    # union shots + merged track (single-rim clips: one calib; else per-shot calib)
+    gtrack = assemble_track(_cands_at_conf(raw, 0.25))
+    calib0 = rs.calib_at(rim_doc, 0)
+    greedy = detect_shots_to_rim(gtrack, calib0)
+    shots, track = _union_beam(greedy, gtrack, _cands_at_conf(raw, 0.01), calib0)
+    # match shots to attempts by rim frame
+    used, pairs = set(), []
+    for s in shots:
+        rf = _rim_frame(s, calib0)
+        near = [a for a in attempts if abs(a["rim_frame"] - rf) <= tol
+                and a["attempt_id"] not in used]
+        if near:
+            a = min(near, key=lambda a: abs(a["rim_frame"] - rf))
+            used.add(a["attempt_id"]); pairs.append((s, a))
+    # geometric classifier (production default)
+    geom = {"correct": 0, "na": 0, "make_hit": 0, "make_tot": 0}
+    for s, a in pairs:
+        truth = a["outcome"] == "make"
+        geom["make_tot"] += truth
+        mr = classify_make(s, track, calib0)
+        if mr.made is None:
+            geom["na"] += 1
+        elif mr.made == truth:
+            geom["correct"] += 1
+            geom["make_hit"] += truth
+    # learned visual model, if the file exists
+    vis = None
+    try:
+        import shotlab.make_visual as mv
+        model = mv.load()
+        vp = str(CLIP_DIR / f"{clip}.mp4")
+        vis = {"correct": 0, "na": 0, "make_hit": 0, "make_tot": 0}
+        for s, a in pairs:
+            truth = a["outcome"] == "make"
+            vis["make_tot"] += truth
+            feats = mv.shot_features(vp, s, calib0, track=track)
+            if feats is None:
+                vis["na"] += 1; continue
+            made, _ = mv.predict(model, feats)
+            if made == truth:
+                vis["correct"] += 1; vis["make_hit"] += truth
+    except (FileNotFoundError, ImportError, Exception):
+        vis = None
+    return {"n_matched": len(pairs), "geometric": geom, "visual": vis}
+
+
+def _fmt_make(name, m, n):
+    dec = n - m["na"]
+    acc_all = m["correct"] / n if n else float("nan")
+    acc_dec = m["correct"] / dec if dec else float("nan")
+    mr = m["make_hit"] / m["make_tot"] if m["make_tot"] else float("nan")
+    return (f"   [{name}] accuracy {m['correct']}/{n}={acc_all:.0%} (all matched) | "
+            f"{m['correct']}/{dec}={acc_dec:.0%} (decided) | na={m['na']} | "
+            f"make-recall {m['make_hit']}/{m['make_tot']}={mr:.0%}")
+
+
 def _detect_full_clip(clip):
     """Detect the ball every frame at conf 0.01 (cloud). Baseline @0.25 is a
     subset (filter by conf), so ONE YOLO pass serves both conditions. Cached."""
@@ -236,9 +303,19 @@ def run(clip, tol):
                        _union(greedy, beam), attempts, tol))
     print("\n(C5 oracle-track / arc-only need a dense per-attempt GT ball track -- "
           "supply via --gt-track once labeled; stubbed for now.)")
+    # MAKE/MISS accuracy against the hand-count's true outcomes (the first-class
+    # product output, unmeasured until 2026-07-23).
+    mk = score_make(clip, raw, rim_doc, attempts, tol)
+    print(f"\nMAKE/MISS on {mk['n_matched']} matched shots (truth make-rate "
+          f"{sum(a['outcome']=='make' for a in attempts)}/{len(attempts)}):")
+    print(_fmt_make("geometric (production default)", mk["geometric"], mk["n_matched"]))
+    if mk["visual"] is not None:
+        print(_fmt_make("make_visual (learned model)", mk["visual"], mk["n_matched"]))
+    else:
+        print("   [make_visual] model not available")
     out = HANDCOUNT_DIR / f"{clip}_eval.json"
-    json.dump({"clip": clip, "tol": tol, "n_attempts": len(attempts), "conditions": rows},
-              open(out, "w"), indent=2)
+    json.dump({"clip": clip, "tol": tol, "n_attempts": len(attempts),
+               "conditions": rows, "make_miss": mk}, open(out, "w"), indent=2)
     print(f"\nwrote {out}")
 
 
