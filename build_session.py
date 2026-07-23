@@ -109,6 +109,13 @@ def main(argv=None):
                          "cloud) with the greedy tracker -- recovers fragmented-arc "
                          "shots (validated: recall 55%%->80%% at precision 0.96 across "
                          "3 hand-counted clips). Slower (detects the full cloud).")
+    ap.add_argument("--camera", default="unknown",
+                    choices=["side_on", "oblique", "behind", "unknown"],
+                    help="camera geometry -- gates arc-angle confidence. release/entry "
+                         "angles are only physically valid SIDE-ON; on oblique/behind "
+                         "views they are image-space diagnostics (low confidence). "
+                         "Default 'unknown' treats angles as low-confidence -- pass "
+                         "--camera side_on ONLY when you filmed perpendicular to the shot.")
     ap.add_argument("--make-model", default="auto",
                     help="learned make/miss model (joblib). 'auto' uses "
                          "models/make_visual_0720.joblib if present, else geometric. "
@@ -196,7 +203,7 @@ def main(argv=None):
                             shooter_height_ft=shooter_ft,
                             tiles="auto" if args.tile else None,
                             conf=args.conf, use_beam=args.beam,
-                            make_model=make_model)
+                            make_model=make_model, camera_angle=args.camera)
         print(f"  {os.path.basename(c)}: {len(recs)} shots")
         all_records.extend(recs)
 

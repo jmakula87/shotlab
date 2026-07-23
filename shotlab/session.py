@@ -63,6 +63,9 @@ class ShotRecord:
     apex_above_rim_ft: float | None = None   # ball arc peak above the rim (rim-scaled)
     release_height_ft: float | None = None   # ball height at release above the floor
     jump_height_ft: float | None = None      # vertical body travel (load->peak)
+    camera_angle: str = "unknown"            # side_on / oblique / behind / unknown --
+    # gates arc-angle confidence: release/entry angles are only physically valid on a
+    # side-on view (2026-07-23 honesty pass; was hardcoded side_on + reported "high").
     n_points: int = 0
     rim_dist_px: float | None = None
     rim_dx_px: float | None = None    # release point vs rim, image px (sign = camera-dependent)
@@ -112,7 +115,7 @@ def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
                       with_pose, with_spin, handedness, with_audio=False,
                       shooter_height_ft=None, video_path=None,
                       calib=None, tiles=None, conf=0.25, use_beam=False,
-                      make_model=None) -> str:
+                      make_model=None, camera_angle="unknown") -> str:
     """A signature for a clip's cached records. Any change to the record schema,
     the detection/pose params, the VIDEO's content (size+mtime -- an in-place
     re-trim/re-transcode keeps the basename the cache is filed under), the
@@ -130,7 +133,7 @@ def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
         _CACHE_VERSION, _code_hash(), schema, detector_name, _weights_id(weights),
         imgsz, stride, max_frames, with_pose, with_spin, handedness, with_audio,
         shooter_height_ft, tiles, round(float(conf), 3), bool(use_beam),
-        (os.path.basename(make_model) if make_model else "geom"),
+        (os.path.basename(make_model) if make_model else "geom"), camera_angle,
         video_id(video_path) if video_path else "none", calib_id])
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
@@ -157,7 +160,7 @@ def _real_time(frame, times, info) -> float:
 def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
                         do_spin, with_pose, handedness, audio=None,
                         shooter_height_ft=None, times=None,
-                        make_model=None) -> list[ShotRecord]:
+                        make_model=None, camera_angle="unknown") -> list[ShotRecord]:
     """Build ShotRecords for a set of shots (pose + spin + make + zone). Shared by
     the whole-clip pass and each window of the long-clip chunker; frame indices in
     `shots`/`track` are absolute, so the timestamps come out right either way.
@@ -181,7 +184,7 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
     if with_pose and shots:
         from .phase2_pose.pipeline import run_phase2
         p2 = run_phase2(video_path, shots, track, handedness=handedness,
-                        camera_angle="side_on", rim_xy=(calib.rim_x, calib.rim_y),
+                        camera_angle=camera_angle, rim_xy=(calib.rim_x, calib.rim_y),
                         px_per_foot=ppf_rim, shooter_height_ft=shooter_height_ft)
         forms = {fm.shot: fm for fm in p2.forms}
 
@@ -210,6 +213,7 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
             release_angle_deg=mm.release_angle_deg,
             entry_angle_deg=mm.entry_angle_deg,
             apex_height_ft=mm.apex_height_ft,
+            camera_angle=camera_angle,
             n_points=mm.n_points,
             rim_dist_px=s.meta.get("rim_dist_px"),
             rim_dx_px=z.get("rim_dx_px"), rim_dy_px=z.get("rim_dy_px"),
@@ -330,7 +334,7 @@ def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
                      stride, chunk_frames, do_spin, with_pose, handedness,
                      use_cache, sig, audio=None, shooter_height_ft=None,
                      times=None, tiles=None, conf=0.25, use_beam=False,
-                     make_model=None):
+                     make_model=None, camera_angle="unknown"):
     """Process a long clip in absolute frame WINDOWS so each window fits the
     background-job time cap and is cached on its own -- a kill resumes at the next
     window instead of re-detecting from frame 0.
@@ -364,7 +368,8 @@ def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
                                        with_pose=with_pose, handedness=handedness,
                                        audio=audio,
                                        shooter_height_ft=shooter_height_ft,
-                                       times=times, make_model=make_model)
+                                       times=times, make_model=make_model,
+                                       camera_angle=camera_angle)
             os.makedirs(os.path.dirname(ccache), exist_ok=True)
             with open(ccache, "w", encoding="utf-8") as f:
                 json.dump({"sig": sig,
@@ -393,7 +398,8 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
                  with_spin="auto", handedness="right",
                  use_cache=True, with_audio=False,
                  shooter_height_ft=None, tiles=None, conf=0.25,
-                 use_beam=False, make_model=None) -> list[ShotRecord]:
+                 use_beam=False, make_model=None,
+                 camera_angle="unknown") -> list[ShotRecord]:
     """Detect rim-anchored shots in one clip and return ShotRecords.
 
     If calib is None the rim is auto-detected for THIS clip (the tripod may move
@@ -409,7 +415,8 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
                             handedness=handedness, with_audio=with_audio,
                             shooter_height_ft=shooter_height_ft,
                             video_path=video_path, calib=calib, tiles=tiles,
-                            conf=conf, use_beam=use_beam, make_model=make_model)
+                            conf=conf, use_beam=use_beam, make_model=make_model,
+                            camera_angle=camera_angle)
     # (make_model participates in the signature so switching classifiers recomputes)
     if use_cache and os.path.exists(cache):
         try:
@@ -467,7 +474,8 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
             chunk_frames=int(chunk_frames), do_spin=do_spin, with_pose=with_pose,
             handedness=handedness, use_cache=use_cache, sig=sig, audio=audio,
             shooter_height_ft=shooter_height_ft, times=times, tiles=tiles,
-            conf=conf, use_beam=use_beam, make_model=make_model)
+            conf=conf, use_beam=use_beam, make_model=make_model,
+            camera_angle=camera_angle)
         os.makedirs(os.path.dirname(cache), exist_ok=True)
         with open(cache, "w", encoding="utf-8") as f:
             json.dump({"sig": sig, "records": [r.row() for r in records]}, f, indent=2)
@@ -490,7 +498,8 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
                                   clip_start, do_spin=do_spin,
                                   with_pose=with_pose, handedness=handedness,
                                   audio=audio, shooter_height_ft=shooter_height_ft,
-                                  times=times, make_model=make_model)
+                                  times=times, make_model=make_model,
+                                  camera_angle=camera_angle)
 
     os.makedirs(os.path.dirname(cache), exist_ok=True)
     with open(cache, "w", encoding="utf-8") as f:

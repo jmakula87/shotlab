@@ -16,18 +16,30 @@ import pandas as pd
 
 from .config import evaluate, Flag
 
-# Which arc metrics map to which config keys, and their monocular confidence.
-_ARC_METRICS = {
-    "release_angle_deg": ("release_angle_deg", "high"),
-    "entry_angle_deg": ("entry_angle_deg", "high"),
+# Arc metrics -> config key + confidence, keyed by whether the camera is SIDE-ON.
+# release/entry angle assume the optical axis is perpendicular to the flight plane;
+# on an oblique/behind view they carry an unquantified projection bias, so they are
+# image-space diagnostics only (2026-07-23 honesty pass -- were hardcoded "high"
+# regardless of the actual camera). apex_height also depends on the rim vs ball
+# ruler (which disagree ~1.6x under foreshortening), so never above medium.
+_ARC_METRICS_SIDE_ON = {
+    "release_angle_deg": ("release_angle_deg", "medium"),
+    "entry_angle_deg": ("entry_angle_deg", "medium"),
     "apex_height_ft": ("apex_height_ft", "medium"),
+}
+_ARC_METRICS_OBLIQUE = {
+    "release_angle_deg": ("release_angle_deg", "low"),
+    "entry_angle_deg": ("entry_angle_deg", "low"),
+    "apex_height_ft": ("apex_height_ft", "low"),
 }
 
 
 def flag_arc_metrics(metric_row: dict, targets: dict) -> list[Flag]:
     arc_targets = targets.get("arc", {})
+    side_on = metric_row.get("camera_angle") == "side_on"
+    table = _ARC_METRICS_SIDE_ON if side_on else _ARC_METRICS_OBLIQUE
     flags = []
-    for key, (cfg_key, conf) in _ARC_METRICS.items():
+    for key, (cfg_key, conf) in table.items():
         spec = arc_targets.get(cfg_key, {})
         flags.append(evaluate(cfg_key, metric_row.get(key), spec, confidence=conf))
     return flags
