@@ -54,16 +54,17 @@ Both converged: we'd over-focused on detection and MISSED bigger issues. Verifie
   fresh-start each run. Owner RE-CLICKED all 3 (r~36-39). The corrected rim is what UNLOCKS
   make_visual (r=8→52%, r=36→88% on clip1). ⚠️ my earlier "555 hoop-center / 8.5° entry bias" was
   WRONG (555 is the left edge; true center ~602-616, real entry bias ~1.5-2°). The RADIUS was the bug.
-- **⚠️ REVIEWER FINDINGS STILL OPEN (not yet acted):** (a) train/test LEAKAGE — detector trained on
-  clips 1-2, val on clip 3 (`ingest_labels.py --val-clip 153054`) → absolute 80% recall won't
-  generalize (tracker DELTA still does); need an untouched test session. (b) "detection-limited is
-  the wall" likely WRONG — reviewers say all 22 residual misses HAVE near-rim detections → still
-  tracker-recoverable (rim-anchored backward-recovery pass); my `diagnose_misses` used the wrong
-  candidate set. (c) production/eval CALIBRATION PARITY — `process_clip` ignores `verify_rim` rims,
-  uses auto_calibrate (garbage here); build_session defaults imgsz 768/motion/yolo11n vs eval's
-  1280/best.onnx/beam. (d) caches don't hash CODE → stale-serving risk. (e) arc/form angles carry
-  unquantified oblique-camera bias. (f) beam empty-frame coast accounting (same cross-gap class as
-  the walk-back bug). Reviews: file to `process/reviews/2026-07-23_broad_*` (TODO).
+- **REVIEWER FINDINGS — WORKED IN ORDER (2026-07-23 later):** ✅ (1a) max-cardinality matcher +
+  tolerance sweep (f515291); ⛔ (1b) untouched test session = OWNER-BLOCKED (needs new footage).
+  ✅ (2) rim-anchored RECOVERY pass (09de1e9): VERIFIED 23/23 residual misses have near-rim
+  detections → recall 79%→**86%** at prec 0.99 (`rim_recovery.py`, eval C5, in production `_union_beam`;
+  "detection-limited is the wall" REFUTED). ✅ (3) calibration PARITY (bdefc8c): build_session now uses
+  `verify_rim` rims + `--validated` profile flag. ✅ (4) cache CODE-HASH (9885875): `_code_hash()` in
+  both cache sigs. ✅ beam coast frame-gap guard (d4aa787). **STILL OPEN (need owner judgment/footage):**
+  (e) arc/form angle oblique-camera bias — metric-honesty labeling (report raw+uncertainty / gate
+  confidence); changes coaching outputs, needs owner eye + can't validate vs GT here. (f) pose/form:
+  hardcoded side_on, release=wrist-apex (10-15° elbow bias), release-height uses wrist not ball.
+  Reviews filed: `process/reviews/2026-07-23_broad_*`.
 
 ## ⭐⭐ BEAM TRACKER VALIDATED (3 clips) + WIRED TO PRODUCTION (2026-07-23)
 Owner hand-counted all 3 clips (111 attempts) + manual rims. **Aggregate: greedy recall 55%
