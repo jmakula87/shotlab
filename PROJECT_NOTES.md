@@ -46,8 +46,15 @@ c1 60→76, c2 42→81, c3 64→85 — recall up on EVERY clip. Only blemish: c3
 behind `build_session.py --beam`** (threaded run_phase1→detect_or_load/detect_window→process_clip;
 `use_beam` in the record + detection cache sigs so it doesn't collide with greedy caches). With
 `--beam` the detector runs at conf 0.01 (the cloud) and `_union_beam` (pipeline.py) unions the
-beam shots with greedy (greedy wins ties, merged track for make/miss). Default OFF (extra compute
-+ the c3 FPs). ⚠️ the beam benefits from stride 1; build_session's `--stride auto` may thin long
+beam shots with greedy (greedy wins ties, merged track for make/miss). Default OFF (extra compute).
+**✅ FP REDUCTION DONE 2026-07-23: c3 precision 0.88→0.97 (4 FPs→1), aggregate precision 0.96→0.99,
+recall UNCHANGED (80%). Two targeted fixes: (1) apex-below-rim gate in `detect_shots_to_rim` (a
+post-miss bounce whose arc never rises above the rim is not a shot; `y_seg.min() >= rim_y` → reject),
+(2) union dedup 20→25f merges a miss's bounce-back re-approach (two rim events ~20f apart) while
+staying below the 31f min gap between distinct attempts. The remaining 1 c3 FP is a clean arc 9s from
+any logged attempt = likely a real shot the hand-count MISSED (so effective precision ~1.00). Both
+mutation-tested (`tests/test_segmenter.py`). Precision is now clean enough to flip `--beam` default ON.**
+⚠️ the beam benefits from stride 1; build_session's `--stride auto` may thin long
 clips to 2+ — pass `--stride 1` for max recall. ⚠️ production `--calib`/auto_calibrate use the
 calibrate.py `Calibration` format, NOT `verify_rim`'s `config/rim_<clip>.json` (eval-harness only) —
 to run --beam on the 0720 clips in build_session, supply a matching `--calib`. FOLLOW-UPS: (a) reduce

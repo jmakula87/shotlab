@@ -88,6 +88,13 @@ if shots:
 flat = {int(100 + i): C(100 + i, 300 + i * 10, 205) for i in range(21)}
 check("near-rim-height roll is not a shot", len(detect_shots_to_rim(flat, calib)) == 0)
 
+# apex-below-rim gate: an arc whose highest point stays BELOW the rim (a post-miss
+# bounce/roll) is not a shot, even if it launches from below and reaches the gate.
+# Same launch, but the apex sits 20px BELOW the rim (min y = rim_y+20 > rim_y).
+bounce = make_arc(100, 300, 500, 500, 200, apex_y=220, launch_y=470)
+check("apex-below-rim bounce is rejected",
+      len(detect_shots_to_rim({f: c[0] for f, c in bounce.items()}, calib)) == 0)
+
 
 # --- detect_shots_to_rim: walk-back must NOT cross a dead-ball void (the fix) ---
 # Both arcs lie on ONE parabola P (launch x=100/y=470 -> rim x=500/y=195), so the

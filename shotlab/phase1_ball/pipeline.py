@@ -124,10 +124,12 @@ def _rim_frame(shot, calib) -> int:
     return int(np.asarray(shot.frames)[int(np.argmin(d))])
 
 
-def _union_beam(greedy_shots, greedy_track, cloud, calib, tol: int = 20):
+def _union_beam(greedy_shots, greedy_track, cloud, calib, tol: int = 25):
     """Union greedy shots with beam-tracker shots over the cloud. Greedy shots win
     on overlap (more stable); beam adds the fragmented-arc shots greedy dropped.
-    Returns (unioned_shots renumbered, merged track covering all shots)."""
+    `tol`=25f merges a shot's bounce-back re-approach (a miss produces two rim
+    events ~20f apart) into one, while staying below the 31f minimum gap between
+    distinct hand-counted attempts. Returns (unioned_shots, merged track)."""
     from ..court import detect_shots_to_rim
     from .track_beam import beam_tracks
     segs = beam_tracks(cloud, conf_floor=0.05, beam=24, max_coast=6)

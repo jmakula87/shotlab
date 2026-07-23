@@ -288,6 +288,12 @@ def detect_shots_to_rim(track, calib: Calibration, *, max_rim_gap: int = 20,
         # (both ends ~vertical) and noisy fits with too few inlier points.
         if fit.n_used < 7:
             continue
+        # a real shot's ball rises ABOVE the rim (to drop in, or hit the rim from
+        # above); if the arc's highest tracked point never gets above rim height
+        # it is a post-miss bounce / roll near the rim, not a shot (dual-review
+        # bounce-FP class, confirmed on clip-3 hand-count 2026-07-23).
+        if y_seg.min() >= calib.rim_y:
+            continue
         rel = fit.release_angle_deg()
         ent = fit.entry_angle_deg(calib.rim_x)
         if min(rel, ent) > 78:

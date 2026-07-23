@@ -159,8 +159,10 @@ def _beam_shots(raw, rim_doc, n_frames):
     return produced
 
 
-def _union(a, b, tol=20):
-    """Merge two shot lists, deduping events within `tol` frames (same attempt)."""
+def _union(a, b, tol=25):
+    """Merge two shot lists, deduping events within `tol` frames (same attempt).
+    25f merges a shot's bounce-back re-approach while staying below the 31f min
+    gap between distinct hand-counted attempts."""
     frames = sorted([int(p["rim_frame"]) for p in a] + [int(p["rim_frame"]) for p in b])
     out = []
     for f in frames:
