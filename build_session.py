@@ -97,6 +97,11 @@ def main(argv=None):
                     help="native-resolution corridor tiling. ⚠️ REGRESSES recall "
                          "on the current downscale-trained model (measured 11->2 "
                          "shots); only useful after a native-scale retrain.")
+    ap.add_argument("--beam", action="store_true",
+                    help="union the multi-hypothesis beam tracker (over the conf-0.01 "
+                         "cloud) with the greedy tracker -- recovers fragmented-arc "
+                         "shots (validated: recall 55%%->80%% at precision 0.96 across "
+                         "3 hand-counted clips). Slower (detects the full cloud).")
     ap.add_argument("--conf", type=float, default=0.25,
                     help="ball-detection confidence floor (default 0.25). Lower "
                          "(e.g. 0.05) recovers ~38%% more ball frames for the "
@@ -145,7 +150,7 @@ def main(argv=None):
                             use_cache=not args.no_cache, with_audio=args.audio,
                             shooter_height_ft=shooter_ft,
                             tiles="auto" if args.tile else None,
-                            conf=args.conf)
+                            conf=args.conf, use_beam=args.beam)
         print(f"  {os.path.basename(c)}: {len(recs)} shots")
         all_records.extend(recs)
 

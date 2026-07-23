@@ -38,6 +38,22 @@ backfilled from git.)
 8. Same camera position session-to-session (metrics aren't cross-comparable
    otherwise). The close 2nd camera (S8) is the real form-detail fix.
 
+## ⭐⭐ BEAM TRACKER VALIDATED (3 clips) + WIRED TO PRODUCTION (2026-07-23)
+Owner hand-counted all 3 clips (111 attempts) + manual rims. **Aggregate: greedy recall 55%
+(61/111), precision 0.98 → greedy∪beam recall 80% (89/111), precision 0.96.** Per clip:
+c1 60→76, c2 42→81, c3 64→85 — recall up on EVERY clip. Only blemish: c3 adds 4 FPs (it has
+2 airballs + retrieve clutter) → c3 precision 0.88; c1/c2 stay 1.00. **WIRED into production
+behind `build_session.py --beam`** (threaded run_phase1→detect_or_load/detect_window→process_clip;
+`use_beam` in the record + detection cache sigs so it doesn't collide with greedy caches). With
+`--beam` the detector runs at conf 0.01 (the cloud) and `_union_beam` (pipeline.py) unions the
+beam shots with greedy (greedy wins ties, merged track for make/miss). Default OFF (extra compute
++ the c3 FPs). ⚠️ the beam benefits from stride 1; build_session's `--stride auto` may thin long
+clips to 2+ — pass `--stride 1` for max recall. ⚠️ production `--calib`/auto_calibrate use the
+calibrate.py `Calibration` format, NOT `verify_rim`'s `config/rim_<clip>.json` (eval-harness only) —
+to run --beam on the 0720 clips in build_session, supply a matching `--calib`. FOLLOW-UPS: (a) reduce
+the c3 FPs (tighter beam-shot acceptance, measured vs the 3 evals) then flip `--beam` default ON;
+(b) the ~10-per-clip detection-limited misses = film-closer / detector-retrain front.
+
 ## ⭐⭐ FIRST EVAL RESULT — clip 1 (2026-07-23)
 Owner hand-counted clip 1 (42 attempts) + manual rim (616,232). `eval_ablations` result
 (`process/handcount/PXL_20260720_151519220_eval.json`): **C1 baseline@0.25 = precision 1.00,

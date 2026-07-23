@@ -70,7 +70,9 @@ def run_phase1(video_path: str,
                max_frames: int | None = None,
                calib=None,
                stride: int = 1,
-               start_frame: int = 0) -> Phase1Result:
+               start_frame: int = 0,
+               use_beam: bool = False,
+               beam_greedy_conf: float = 0.25) -> Phase1Result:
     """Detect + track the ball, then segment shots.
 
     If `calib` is given, shots are found by rim-anchored detection on the
@@ -83,6 +85,13 @@ def run_phase1(video_path: str,
     `start_frame`/`max_frames` bound the decode to a frame WINDOW [start, max);
     frame indices in the returned track/shots stay ABSOLUTE, so windows from one
     clip can be merged (used by the long-clip auto-chunker).
+
+    `use_beam` (calibrated clips only): additionally run the multi-hypothesis beam
+    tracker over the low-confidence candidate CLOUD and UNION its shots with the
+    greedy ones. Validated 2026-07-23 across 3 hand-counted clips: recall 55%->80%
+    at precision 0.96 (the greedy tracker fragments arcs on distractors; the beam
+    recovers them). The CALLER must pass a low-conf detector (~0.01) so cands_by_frame
+    is the cloud; the greedy pass uses the `beam_greedy_conf` (0.25) subset.
     """
     info = probe(video_path)
     detector = detector or ColorBallDetector()
@@ -93,12 +102,49 @@ def run_phase1(video_path: str,
             continue
         cands_by_frame[idx] = detector.detect(idx, frame)
 
-    track = assemble_track(cands_by_frame)
+    greedy_cands = cands_by_frame
+    if use_beam:                       # greedy uses the >=conf subset of the cloud
+        greedy_cands = {f: [c for c in cs if c.conf >= beam_greedy_conf]
+                        for f, cs in cands_by_frame.items()}
+    track = assemble_track(greedy_cands)
     if calib is not None:
         from ..court import detect_shots_to_rim
         shots = detect_shots_to_rim(track, calib)
         rim_x = calib.rim_x
+        if use_beam:
+            shots, track = _union_beam(shots, track, cands_by_frame, calib)
     else:
         shots = segment_shots(track)
     metrics = [metrics_for_shot(s, rim_x=rim_x) for s in shots]
     return Phase1Result(info=info, track=track, shots=shots, metrics=metrics)
+
+
+def _rim_frame(shot, calib) -> int:
+    d = np.hypot(np.asarray(shot.xs) - calib.rim_x, np.asarray(shot.ys) - calib.rim_y)
+    return int(np.asarray(shot.frames)[int(np.argmin(d))])
+
+
+def _union_beam(greedy_shots, greedy_track, cloud, calib, tol: int = 20):
+    """Union greedy shots with beam-tracker shots over the cloud. Greedy shots win
+    on overlap (more stable); beam adds the fragmented-arc shots greedy dropped.
+    Returns (unioned_shots renumbered, merged track covering all shots)."""
+    from ..court import detect_shots_to_rim
+    from .track_beam import beam_tracks
+    segs = beam_tracks(cloud, conf_floor=0.05, beam=24, max_coast=6)
+    beam_shots = []
+    for seg in segs:
+        beam_shots.extend(detect_shots_to_rim(seg, calib))
+    kept, rims = [], []
+    for s in list(greedy_shots) + beam_shots:      # greedy first -> wins ties
+        rf = _rim_frame(s, calib)
+        if all(abs(rf - r) > tol for r in rims):
+            kept.append(s)
+            rims.append(rf)
+    kept.sort(key=lambda s: _rim_frame(s, calib))
+    for i, s in enumerate(kept, 1):
+        s.index = i
+    merged = dict(greedy_track)                    # greedy positions take priority
+    for seg in segs:
+        for f, c in seg.items():
+            merged.setdefault(f, c)
+    return kept, merged

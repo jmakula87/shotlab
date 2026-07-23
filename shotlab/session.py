@@ -111,7 +111,7 @@ _CACHE_VERSION = 21   # v20: VFR fix -- abs_time + audio rim window from real
 def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
                       with_pose, with_spin, handedness, with_audio=False,
                       shooter_height_ft=None, video_path=None,
-                      calib=None, tiles=None, conf=0.25) -> str:
+                      calib=None, tiles=None, conf=0.25, use_beam=False) -> str:
     """A signature for a clip's cached records. Any change to the record schema,
     the detection/pose params, the VIDEO's content (size+mtime -- an in-place
     re-trim/re-transcode keeps the basename the cache is filed under), the
@@ -128,7 +128,7 @@ def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
     raw = "|".join(str(x) for x in [
         _CACHE_VERSION, schema, detector_name, _weights_id(weights),
         imgsz, stride, max_frames, with_pose, with_spin, handedness, with_audio,
-        shooter_height_ft, tiles, round(float(conf), 3),
+        shooter_height_ft, tiles, round(float(conf), 3), bool(use_beam),
         video_id(video_path) if video_path else "none", calib_id])
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
@@ -308,7 +308,7 @@ def _merge_seam_pairs(kept: list, new_pairs: list, overlap: int = _CHUNK_OVERLAP
 def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
                      stride, chunk_frames, do_spin, with_pose, handedness,
                      use_cache, sig, audio=None, shooter_height_ft=None,
-                     times=None, tiles=None, conf=0.25):
+                     times=None, tiles=None, conf=0.25, use_beam=False):
     """Process a long clip in absolute frame WINDOWS so each window fits the
     background-job time cap and is cached on its own -- a kill resumes at the next
     window instead of re-detecting from frame 0.
@@ -335,7 +335,8 @@ def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
                 recs = None                       # corrupt/old chunk -> redo
         if recs is None:
             track, shots = detect_window(video_path, weights, calib, int(stride),
-                                         w0, stop, imgsz=imgsz, tiles=tiles, conf=conf)
+                                         w0, stop, imgsz=imgsz, tiles=tiles,
+                                         conf=conf, use_beam=use_beam)
             recs = _records_from_shots(shots, track, video_path, calib, info,
                                        clip_start, do_spin=do_spin,
                                        with_pose=with_pose, handedness=handedness,
@@ -369,7 +370,8 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
                  max_frames=None, chunk_frames=None, with_pose=False,
                  with_spin="auto", handedness="right",
                  use_cache=True, with_audio=False,
-                 shooter_height_ft=None, tiles=None, conf=0.25) -> list[ShotRecord]:
+                 shooter_height_ft=None, tiles=None, conf=0.25,
+                 use_beam=False) -> list[ShotRecord]:
     """Detect rim-anchored shots in one clip and return ShotRecords.
 
     If calib is None the rim is auto-detected for THIS clip (the tripod may move
@@ -385,7 +387,7 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
                             handedness=handedness, with_audio=with_audio,
                             shooter_height_ft=shooter_height_ft,
                             video_path=video_path, calib=calib, tiles=tiles,
-                            conf=conf)
+                            conf=conf, use_beam=use_beam)
     if use_cache and os.path.exists(cache):
         try:
             with open(cache, encoding="utf-8") as f:
@@ -442,7 +444,7 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
             chunk_frames=int(chunk_frames), do_spin=do_spin, with_pose=with_pose,
             handedness=handedness, use_cache=use_cache, sig=sig, audio=audio,
             shooter_height_ft=shooter_height_ft, times=times, tiles=tiles,
-            conf=conf)
+            conf=conf, use_beam=use_beam)
         os.makedirs(os.path.dirname(cache), exist_ok=True)
         with open(cache, "w", encoding="utf-8") as f:
             json.dump({"sig": sig, "records": [r.row() for r in records]}, f, indent=2)
@@ -454,7 +456,8 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
         from .detect_cache import detect_or_load
         track, shots = detect_or_load(video_path, weights or "yolo11n.pt", calib,
                                       int(stride), max_frames, imgsz=imgsz,
-                                      use_cache=use_cache, tiles=tiles, conf=conf)
+                                      use_cache=use_cache, tiles=tiles, conf=conf,
+                                      use_beam=use_beam)
     else:
         res = run_phase1(video_path, detector=detector, calib=calib,
                          stride=int(stride), max_frames=max_frames)

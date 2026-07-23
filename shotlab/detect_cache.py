@@ -60,12 +60,13 @@ def _weights_id(weights) -> str:
 
 
 def _params(video_path, weights, imgsz, stride, max_frames, calib, tiles=None,
-            conf=0.25) -> dict:
+            conf=0.25, use_beam=False) -> dict:
     from .video_io import video_id
     return {"weights": _weights_id(weights), "imgsz": int(imgsz),
             "stride": int(stride), "max_frames": max_frames,
             "tiles": tiles if isinstance(tiles, str) else tiles,
             "conf": round(float(conf), 3),
+            "beam": bool(use_beam),
             "rim": [round(calib.rim_x, 1), round(calib.rim_y, 1)],
             "video": video_id(video_path)}
 
@@ -156,33 +157,42 @@ def _load(video_path):
 
 
 def detect_window(video_path, weights, calib, stride, start, stop, imgsz=640,
-                  tiles=None, conf=0.25):
+                  tiles=None, conf=0.25, use_beam=False):
     """Detect ball + rim-anchored shots in a FRAME WINDOW [start, stop). Frame
     indices stay absolute. Uncached (the long-clip chunker caches the resulting
-    records itself). Returns (track, shots)."""
+    records itself). Returns (track, shots).
+
+    `use_beam` detects the low-conf CLOUD (conf 0.01) and unions the beam tracker's
+    shots with the greedy ones (validated recall win)."""
     from .phase1_ball.pipeline import run_phase1
     from .phase1_ball.detect_yolo import YoloBallDetector
-    det = YoloBallDetector(weights=weights, ball_class=0, conf=conf, imgsz=imgsz,
+    det_conf = 0.01 if use_beam else conf
+    det = YoloBallDetector(weights=weights, ball_class=0, conf=det_conf, imgsz=imgsz,
                            tiles=tiles)
     res = run_phase1(video_path, detector=det, calib=calib, stride=int(stride),
-                     start_frame=int(start), max_frames=int(stop))
+                     start_frame=int(start), max_frames=int(stop),
+                     use_beam=use_beam, beam_greedy_conf=conf)
     return res.track, res.shots
 
 
 def detect_or_load(video_path, weights, calib, stride, max_frames, imgsz=640,
-                   use_cache=True, tiles=None, conf=0.25):
+                   use_cache=True, tiles=None, conf=0.25, use_beam=False):
     """Return (track, shots). Loads the cached detection if params match, else
-    runs YOLO detection + rim-anchored shots and caches the result."""
-    params = _params(video_path, weights, imgsz, stride, max_frames, calib, tiles, conf)
+    runs YOLO detection + rim-anchored shots and caches the result.
+
+    `use_beam` detects the low-conf CLOUD (conf 0.01) and unions the beam tracker's
+    shots with the greedy ones (validated recall win); it is part of the cache key."""
+    params = _params(video_path, weights, imgsz, stride, max_frames, calib, tiles,
+                     conf, use_beam)
     if use_cache:
         loaded = _load(video_path)
         if loaded is not None and loaded[0] == params:
             return loaded[1], loaded[2]
     from .phase1_ball.pipeline import run_phase1
     from .phase1_ball.detect_yolo import YoloBallDetector
-    det = YoloBallDetector(weights=weights, ball_class=0, conf=conf, imgsz=imgsz,
-                           tiles=tiles)
+    det = YoloBallDetector(weights=weights, ball_class=0,
+                           conf=(0.01 if use_beam else conf), imgsz=imgsz, tiles=tiles)
     res = run_phase1(video_path, detector=det, calib=calib, stride=int(stride),
-                     max_frames=max_frames)
+                     max_frames=max_frames, use_beam=use_beam, beam_greedy_conf=conf)
     save_detection(video_path, res.track, res.shots, params)
     return res.track, res.shots
