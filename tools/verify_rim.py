@@ -117,11 +117,14 @@ def gui(clip):
         elif k in (13, 10) and len(state["clicks"]) == 2:   # ENTER = add
             (cx, cy), (ex, ey) = state["clicks"]
             rad = ((ex - cx) ** 2 + (ey - cy) ** 2) ** 0.5
+            # the FIRST rim always covers from frame 0 (there is no earlier rim);
+            # only a later camera position starts at the current frame.
+            f0 = 0 if not doc["rims"] else state["frame"]
             doc = rs.add_rim(clip, info.width, info.height, rim_x=cx, rim_y=cy,
-                             rim_radius_px=rad, f0=state["frame"], f1=None,
+                             rim_radius_px=rad, f0=f0, f1=None,
                              note=f"manual @f{state['frame']}")
             state["clicks"] = []
-            print(f"added rim ({cx},{cy}) r={rad:.0f} from frame {state['frame']}")
+            print(f"added rim ({cx},{cy}) r={rad:.0f} covering from frame {f0}")
         elif k == ord('s'):
             p = rs.save_rims(doc); print(f"saved {p}")
     cap.release()
