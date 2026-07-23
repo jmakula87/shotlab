@@ -40,7 +40,7 @@
       "n_airball": 0
     },
     {
-      "condition": "C4 greedy u beam (production candidate)",
+      "condition": "C4 greedy u beam",
       "produced": 28,
       "tp": 28,
       "fp": 0,
@@ -50,27 +50,39 @@
       "recall_rim": 0.7777777777777778,
       "recall_airball": 0,
       "n_airball": 0
+    },
+    {
+      "condition": "C5 + rim-recovery (production candidate)",
+      "produced": 31,
+      "tp": 31,
+      "fp": 0,
+      "fn": 5,
+      "precision": 1.0,
+      "recall_all": 0.8611111111111112,
+      "recall_rim": 0.8611111111111112,
+      "recall_airball": 0,
+      "n_airball": 0
     }
   ],
   "make_miss": {
-    "n_matched": 28,
+    "n_matched": 31,
     "geometric": {
-      "correct": 18,
+      "correct": 21,
       "na": 4,
-      "make_hit": 11,
-      "make_tot": 14
+      "make_hit": 12,
+      "make_tot": 15
     },
     "visual": {
-      "correct": 14,
+      "correct": 17,
       "na": 0,
-      "make_hit": 4,
-      "make_tot": 14
+      "make_hit": 5,
+      "make_tot": 15
     }
   },
   "union_tol_sweep": {
-    "5": 0.5833333333333334,
-    "10": 0.75,
-    "15": 0.7777777777777778,
-    "30": 0.7777777777777778
+    "5": 0.6666666666666666,
+    "10": 0.8333333333333334,
+    "15": 0.8611111111111112,
+    "30": 0.8611111111111112
   }
 }

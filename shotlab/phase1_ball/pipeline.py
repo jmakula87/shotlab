@@ -8,7 +8,7 @@ import numpy as np
 
 from ..arc import estimate_px_per_foot_from_ball
 from ..video_io import probe, iter_frames
-from .detect import BaseDetector, ColorBallDetector
+from .detect import BaseDetector, ColorBallDetector, BallCandidate
 from .track import assemble_track, segment_shots, Shot
 
 
@@ -132,6 +132,7 @@ def _union_beam(greedy_shots, greedy_track, cloud, calib, tol: int = 25):
     distinct hand-counted attempts. Returns (unioned_shots, merged track)."""
     from ..court import detect_shots_to_rim
     from .track_beam import beam_tracks
+    from .rim_recovery import recover_shots
     segs = beam_tracks(cloud, conf_floor=0.05, beam=24, max_coast=6)
     beam_shots = []
     for seg in segs:
@@ -140,8 +141,14 @@ def _union_beam(greedy_shots, greedy_track, cloud, calib, tol: int = 25):
     for s in list(greedy_shots) + beam_shots:      # greedy first -> wins ties
         rf = _rim_frame(s, calib)
         if all(abs(rf - r) > tol for r in rims):
-            kept.append(s)
-            rims.append(rf)
+            kept.append(s); rims.append(rf)
+    # rim-anchored recovery: near-rim cloud events with no shot yet, RANSAC-fit the
+    # backward cloud window. Measured +8 shots / 111 at precision 0.99 across 3 clips
+    # (the residual misses all HAD near-rim detections -- tracker-recoverable, 2026-07-23).
+    for s in recover_shots(cloud, calib, rims):
+        rf = _rim_frame(s, calib)
+        if all(abs(rf - r) > tol for r in rims):
+            kept.append(s); rims.append(rf)
     kept.sort(key=lambda s: _rim_frame(s, calib))
     for i, s in enumerate(kept, 1):
         s.index = i
@@ -149,4 +156,8 @@ def _union_beam(greedy_shots, greedy_track, cloud, calib, tol: int = 25):
     for seg in segs:
         for f, c in seg.items():
             merged.setdefault(f, c)
+    for s in kept:                                 # recovered shots' points for make/miss
+        if s.meta.get("source") == "rim_recovery":
+            for f, x, y, r in zip(s.frames, s.xs, s.ys, s.radii):
+                merged.setdefault(int(f), BallCandidate(int(f), float(x), float(y), float(r), 0.5))
     return kept, merged

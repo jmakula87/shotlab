@@ -168,6 +168,21 @@ def _beam_shots(raw, rim_doc, n_frames):
     return produced
 
 
+def _recovery_shots(raw, rim_doc, n_frames, seen_frames):
+    """Rim-anchored recovery shots (shotlab.phase1_ball.rim_recovery) over the cloud,
+    per frame-ranged rim, for near-rim events not already in `seen_frames`."""
+    from shotlab.phase1_ball.rim_recovery import recover_shots
+    cloud = _cands_at_conf(raw, 0.01)
+    produced, sid = [], 0
+    for f0, f1, calib in rs.segments(rim_doc, n_frames):
+        sub = {f: c for f, c in cloud.items() if f0 <= f < f1}
+        seen = [f for f in seen_frames if f0 <= f < f1]
+        for s in recover_shots(sub, calib, seen):
+            sid += 1
+            produced.append({"shot": 90000 + sid, "rim_frame": _shot_rim_frame(s, calib)})
+    return produced
+
+
 def _union(a, b, tol=25):
     """Merge two shot lists, deduping events within `tol` frames (same attempt).
     25f merges a shot's bounce-back re-approach while staying below the 31f min
@@ -309,7 +324,10 @@ def run(clip, tol):
     beam = _beam_shots(raw, rim_doc, n_frames)
     rows.append(report("C3 beam (cloud MHT)", beam, attempts, tol))
     union = _union(greedy, beam)
-    rows.append(report("C4 greedy u beam (production candidate)", union, attempts, tol))
+    rows.append(report("C4 greedy u beam", union, attempts, tol))
+    recov = _recovery_shots(raw, rim_doc, n_frames, [u["rim_frame"] for u in union])
+    union = _union(union, recov)     # C5 = production candidate (greedy u beam u recovery)
+    rows.append(report("C5 + rim-recovery (production candidate)", union, attempts, tol))
     # tolerance sweep for the production candidate -- shows how much the ±tol window
     # buys (a tight sweep = matches are real, not chance timing coincidences).
     sweep = {}
