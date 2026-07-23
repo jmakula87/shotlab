@@ -224,7 +224,7 @@ def filter_shots_by_rim(shots, calib: Calibration):
 
 def detect_shots_to_rim(track, calib: Calibration, *, max_rim_gap: int = 20,
                         launch_drop: float = 200.0, min_points: int = 8,
-                        threshold_px: float = 8.0):
+                        threshold_px: float = 8.0, max_launch_gap: int = 45):
     """Find shots in a CONTINUOUS ball track (the case a good detector produces).
 
     Gap-based segmentation fails when the ball is tracked unbroken through
@@ -262,6 +262,15 @@ def detect_shots_to_rim(track, calib: Calibration, *, max_rim_gap: int = 20,
         i = fidx[int(t_rim)]
         j = i
         while j > 0 and (y[j] - calib.rim_y) < launch_drop:
+            # A shot's launch cannot lie on the far side of a dead-ball gap (the
+            # retrieve/reset between possessions, >=1.5s). Without this stop the
+            # walk-back marches across the void into an EARLIER shot and fabricates
+            # a cross-possession "shot" -- the win3 pathology both reviewers flagged
+            # (dual review 2026-07-22). max_launch_gap=45f (~1.5s @30fps) is longer
+            # than any real flight, so a mid-air detection dropout is still bridged;
+            # it only trips on a genuine between-possession void. (Tune vs the eval.)
+            if frames[j] - frames[j - 1] > max_launch_gap:
+                break
             j -= 1
         if int(frames[j]) in seen_launch:
             continue
