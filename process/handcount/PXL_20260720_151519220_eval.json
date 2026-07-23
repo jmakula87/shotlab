@@ -1,0 +1,31 @@
+{
+  "clip": "PXL_20260720_151519220",
+  "tol": 30,
+  "n_attempts": 42,
+  "conditions": [
+    {
+      "condition": "C1 baseline@0.25",
+      "produced": 25,
+      "tp": 25,
+      "fp": 0,
+      "fn": 17,
+      "precision": 1.0,
+      "recall_all": 0.5952380952380952,
+      "recall_rim": 0.5853658536585366,
+      "recall_airball": 1,
+      "n_airball": 1
+    },
+    {
+      "condition": "C2 cloud@0.01",
+      "produced": 12,
+      "tp": 12,
+      "fp": 0,
+      "fn": 30,
+      "precision": 1.0,
+      "recall_all": 0.2857142857142857,
+      "recall_rim": 0.2682926829268293,
+      "recall_airball": 1,
+      "n_airball": 1
+    }
+  ]
+}

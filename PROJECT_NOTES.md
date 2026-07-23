@@ -38,6 +38,24 @@ backfilled from git.)
 8. Same camera position session-to-session (metrics aren't cross-comparable
    otherwise). The close 2nd camera (S8) is the real form-detail fix.
 
+## ⭐⭐ FIRST EVAL RESULT — clip 1 (2026-07-23)
+Owner hand-counted clip 1 (42 attempts) + manual rim (616,232). `eval_ablations` result
+(`process/handcount/PXL_20260720_151519220_eval.json`): **C1 baseline@0.25 = precision 1.00,
+recall 0.60 (25/42, ZERO false positives); C2 cloud@0.01 = recall 0.29 (WORSE).** So with the
+CORRECT rim, precision is perfect — the old FP problem was the bogus rim. Bottleneck = RECALL.
+**Root-caused the 17 misses by measurement (`tools/diagnose_misses.py` + cloud-arc RANSAC):**
+- Segmenter threshold tuning (min_points 8→3, launch_drop 200→120): **ZERO effect.**
+- Tracker scoring tuning (conf_weight 30→0, gate 120→80): **ZERO effect.**
+- cloud@0.01: WORSE (floods the greedy tracker).
+- The misses split: **~7/17 TRACKER-RECOVERABLE** (a clean launch→rim arc EXISTS in the conf-0.01
+  cloud — RANSAC finds it — but the greedy single-pick tracker fragments it by flipping between the
+  ball and a stationary distractor) + **~10/17 DETECTION-LIMITED** (no clean arc even in the cloud →
+  ball not consistently detected on the fast ascent).
+⇒ **Lever = a multi-hypothesis tracker (Viterbi/beam over the candidate cloud, Codex's rec) → ~7 shots
+(60%→~77%); the other ~10 need better DETECTION (film closer / retrain on ascent balls).** NOT the
+segmenter. ⚠️ ONE clip only — confirm the split on clips 2-3 (owner hand-count pending). Rim is slightly
+front-of-center (616 vs hoop-center ~555); doesn't cause FPs but nudging to center may help borderline.
+
 ## ⭐ NEXT SESSION PICKUP (2026-07-22 night)
 **Where we are:** Step-1 of the TrackNet plan is DONE, and a DUAL ADVERSARIAL REVIEW
 (Codex + Fable, owner-requested "push further") retired the oracle experiment family as a
