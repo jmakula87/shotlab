@@ -9,10 +9,13 @@ moves only a few times, so clicking the rim is cheap and removes the confound.
 
 GUI (a window opens on the clip):
   navigate:  d/a = +/-1 frame,  e/q = +/-30,  c/z = +/-300,  g = jump to frame#
-  set rim:   left-click the rim CENTER, then left-click the rim EDGE (radius).
-             The rim is ADDED as soon as both clicks land (no ENTER). It covers
-             from the current frame to clip end; add a 2nd rim later in the clip
-             only if the camera moved mid-clip (it supersedes for later frames).
+  set rim:   left-click the rim's LEFT edge, then its RIGHT edge. Center = the
+             midpoint, radius = HALF the span. (Do NOT click center+near-center --
+             that gave a 4-6x-too-small radius that corrupts make/miss + apex
+             scaling.) The rim is ADDED as soon as both edges land (no ENTER); a
+             ball-diameter sanity check prints if the radius looks wrong. It covers
+             from the current frame to clip end; add a 2nd rim later only if the
+             camera moved mid-clip (it supersedes for later frames).
   r = clear a half-click   x = delete last added rim   s = save   ESC/close = save & quit
 Headless (no GUI): --rim X Y --radius R [--f0 N]   appends one entry, f0..end.
 
@@ -31,6 +34,19 @@ from tools import rim_segments as rs
 from shotlab.video_io import probe
 
 CLIP_DIR = ROOT / "data" / "raw" / "Camera 1"
+
+
+def _median_ball_diameter(clip):
+    """Median detected ball diameter (px) from the eval candidate cloud, if cached
+    -- used only for a rim-radius sanity check. Returns None if unavailable."""
+    import json
+    import numpy as np
+    cache = ROOT / "data" / "out" / "eval_cands" / f"{clip}_cloud01.json"
+    if not cache.exists():
+        return None
+    raw = json.load(open(cache))
+    rads = [c[2] for cs in raw.values() for c in cs if c[3] >= 0.4]
+    return float(np.median(rads)) * 2.0 if rads else None
 
 
 def _clip_path(clip):
@@ -83,21 +99,33 @@ def gui(clip):
                        (0, 255, 0), 2)
             cv2.circle(disp, (int(c.rim_x), int(c.rim_y)),
                        int(c.shot_gate_px), (0, 180, 0), 1)
-        # AUTO-COMMIT: as soon as center+edge are clicked, add the rim (no ENTER
-        # needed -- clicking then 's' used to silently save nothing).
+        # AUTO-COMMIT: click the rim's LEFT edge then RIGHT edge -> center is the
+        # midpoint, radius is HALF the span. (Clicking center+near-center gave a
+        # 4-6x-too-small radius that corrupted make/miss + apex-height scaling.)
         if len(state["clicks"]) == 2:
-            (cx, cy), (ex, ey) = state["clicks"]
-            rad = ((ex - cx) ** 2 + (ey - cy) ** 2) ** 0.5
+            (x1, y1), (x2, y2) = state["clicks"]
+            cx, cy = (x1 + x2) / 2.0, (y1 + y2) / 2.0
+            rad = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5 / 2.0
             f0 = 0 if not doc["rims"] else state["frame"]   # first rim covers frame 0
             doc = rs.add_rim(clip, info.width, info.height, rim_x=cx, rim_y=cy,
                              rim_radius_px=rad, f0=f0, f1=None,
-                             note=f"manual @f{state['frame']}")
+                             note=f"manual edge-to-edge @f{state['frame']}")
             state["clicks"] = []
-            print(f"added rim ({cx},{cy}) r={rad:.0f} from frame {f0} "
-                  f"-- press 's' or close the window to save")
+            print(f"added rim center=({cx:.0f},{cy:.0f}) r={rad:.0f} from frame {f0}")
+            bd = _median_ball_diameter(clip)
+            if bd:
+                ratio = rad / bd
+                if ratio < 0.3 or ratio > 2.0:
+                    print(f"  ⚠️ SANITY: rim half-width {rad:.0f}px vs median ball "
+                          f"diameter {bd:.0f}px (ratio {ratio:.2f}). A real rim half-"
+                          f"width is ~0.5-1.0x the ball diameter -- re-click the EDGES "
+                          f"if this looks off ('x' deletes the last rim).")
+                else:
+                    print(f"  ✓ sanity: rim/ball ratio {ratio:.2f} (plausible)")
+            print("  press 's' or close the window to save")
         for i, (cx, cy) in enumerate(state["clicks"]):
-            cv2.circle(disp, (cx, cy), 4, (0, 0, 255), -1)
-        txt = f"f {state['frame']}/{info.n_frames}  rims={len(doc['rims'])} (click center+edge to add)"
+            cv2.circle(disp, (int(cx), int(cy)), 4, (0, 0, 255), -1)
+        txt = f"f {state['frame']}/{info.n_frames}  rims={len(doc['rims'])} (click LEFT then RIGHT rim edge)"
         cv2.putText(disp, txt, (12, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
                     (255, 255, 255), 2)
         cv2.imshow(win, disp)
