@@ -38,6 +38,33 @@ backfilled from git.)
 8. Same camera position session-to-session (metrics aren't cross-comparable
    otherwise). The close 2nd camera (S8) is the real form-detail fix.
 
+## ⭐⭐⭐ BROAD DUAL REVIEW → MAKE/MISS FIXED + RIM RECALIBRATED (2026-07-23, later)
+Owner asked "are there OTHER areas to improve?" → dual adversarial review (Codex + Fable, broad).
+Both converged: we'd over-focused on detection and MISSED bigger issues. Verified + acted:
+- **Make/miss (the product's #1 output) was UNMEASURED and ships at ~51% (coin-flip).** Geometric
+  `classify_make` is miss-biased + abstains ~40%; audio fusion is anti-signal (only fills unknowns
+  as "miss", wrong 13/20). ✅ Added make/miss scoring to `eval_ablations.py` (permanent gate). ✅ A
+  learned model (`make_visual`, net/occlusion cues) exists; shipped model brittle cross-session
+  (88/50/82% on the 3 clips). ✅ RE-FIT on the 89 new hand-count labels → **81% LOCO** (vs 51%
+  geometric); saved `models/make_visual_0720.joblib`. ✅ WIRED into production (`build_session
+  --make-model auto`, default-on when present; geometric fallback; audio demoted to last-resort).
+- **Rim calibration was broken:** clicked radius 8-12px vs true ~36-47px (center+near-center click).
+  Corrupts make/miss thresholds (rim-radius units) + apex-height-ft (~5× inflated). ✅ `verify_rim`
+  now clicks LEFT+RIGHT edges (center=midpoint, radius=half-span) + ball-diameter sanity check +
+  fresh-start each run. Owner RE-CLICKED all 3 (r~36-39). The corrected rim is what UNLOCKS
+  make_visual (r=8→52%, r=36→88% on clip1). ⚠️ my earlier "555 hoop-center / 8.5° entry bias" was
+  WRONG (555 is the left edge; true center ~602-616, real entry bias ~1.5-2°). The RADIUS was the bug.
+- **⚠️ REVIEWER FINDINGS STILL OPEN (not yet acted):** (a) train/test LEAKAGE — detector trained on
+  clips 1-2, val on clip 3 (`ingest_labels.py --val-clip 153054`) → absolute 80% recall won't
+  generalize (tracker DELTA still does); need an untouched test session. (b) "detection-limited is
+  the wall" likely WRONG — reviewers say all 22 residual misses HAVE near-rim detections → still
+  tracker-recoverable (rim-anchored backward-recovery pass); my `diagnose_misses` used the wrong
+  candidate set. (c) production/eval CALIBRATION PARITY — `process_clip` ignores `verify_rim` rims,
+  uses auto_calibrate (garbage here); build_session defaults imgsz 768/motion/yolo11n vs eval's
+  1280/best.onnx/beam. (d) caches don't hash CODE → stale-serving risk. (e) arc/form angles carry
+  unquantified oblique-camera bias. (f) beam empty-frame coast accounting (same cross-gap class as
+  the walk-back bug). Reviews: file to `process/reviews/2026-07-23_broad_*` (TODO).
+
 ## ⭐⭐ BEAM TRACKER VALIDATED (3 clips) + WIRED TO PRODUCTION (2026-07-23)
 Owner hand-counted all 3 clips (111 attempts) + manual rims. **Aggregate: greedy recall 55%
 (61/111), precision 0.98 → greedy∪beam recall 80% (89/111), precision 0.96.** Per clip:
