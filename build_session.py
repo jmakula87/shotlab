@@ -102,12 +102,28 @@ def main(argv=None):
                          "cloud) with the greedy tracker -- recovers fragmented-arc "
                          "shots (validated: recall 55%%->80%% at precision 0.96 across "
                          "3 hand-counted clips). Slower (detects the full cloud).")
+    ap.add_argument("--make-model", default="auto",
+                    help="learned make/miss model (joblib). 'auto' uses "
+                         "models/make_visual_0720.joblib if present, else geometric. "
+                         "Geometric classify_make is ~coin-flip on real footage "
+                         "(measured); the re-fit visual model is 81%% LOCO. Pass "
+                         "'none' to force geometric.")
     ap.add_argument("--conf", type=float, default=0.25,
                     help="ball-detection confidence floor (default 0.25). Lower "
                          "(e.g. 0.05) recovers ~38%% more ball frames for the "
                          "physics/rim gates to filter -- the track-before-detect "
                          "lever.")
     args = ap.parse_args(argv)
+
+    # resolve the learned make/miss model: 'auto' -> the re-fit model if present
+    if args.make_model == "auto":
+        _cand = os.path.join("models", "make_visual_0720.joblib")
+        make_model = _cand if os.path.exists(_cand) else None
+    elif args.make_model in ("none", "", None):
+        make_model = None
+    else:
+        make_model = args.make_model
+    print(f"make/miss classifier: {'visual ' + os.path.basename(make_model) if make_model else 'geometric (coin-flip -- no model)'}")
 
     shooter_ft = parse_height(args.shooter_height)
 
@@ -150,7 +166,8 @@ def main(argv=None):
                             use_cache=not args.no_cache, with_audio=args.audio,
                             shooter_height_ft=shooter_ft,
                             tiles="auto" if args.tile else None,
-                            conf=args.conf, use_beam=args.beam)
+                            conf=args.conf, use_beam=args.beam,
+                            make_model=make_model)
         print(f"  {os.path.basename(c)}: {len(recs)} shots")
         all_records.extend(recs)
 

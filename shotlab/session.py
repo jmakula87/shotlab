@@ -111,7 +111,8 @@ _CACHE_VERSION = 21   # v20: VFR fix -- abs_time + audio rim window from real
 def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
                       with_pose, with_spin, handedness, with_audio=False,
                       shooter_height_ft=None, video_path=None,
-                      calib=None, tiles=None, conf=0.25, use_beam=False) -> str:
+                      calib=None, tiles=None, conf=0.25, use_beam=False,
+                      make_model=None) -> str:
     """A signature for a clip's cached records. Any change to the record schema,
     the detection/pose params, the VIDEO's content (size+mtime -- an in-place
     re-trim/re-transcode keeps the basename the cache is filed under), the
@@ -129,6 +130,7 @@ def _record_cache_sig(*, detector_name, weights, imgsz, stride, max_frames,
         _CACHE_VERSION, schema, detector_name, _weights_id(weights),
         imgsz, stride, max_frames, with_pose, with_spin, handedness, with_audio,
         shooter_height_ft, tiles, round(float(conf), 3), bool(use_beam),
+        (os.path.basename(make_model) if make_model else "geom"),
         video_id(video_path) if video_path else "none", calib_id])
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
@@ -154,11 +156,24 @@ def _real_time(frame, times, info) -> float:
 
 def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
                         do_spin, with_pose, handedness, audio=None,
-                        shooter_height_ft=None, times=None) -> list[ShotRecord]:
+                        shooter_height_ft=None, times=None,
+                        make_model=None) -> list[ShotRecord]:
     """Build ShotRecords for a set of shots (pose + spin + make + zone). Shared by
     the whole-clip pass and each window of the long-clip chunker; frame indices in
-    `shots`/`track` are absolute, so the timestamps come out right either way."""
+    `shots`/`track` are absolute, so the timestamps come out right either way.
+
+    `make_model` (path to a make_visual joblib): use the LEARNED visual make/miss
+    model as the primary classifier (geometric `classify_make` = ~coin-flip on real
+    footage, measured 2026-07-23; a re-fit visual model is 81% LOCO). Geometric is
+    the fallback when the visual model can't extract features."""
     from .phase1_ball.pipeline import metrics_for_shot
+    _mv_model = None
+    if make_model:
+        try:
+            import shotlab.make_visual as _mv
+            _mv_model = _mv.load(make_model)
+        except (FileNotFoundError, ImportError, Exception):
+            _mv_model = None
 
     ppf_rim = px_per_foot_from_rim(calib.rim_radius_px)   # rim = 18in ruler
 
@@ -237,18 +252,24 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
             movement_dir=rec.movement_dir, ball_track=track,
             rel_frame=st_rel, fps=info.fps)
         rec.shot_form, rec.shot_setup = stype.form, stype.setup
-        mk = classify_make(s, track, calib, fps=info.fps)
+        mk = classify_make(s, track, calib, fps=info.fps)   # geometric (+ rim_frame)
         made, mconf = mk.made, mk.confidence
-        if audio is not None and audio[0] is not None:
+        if _mv_model is not None:                            # LEARNED visual model wins
+            import shotlab.make_visual as _mv
+            feats = _mv.shot_features(video_path, s, calib, track=track)
+            if feats is not None:
+                v_made, v_prob = _mv.predict(_mv_model, feats)
+                made = v_made
+                mconf = "high" if abs(v_prob - 0.5) > 0.3 else "med"
+        # Audio ONLY fills a genuine unknown (measured 2026-07-23: on a loud outdoor
+        # court fuse_make never flips a decided call and mislabels filled unknowns as
+        # "miss" 13/20 -- so it is demoted from the fuse to a last-resort tiebreak).
+        if made is None and audio is not None and audio[0] is not None:
             from .audio import audio_make_hint, fuse_make
-            # time the audio window on the CLOSEST-RIM-APPROACH frame, not the last
-            # tracked flight frame -- on a phantom/over-long track the last frame is
-            # seconds after the real rim event, so the swish/clank window missed it
-            # (audit D8). Fall back to flight end if closest approach is unknown.
             rim_f = mk.rim_frame if mk.rim_frame is not None else int(s.frames[-1])
             rim_t = _real_time(rim_f, times, info)
             hint = audio_make_hint(audio[0], audio[1], rim_t)
-            made, mconf = fuse_make(mk.made, mk.confidence, hint)
+            made, mconf = fuse_make(None, mk.confidence, hint)
         rec.made, rec.make_conf = made, mconf
         records.append(rec)
     return records
@@ -308,7 +329,8 @@ def _merge_seam_pairs(kept: list, new_pairs: list, overlap: int = _CHUNK_OVERLAP
 def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
                      stride, chunk_frames, do_spin, with_pose, handedness,
                      use_cache, sig, audio=None, shooter_height_ft=None,
-                     times=None, tiles=None, conf=0.25, use_beam=False):
+                     times=None, tiles=None, conf=0.25, use_beam=False,
+                     make_model=None):
     """Process a long clip in absolute frame WINDOWS so each window fits the
     background-job time cap and is cached on its own -- a kill resumes at the next
     window instead of re-detecting from frame 0.
@@ -342,7 +364,7 @@ def _process_chunked(video_path, calib, info, clip_start, *, weights, imgsz,
                                        with_pose=with_pose, handedness=handedness,
                                        audio=audio,
                                        shooter_height_ft=shooter_height_ft,
-                                       times=times)
+                                       times=times, make_model=make_model)
             os.makedirs(os.path.dirname(ccache), exist_ok=True)
             with open(ccache, "w", encoding="utf-8") as f:
                 json.dump({"sig": sig,
@@ -371,7 +393,7 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
                  with_spin="auto", handedness="right",
                  use_cache=True, with_audio=False,
                  shooter_height_ft=None, tiles=None, conf=0.25,
-                 use_beam=False) -> list[ShotRecord]:
+                 use_beam=False, make_model=None) -> list[ShotRecord]:
     """Detect rim-anchored shots in one clip and return ShotRecords.
 
     If calib is None the rim is auto-detected for THIS clip (the tripod may move
@@ -387,7 +409,8 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
                             handedness=handedness, with_audio=with_audio,
                             shooter_height_ft=shooter_height_ft,
                             video_path=video_path, calib=calib, tiles=tiles,
-                            conf=conf, use_beam=use_beam)
+                            conf=conf, use_beam=use_beam, make_model=make_model)
+    # (make_model participates in the signature so switching classifiers recomputes)
     if use_cache and os.path.exists(cache):
         try:
             with open(cache, encoding="utf-8") as f:
@@ -444,7 +467,7 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
             chunk_frames=int(chunk_frames), do_spin=do_spin, with_pose=with_pose,
             handedness=handedness, use_cache=use_cache, sig=sig, audio=audio,
             shooter_height_ft=shooter_height_ft, times=times, tiles=tiles,
-            conf=conf, use_beam=use_beam)
+            conf=conf, use_beam=use_beam, make_model=make_model)
         os.makedirs(os.path.dirname(cache), exist_ok=True)
         with open(cache, "w", encoding="utf-8") as f:
             json.dump({"sig": sig, "records": [r.row() for r in records]}, f, indent=2)
@@ -467,7 +490,7 @@ def process_clip(video_path: str, calib: Calibration | None = None, *,
                                   clip_start, do_spin=do_spin,
                                   with_pose=with_pose, handedness=handedness,
                                   audio=audio, shooter_height_ft=shooter_height_ft,
-                                  times=times)
+                                  times=times, make_model=make_model)
 
     os.makedirs(os.path.dirname(cache), exist_ok=True)
     with open(cache, "w", encoding="utf-8") as f:
