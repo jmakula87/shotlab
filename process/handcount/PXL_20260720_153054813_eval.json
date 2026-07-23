@@ -17,13 +17,13 @@
     },
     {
       "condition": "C2 cloud@0.01 (greedy)",
-      "produced": 8,
-      "tp": 8,
+      "produced": 6,
+      "tp": 6,
       "fp": 0,
-      "fn": 25,
+      "fn": 27,
       "precision": 1.0,
-      "recall_all": 0.24242424242424243,
-      "recall_rim": 0.25806451612903225,
+      "recall_all": 0.18181818181818182,
+      "recall_rim": 0.1935483870967742,
       "recall_airball": 0,
       "n_airball": 2
     },
@@ -51,5 +51,20 @@
       "recall_airball": 2,
       "n_airball": 2
     }
-  ]
+  ],
+  "make_miss": {
+    "n_matched": 28,
+    "geometric": {
+      "correct": 13,
+      "na": 12,
+      "make_hit": 8,
+      "make_tot": 14
+    },
+    "visual": {
+      "correct": 23,
+      "na": 0,
+      "make_hit": 12,
+      "make_tot": 14
+    }
+  }
 }
