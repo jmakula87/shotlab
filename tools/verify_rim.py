@@ -70,8 +70,10 @@ def gui(clip):
     path = _clip_path(clip)
     info = probe(str(path))
     cap = cv2.VideoCapture(str(path))
-    doc = rs.load_rims(clip) or {"clip": clip, "image_w": info.width,
-                                 "image_h": info.height, "rims": []}
+    # start FRESH each run (do not append to a prior file) -- re-clicking a rim
+    # simply replaces it. For a mid-clip camera move, click all positions in this
+    # one session (first at frame 0, then navigate + click the later one).
+    doc = {"clip": clip, "image_w": info.width, "image_h": info.height, "rims": []}
     state = {"frame": info.n_frames // 3, "clicks": []}
 
     def on_mouse(ev, mx, my, flags, param):
