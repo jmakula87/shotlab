@@ -45,28 +45,37 @@ CAND_CACHE = ROOT / "data" / "out" / "eval_cands"
 
 # ------------------------------------------------------------------ matching
 def match(produced, attempts, tol):
-    """Global nearest matching between produced shots and hand-counted attempts.
+    """MAX-CARDINALITY (min total frame-error) matching of produced shots to
+    hand-counted attempts, each within +-tol frames. A pair is eligible if
+    |rim_frame difference| <= tol; the assignment maximizes the number of matched
+    pairs (then minimizes total error) via the Hungarian algorithm -- the earlier
+    closest-first greedy could UNDERCOUNT recall (Codex, 2026-07-23: attempts
+    [100,130] + shots [70,105] greedily match 1 but optimally match 2).
 
     produced: list of {"shot": int, "rim_frame": int}
     attempts: list of {"attempt_id","rim_frame","outcome","reached"}
-    A pair is eligible if |rim_frame difference| <= tol; assign closest-first,
-    each shot/attempt used once. Returns (tp_pairs, fp_shots, fn_attempts).
+    Returns (tp_pairs, fp_shots, fn_attempts).
     """
-    pairs = []
-    for a in attempts:
-        for p in produced:
-            d = abs(int(p["rim_frame"]) - int(a["rim_frame"]))
-            if d <= tol:
-                pairs.append((d, a["attempt_id"], p["shot"]))
-    pairs.sort()
-    used_a, used_p, tp = set(), set(), []
-    for d, aid, sid in pairs:
-        if aid in used_a or sid in used_p:
-            continue
-        used_a.add(aid); used_p.add(sid)
-        tp.append({"attempt_id": aid, "shot": sid, "frame_err": d})
-    fp = [p for p in produced if p["shot"] not in used_p]
-    fn = [a for a in attempts if a["attempt_id"] not in used_a]
+    if not produced or not attempts:
+        return [], list(produced), list(attempts)
+    from scipy.optimize import linear_sum_assignment
+    BIG = 10 ** 9
+    A = np.array([int(a["rim_frame"]) for a in attempts])
+    P = np.array([int(p["rim_frame"]) for p in produced])
+    d = np.abs(A[:, None] - P[None, :])                 # |Δframe| per (attempt, shot)
+    # eligible pairs keep their frame error; ineligible get BIG (never preferred,
+    # and a large margin so any eligible match beats an ineligible one).
+    cost = np.where(d <= tol, d, BIG + d)
+    rows, cols = linear_sum_assignment(cost)
+    tp = []
+    for i, j in zip(rows, cols):
+        if d[i, j] <= tol:
+            tp.append({"attempt_id": attempts[i]["attempt_id"],
+                       "shot": produced[j]["shot"], "frame_err": int(d[i, j])})
+    matched_a = {t["attempt_id"] for t in tp}
+    matched_p = {t["shot"] for t in tp}
+    fp = [p for p in produced if p["shot"] not in matched_p]
+    fn = [a for a in attempts if a["attempt_id"] not in matched_a]
     return tp, fp, fn
 
 
@@ -299,8 +308,15 @@ def run(clip, tol):
                        attempts, tol))
     beam = _beam_shots(raw, rim_doc, n_frames)
     rows.append(report("C3 beam (cloud MHT)", beam, attempts, tol))
-    rows.append(report("C4 greedy u beam (production candidate)",
-                       _union(greedy, beam), attempts, tol))
+    union = _union(greedy, beam)
+    rows.append(report("C4 greedy u beam (production candidate)", union, attempts, tol))
+    # tolerance sweep for the production candidate -- shows how much the ±tol window
+    # buys (a tight sweep = matches are real, not chance timing coincidences).
+    sweep = {}
+    for t in (5, 10, 15, 30):
+        tp, _, _ = match(union, attempts, t)
+        sweep[t] = len(tp) / len(attempts) if attempts else float("nan")
+    print("   tol sweep (union recall): " + "  ".join(f"±{t}f={sweep[t]:.0%}" for t in sweep))
     print("\n(C5 oracle-track / arc-only need a dense per-attempt GT ball track -- "
           "supply via --gt-track once labeled; stubbed for now.)")
     # MAKE/MISS accuracy against the hand-count's true outcomes (the first-class
@@ -315,7 +331,8 @@ def run(clip, tol):
         print("   [make_visual] model not available")
     out = HANDCOUNT_DIR / f"{clip}_eval.json"
     json.dump({"clip": clip, "tol": tol, "n_attempts": len(attempts),
-               "conditions": rows, "make_miss": mk}, open(out, "w"), indent=2)
+               "conditions": rows, "make_miss": mk, "union_tol_sweep": sweep},
+              open(out, "w"), indent=2)
     print(f"\nwrote {out}")
 
 
