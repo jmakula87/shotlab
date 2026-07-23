@@ -1,0 +1,55 @@
+{
+  "clip": "PXL_20260720_152319112",
+  "tol": 30,
+  "n_attempts": 36,
+  "conditions": [
+    {
+      "condition": "C1 baseline@0.25 (greedy)",
+      "produced": 15,
+      "tp": 15,
+      "fp": 0,
+      "fn": 21,
+      "precision": 1.0,
+      "recall_all": 0.4166666666666667,
+      "recall_rim": 0.4166666666666667,
+      "recall_airball": 0,
+      "n_airball": 0
+    },
+    {
+      "condition": "C2 cloud@0.01 (greedy)",
+      "produced": 9,
+      "tp": 9,
+      "fp": 0,
+      "fn": 27,
+      "precision": 1.0,
+      "recall_all": 0.25,
+      "recall_rim": 0.25,
+      "recall_airball": 0,
+      "n_airball": 0
+    },
+    {
+      "condition": "C3 beam (cloud MHT)",
+      "produced": 22,
+      "tp": 21,
+      "fp": 1,
+      "fn": 15,
+      "precision": 0.9545454545454546,
+      "recall_all": 0.5833333333333334,
+      "recall_rim": 0.5833333333333334,
+      "recall_airball": 0,
+      "n_airball": 0
+    },
+    {
+      "condition": "C4 greedy u beam (production candidate)",
+      "produced": 29,
+      "tp": 29,
+      "fp": 0,
+      "fn": 7,
+      "precision": 1.0,
+      "recall_all": 0.8055555555555556,
+      "recall_rim": 0.8055555555555556,
+      "recall_airball": 0,
+      "n_airball": 0
+    }
+  ]
+}
