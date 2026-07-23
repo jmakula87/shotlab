@@ -4,7 +4,7 @@
   "n_attempts": 42,
   "conditions": [
     {
-      "condition": "C1 baseline@0.25",
+      "condition": "C1 baseline@0.25 (greedy)",
       "produced": 25,
       "tp": 25,
       "fp": 0,
@@ -16,7 +16,7 @@
       "n_airball": 1
     },
     {
-      "condition": "C2 cloud@0.01",
+      "condition": "C2 cloud@0.01 (greedy)",
       "produced": 12,
       "tp": 12,
       "fp": 0,
@@ -24,6 +24,30 @@
       "precision": 1.0,
       "recall_all": 0.2857142857142857,
       "recall_rim": 0.2682926829268293,
+      "recall_airball": 1,
+      "n_airball": 1
+    },
+    {
+      "condition": "C3 beam (cloud MHT)",
+      "produced": 29,
+      "tp": 29,
+      "fp": 0,
+      "fn": 13,
+      "precision": 1.0,
+      "recall_all": 0.6904761904761905,
+      "recall_rim": 0.6829268292682927,
+      "recall_airball": 1,
+      "n_airball": 1
+    },
+    {
+      "condition": "C4 greedy u beam (production candidate)",
+      "produced": 32,
+      "tp": 32,
+      "fp": 0,
+      "fn": 10,
+      "precision": 1.0,
+      "recall_all": 0.7619047619047619,
+      "recall_rim": 0.7560975609756098,
       "recall_airball": 1,
       "n_airball": 1
     }

@@ -138,6 +138,37 @@ def _segment_full_clip(cands_by_frame, rim_doc, n_frames):
     return produced
 
 
+def _beam_shots(raw, rim_doc, n_frames):
+    """Shots from the multi-hypothesis BEAM tracker over the conf-0.01 cloud
+    (shotlab.phase1_ball.track_beam), segmented per frame-ranged rim. Recovers the
+    fragmented-arc shots the greedy tracker drops (clip-1: +7 at precision 1.00)."""
+    from shotlab.phase1_ball.track_beam import beam_tracks
+    from shotlab.court import detect_shots_to_rim
+    segs = beam_tracks(_cands_at_conf(raw, 0.01), conf_floor=0.05, beam=24, max_coast=6)
+    produced, sid = [], 0
+    for f0, f1, calib in rs.segments(rim_doc, n_frames):
+        for seg in segs:
+            sub = {f: c for f, c in seg.items() if f0 <= f < f1}
+            if len(sub) < 2:
+                continue
+            for s in detect_shots_to_rim(sub, calib):
+                sid += 1
+                produced.append({"shot": sid, "rim_frame": _shot_rim_frame(s, calib),
+                                 "first_frame": int(s.frames[0]),
+                                 "last_frame": int(s.frames[-1])})
+    return produced
+
+
+def _union(a, b, tol=20):
+    """Merge two shot lists, deduping events within `tol` frames (same attempt)."""
+    frames = sorted([int(p["rim_frame"]) for p in a] + [int(p["rim_frame"]) for p in b])
+    out = []
+    for f in frames:
+        if not out or f - out[-1]["rim_frame"] > tol:
+            out.append({"shot": len(out) + 1, "rim_frame": f})
+    return out
+
+
 def _detect_full_clip(clip):
     """Detect the ball every frame at conf 0.01 (cloud). Baseline @0.25 is a
     subset (filter by conf), so ONE YOLO pass serves both conditions. Cached."""
@@ -192,12 +223,17 @@ def run(clip, tol):
           f"{len(rim_doc['rims'])} rim segment(s), match tol +-{tol}f")
     raw = _detect_full_clip(clip)
     rows = []
-    for name, conf in [("C1 baseline@0.25", 0.25), ("C2 cloud@0.01", 0.01)]:
-        cands = _cands_at_conf(raw, conf)
-        produced = _segment_full_clip(cands, rim_doc, n_frames)
-        rows.append(report(name, produced, attempts, tol))
-    print("\n(C3 oracle-assoc / C4 oracle-track / C5 arc-only need a dense per-attempt "
-          "GT ball track -- supply via --gt-track once labeled; stubbed for now.)")
+    greedy = _segment_full_clip(_cands_at_conf(raw, 0.25), rim_doc, n_frames)
+    rows.append(report("C1 baseline@0.25 (greedy)", greedy, attempts, tol))
+    rows.append(report("C2 cloud@0.01 (greedy)",
+                       _segment_full_clip(_cands_at_conf(raw, 0.01), rim_doc, n_frames),
+                       attempts, tol))
+    beam = _beam_shots(raw, rim_doc, n_frames)
+    rows.append(report("C3 beam (cloud MHT)", beam, attempts, tol))
+    rows.append(report("C4 greedy u beam (production candidate)",
+                       _union(greedy, beam), attempts, tol))
+    print("\n(C5 oracle-track / arc-only need a dense per-attempt GT ball track -- "
+          "supply via --gt-track once labeled; stubbed for now.)")
     out = HANDCOUNT_DIR / f"{clip}_eval.json"
     json.dump({"clip": clip, "tol": tol, "n_attempts": len(attempts), "conditions": rows},
               open(out, "w"), indent=2)

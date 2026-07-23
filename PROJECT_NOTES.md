@@ -56,6 +56,19 @@ CORRECT rim, precision is perfect — the old FP problem was the bogus rim. Bott
 segmenter. ⚠️ ONE clip only — confirm the split on clips 2-3 (owner hand-count pending). Rim is slightly
 front-of-center (616 vs hoop-center ~555); doesn't cause FPs but nudging to center may help borderline.
 
+**✅ BEAM TRACKER BUILT + VALIDATED (2026-07-23, owner chose this).** `shotlab/phase1_ball/track_beam.py`
+= multi-hypothesis beam MHT over the conf-0.01 cloud (const-velocity motion model, keeps top-K
+hypotheses so a momentary distractor doesn't derail the arc; emits coherent track SEGMENTS). Measured
+in `eval_ablations` (new conditions C3 beam / C4 greedy∪beam): **C1 greedy 0.60 → C3 beam-alone 0.69 →
+C4 greedy∪beam 0.76 recall (32/42), precision 1.00, ZERO FP.** The union recovers exactly the 7
+predicted tracker-recoverable shots [1,8,10,12,19,31,33] while keeping all 25 greedy shots (beam alone
+loses 3 easy ones greedy holds → union). Remaining 10 misses = the detection-limited bucket
+[3,15,18,24,28,32,35,37,40,42]. Covered by `tests/test_track_beam.py` (6 checks; beam follows the ball
+through a distractor cloud). Key param: `max_coast=6` (was 4) let it bridge intermittent detections.
+NOT yet wired into production `session.py` — do that after clips 2-3 confirm the gain generalizes.
+NEXT: (a) owner hand-count clips 2-3 to confirm, then wire beam∪greedy into session.py; (b) the 10
+detection-limited shots = film-closer / detector-retrain front.
+
 ## ⭐ NEXT SESSION PICKUP (2026-07-22 night)
 **Where we are:** Step-1 of the TrackNet plan is DONE, and a DUAL ADVERSARIAL REVIEW
 (Codex + Fable, owner-requested "push further") retired the oracle experiment family as a
