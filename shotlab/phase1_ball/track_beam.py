@@ -42,7 +42,8 @@ def beam_tracks(cands_by_frame: dict[int, list[BallCandidate]], *,
                 motion_gate: float = 90.0, max_coast: int = 4, beam: int = 16,
                 conf_floor: float = 0.05, seed_conf: float = 0.30,
                 conf_bonus: float = 25.0, coast_penalty: float = 40.0,
-                size_penalty: float = 3.0, min_len: int = 6) -> list[dict]:
+                size_penalty: float = 3.0, min_len: int = 6,
+                max_frame_gap: int = 25) -> list[dict]:
     """Return a list of track segments {frame: BallCandidate}, each a smooth path."""
     frames = sorted(cands_by_frame)
     active: list[_Hypo] = []
@@ -60,6 +61,13 @@ def beam_tracks(cands_by_frame: dict[int, list[BallCandidate]], *,
         claimed: set[int] = set()          # candidate ids extended this frame
         # extend each live hypothesis to its single best candidate (or coast)
         for h in active:
+            # ACTUAL elapsed frames since this hypothesis last extended -- empty
+            # frames are skipped above, so max_coast (a candidate-bearing-frame
+            # count) alone would let a hypothesis bridge a long real-time void
+            # (the cross-possession-bridge class fixed on the walk-back 07-22).
+            if f - h.last_f > max_frame_gap:
+                finalize(h)
+                continue
             px, py = h.predict(f)
             best, bestcost, besti = None, motion_gate, -1
             for i, c in enumerate(cands):
