@@ -47,12 +47,18 @@ stay OFF the table. The gap-based "perfect detection HURTS / cloud regresses" he
 untrustworthy: the labeled-window design is **selection-biased** (labels seeded only from
 already-detected shots → blind to the detection prize) and every number is an **unmatched raw
 count** (no precision/FP; the `+2` includes a bounce-back false positive). The rim is a
-**material confound** (auto-rim vs cached differ 110/225/59px; real shots span a 110px x-spread
-within one clip → tripod moved / a single per-clip `Calibration` is wrong). **Biggest EVIDENCED
-lever = verified-rim + segmenter repair, NOT "film closer"** — with a perfect track the production
-`detect_shots_to_rim` still drops ~half the rim-reaching shots via 5 cheap-fix defects (see the
-Step-1 section). Tracker velocity/reset fix is correct but has ZERO test coverage. Committed
-through `68cb7d3` + this session (`b7bdf2d` + docs/reviews); **NOT pushed.**
+**material confound** — and it turned out WORSE than "110px": on 2026-07-22 the owner set the rim
+MANUALLY (`verify_rim`) at **(616,232)** and confirmed the camera is FIXED within a clip (moves only
+BETWEEN clips). Rendered frames prove the real rim is the upper-LEFT hoop; the auto-rim (1134,470)
+was locked on the shooter's **release zone / yellow shirt** (the ball is held at ~x1170 pre-shot).
+So every earlier oracle experiment was anchored to a **bogus rim near where the ball is HELD**, not
+the hoop — measuring ball-near-release, not shots-to-rim. ⚠️ **RETRACTED: my "110px within-clip
+spread → tripod moved" claim was FALSE** (it was release-position variation near the bogus rim; owner
+confirms no intra-clip camera motion). A single manual `Calibration` per clip is correct.
+**Biggest EVIDENCED lever = verified-rim + segmenter repair, NOT "film closer"** — with a perfect
+track the production `detect_shots_to_rim` still drops ~half the rim-reaching shots via 5 cheap-fix
+defects (see the Step-1 section). Tracker velocity/reset fix correct; test coverage since ADDED
+(commit e213ca6). All pushed through `6d7503b`.
 
 **THE DECISIVE EXPERIMENT — HARNESS IS BUILT (commit b8ae653), waiting on the ~1hr hand-count.**
 Owner chose "build on existing 3 clips." Runbook: `process/EVAL_HARNESS_RUNBOOK.md`. Three steps
@@ -298,11 +304,14 @@ verbatim in `process/reviews/2026-07-22_step1_oracle_*.md`). Both converged inde
    the detection prize. And every number is an UNMATCHED raw count (no attempt IDs, no precision/FP),
    so counts can't tell a recovered shot from a false positive. The rim `+2` includes a **bounce-back
    FP** (clip1 win7 2nd rim event) and its losses include **truncation artifacts** → honest delta ≈ +1-with-an-FP.
-3. **Rim is a MATERIAL CONFOUND (adjudicated: Codex right, Fable's validation was necessary-not-sufficient).**
-   Auto-rim vs full-clip cached rim differ 110/225/59px (≫ 90px gate). My own label probe: within clip1
-   real shots approach x≈1130 (early windows) AND x≈1244 (late) — a **110px within-clip spread** → the
-   tripod moved / multiple positions; a single per-clip `Calibration` is wrong for this footage, and
-   `baseline=2` is calibration-driven, not a stable production number.
+3. **Rim is a MATERIAL CONFOUND — worse than first thought.** Auto-rim vs cached differ 110/225/59px.
+   ⚠️ **CORRECTED 2026-07-22 (owner manual rim + rendered frames):** the real rim is the upper-LEFT
+   hoop at **(616,232)**; the auto-rim (1134,470) was locked on the shooter's **release zone / yellow
+   shirt** (ball held ~x1170 pre-shot). So the earlier oracle experiments were anchored to a bogus rim
+   near where the ball is HELD, not the hoop → `baseline=2` etc. were garbage, not just calibration-
+   nudged. My "110px within-clip spread → tripod moved" was FALSE (release-position variation near the
+   bogus rim; owner confirms the camera is FIXED within a clip, moves only BETWEEN clips). A single
+   manual `Calibration` per camera position is correct; the fresh-detection eval sidesteps it entirely.
 4. **Biggest EVIDENCED lever = verified-rim + segmenter repair, NOT "film closer."** With a *perfect*
    track the production `detect_shots_to_rim` still drops ~half the rim-reaching shots via 5 cheap-fix
    defects: walk-back crossing detection gaps + `seen_launch` dedup, gather-poisoned RANSAC
