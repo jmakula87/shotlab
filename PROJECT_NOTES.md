@@ -309,7 +309,13 @@ verbatim in `process/reviews/2026-07-22_step1_oracle_*.md`). Both converged inde
    (`min_inliers_frac=0.5`), hard-coded 200px `launch_drop` (not rim-scaled), the 78° hard gate on the
    data boundary, and no bounce re-approach suppression (all `court.py:225-291`). Separately the 90px
    rim gate makes airballs invisible **by design** (attempt-detection can't count them).
-5. **Tracker fix is CORRECT but has ZERO test coverage** (`grep assemble_track tests/` → nothing).
+   → **✅ #1 FIXED (commit e213ca6): walk-back now stops at dead-ball voids (`max_launch_gap=45f`),
+   a correctness bug (not tuning). The other 4 are TUNING knobs → deferred until the eval gives real
+   numbers (judge against them, not before). Production shot-count effect of the walk-back fix also
+   awaits the eval.**
+5. **Tracker fix is CORRECT but had ZERO test coverage** → **✅ FIXED: `tests/test_segmenter.py`
+   (9 checks, mutation-verified) covers assemble_track + detect_shots_to_rim; `test_eval_harness.py`
+   covers the harness. 37/37 suite.**
 6. **"Film closer is the biggest lever" is NOT SUPPORTED** by this evaluation (both reviewers). It helps
    tiny wholly-missed balls + pose, but perfect detection still loses half the shots inside the segmenter.
 
