@@ -97,6 +97,13 @@ def main(argv=None):
                     help="native-resolution corridor tiling. ⚠️ REGRESSES recall "
                          "on the current downscale-trained model (measured 11->2 "
                          "shots); only useful after a native-scale retrain.")
+    ap.add_argument("--validated", action="store_true",
+                    help="THE hand-count-validated profile (recall 86%%/precision 0.99, "
+                         "make/miss 81%% LOCO): sets --detector yolo --weights "
+                         "runs/detect/ball_gpu_kaggle/weights/best.onnx --imgsz 1280 "
+                         "--stride 1 --beam --make-model auto, and uses the verify_rim "
+                         "config/rim_<clip>.json rims. This is the eval config; plain "
+                         "defaults (motion / imgsz 768 / yolo11n) are NOT validated.")
     ap.add_argument("--beam", action="store_true",
                     help="union the multi-hypothesis beam tracker (over the conf-0.01 "
                          "cloud) with the greedy tracker -- recovers fragmented-arc "
@@ -114,6 +121,15 @@ def main(argv=None):
                          "physics/rim gates to filter -- the track-before-detect "
                          "lever.")
     args = ap.parse_args(argv)
+
+    if args.validated:                 # THE eval-validated profile (opt-in)
+        args.detector = "yolo"
+        args.weights = args.weights or "runs/detect/ball_gpu_kaggle/weights/best.onnx"
+        args.imgsz = 1280
+        args.stride = "1"
+        args.beam = True
+        print("VALIDATED profile: yolo/best.onnx, imgsz 1280, stride 1, beam, "
+              "make-model auto, verify_rim rims")
 
     # resolve the learned make/miss model: 'auto' -> the re-fit model if present
     if args.make_model == "auto":
@@ -146,6 +162,19 @@ def main(argv=None):
         for sub, cal in cal_map.items():
             if sub in os.path.basename(clip_path):
                 return cal
+        # verify_rim manual rim (config/rim_<stem>.json) -- the SAME rim the eval
+        # uses (auto_calibrate is unreliable on cluttered outdoor footage: it locked
+        # onto a shirt on these clips). Single-rim clips only; a mid-clip camera
+        # move would need frame-ranged support in process_clip (deferred).
+        stem = os.path.splitext(os.path.basename(clip_path))[0]
+        if os.path.exists(os.path.join("config", f"rim_{stem}.json")):
+            from tools import rim_segments as rs
+            doc = rs.load_rims(stem)
+            if doc and doc.get("rims"):
+                if len(doc["rims"]) > 1:
+                    print(f"  ⚠️ {stem}: {len(doc['rims'])} rim segments; using the first "
+                          f"(process_clip is single-rim). Re-verify if the camera moved.")
+                return rs.calib_at(doc, doc["rims"][0]["f0"])
         return None   # -> auto-detect per clip
 
     clips = sorted(glob.glob(args.clips))
