@@ -2,8 +2,11 @@
 
 > The canonical "everything" doc. README.md is for usage; this is the decision
 > log, filming guide, roadmap, and enhancement backlog. Update it as we go.
+> **⭐ ON RESTART READ `KICKOFF_NEXT_SESSION.md` FIRST** — it has the current state
+> (recall 86% / precision 0.99 / make-miss 81% via `build_session --validated`, HEAD
+> 67aebde) and the two open owner-dependent items. The dated sections below are the log.
 
-Last updated: 2026-07-22 · Location: `C:\Users\jmaku\Desktop\ShotLab`
+Last updated: 2026-07-23 · Location: `C:\Users\jmaku\Desktop\ShotLab`
 (GPU is the default for **detection** — DirectML/ONNX, proven, re-verified
 5.1 ms/frame after fixing a silent CPU-fallback regression on 07-22 (onnxruntime
 conflict). ⛔ **GPU TRAINING IS ON HOLD**: the ROCm path hard-locked the whole
@@ -120,7 +123,7 @@ NOT yet wired into production `session.py` — do that after clips 2-3 confirm t
 NEXT: (a) owner hand-count clips 2-3 to confirm, then wire beam∪greedy into session.py; (b) the 10
 detection-limited shots = film-closer / detector-retrain front.
 
-## ⭐ NEXT SESSION PICKUP (2026-07-22 night)
+## NEXT SESSION PICKUP (2026-07-22 night) — ⚠️ SUPERSEDED, see `KICKOFF_NEXT_SESSION.md` + the 07-23 sections above
 **Where we are:** Step-1 of the TrackNet plan is DONE, and a DUAL ADVERSARIAL REVIEW
 (Codex + Fable, owner-requested "push further") retired the oracle experiment family as a
 sizing tool. Settled facts: detector sees the ball 99% inside labeled windows → TrackNet/tiling
