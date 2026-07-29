@@ -31,13 +31,14 @@ Location: `C:\Users\jmaku\Desktop\ShotLab`. Read-order: **this → `PROJECT_NOTE
    he filmed closer. The detector was trained on the 0720 clips, so the *absolute* 86%/81%
    is what this session tests (the tracker *delta* should hold regardless). Run FROZEN:
    ```
-   python -X utf8 tools\verify_rim.py "data\raw\Camera 1\PXL_20260729_155320813.mp4"
-   python -X utf8 tools\verify_rim.py "data\raw\Camera 1\PXL_20260729_160743954.mp4"
-   python -X utf8 tools\hand_count.py  "data\raw\Camera 1\PXL_20260729_155320813.mp4"
-   python -X utf8 tools\hand_count.py  "data\raw\Camera 1\PXL_20260729_160743954.mp4"
+   python -X utf8 tools/hand_count.py --clip PXL_20260729_155320813
+   python -X utf8 tools/verify_rim.py --clip PXL_20260729_155320813
+   python -X utf8 tools/eval_ablations.py --clip PXL_20260729_155320813
    ```
-   ⚠️ **A separate rim per clip — the camera moved between them.** Count FRESH (never seeded
-   from detections; that's what makes the eval honest). Workflow: `process/EVAL_HARNESS_RUNBOOK.md`.
+   ...then the same three for `PXL_20260729_160743954`. **`--clip` takes the STEM, not a
+   path** (both tools resolve against `data/raw/Camera 1`). ⚠️ **A separate rim per clip —
+   the camera moved between them.** Count FRESH (never seeded from detections; that's what
+   makes the eval honest). Workflow: `process/EVAL_HARNESS_RUNBOOK.md`.
 2. **Arc-metric VALUE changes (coaching-facing, owner judgment).** Listed in
    `process/ARC_METRIC_HONESTY.md`: apex as a rim..ball ruler range; entry angle constrained to
    the descending arc; release angle anchored to the release frame; deprecate `apex_height_ft`.

@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools import rim_segments as rs
 from tools import eval_ablations as E
 from tools import hand_count as HC
+from tools import verify_rim as VR
 
 PASS = 0
 TOTAL = 0
@@ -99,6 +100,23 @@ HC.save_attempts("T", att)
 rows = E.load_attempts("T")
 check("eval reads hand-count CSV", len(rows) == 3 and rows[0]["outcome"] == "make")
 check("airball survives round-trip", rows[2]["reached"] == "airball")
+
+# --- rim-radius sanity: the clicked rim is the unit for make/miss + apex feet ---
+# A regulation 18in rim and 9.5in ball put rim RADIUS at ~1.0 ball DIAMETER.
+check("plausible rim passes", VR.rim_sanity(126, 126)[0] == "ok")
+check("real 0720 rim passes", VR.rim_sanity(40, 47)[0] == "ok")
+# The likeliest mis-click halves the radius. The original 0.3-2.0 band PASSED it.
+check("center-then-edge click is caught", VR.rim_sanity(63, 126)[0] == "small")
+check("...and the OLD 0.3-2.0 band would have passed it (guards the guard)",
+      0.3 <= 63 / 126 <= 2.0)
+check("the 8px corruption is caught", VR.rim_sanity(8, 47)[0] == "fail")
+check("backboard-wide click is caught", VR.rim_sanity(260, 126)[0] == "fail")
+check("mildly wide click is flagged", VR.rim_sanity(200, 126)[0] == "large")
+check("no cached ball size -> unknown, not a false ok",
+      VR.rim_sanity(126, None)[0] == "unknown")
+check("zero ball size does not divide by zero", VR.rim_sanity(126, 0)[0] == "unknown")
+check("every verdict carries an actionable message",
+      all(len(VR.rim_sanity(r, 126)[1]) > 40 for r in (8, 63, 126, 200, 400)))
 
 print(f"{PASS}/{TOTAL} passed")
 sys.exit(0 if PASS == TOTAL else 1)

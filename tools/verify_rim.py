@@ -50,6 +50,34 @@ def _median_ball_diameter(clip):
     return float(np.median(rads)) * 2.0 if rads else None
 
 
+def rim_sanity(rad: float, ball_diameter: float | None) -> tuple[str, str]:
+    """(verdict, message) for a clicked rim radius, judged against the detected ball.
+
+    An 18in rim and a 9.5in ball put the rim RADIUS at ~1.0 ball DIAMETER. The
+    original 0.3-2.0 band missed the likeliest mistake: clicking CENTER-then-edge
+    (what the pre-07-23 instructions said) halves the radius -> ratio ~0.5, which
+    passed silently while corrupting make/miss thresholds and apex-height feet.
+    Verdicts: 'unknown' | 'ok' | 'small' | 'large' | 'fail'.
+    """
+    if not ball_diameter or ball_diameter <= 0:
+        return "unknown", f"  rim radius {rad:.0f}px (no cached ball size to check against)"
+    ratio = rad / ball_diameter
+    head = (f"  rim radius {rad:.0f}px vs median ball diameter {ball_diameter:.0f}px "
+            f"(ratio {ratio:.2f}; expected ~1.0, i.e. "
+            f"{ball_diameter*0.8:.0f}-{ball_diameter*1.2:.0f}px)")
+    if ratio < 0.3 or ratio > 2.0:
+        return "fail", (head + "\n  ⚠️ SANITY FAIL: that is far from a real rim. Re-click "
+                        "the LEFT then RIGHT EDGE ('x' deletes the last rim).")
+    if ratio < 0.65:
+        return "small", (head + f"\n  ⚠️ SUSPICIOUS: ~{ratio:.2f}x is about HALF a real rim "
+                         "-- the signature of clicking CENTER then edge instead of "
+                         "edge-to-edge. 'x' deletes the last rim; re-click both EDGES.")
+    if ratio > 1.5:
+        return "large", (head + f"\n  ⚠️ SUSPICIOUS: ~{ratio:.2f}x is wider than a real rim "
+                         "-- did a click land on the backboard? 'x' deletes the last rim.")
+    return "ok", head + "\n  ✓ sanity: plausible rim."
+
+
 def _clip_path(clip):
     p = CLIP_DIR / f"{clip}.mp4"
     if not p.exists():
@@ -123,16 +151,7 @@ def gui(clip):
                              note=f"manual edge-to-edge @f{state['frame']}")
             state["clicks"] = []
             print(f"added rim center=({cx:.0f},{cy:.0f}) r={rad:.0f} from frame {f0}")
-            bd = _median_ball_diameter(clip)
-            if bd:
-                ratio = rad / bd
-                if ratio < 0.3 or ratio > 2.0:
-                    print(f"  ⚠️ SANITY: rim half-width {rad:.0f}px vs median ball "
-                          f"diameter {bd:.0f}px (ratio {ratio:.2f}). A real rim half-"
-                          f"width is ~0.5-1.0x the ball diameter -- re-click the EDGES "
-                          f"if this looks off ('x' deletes the last rim).")
-                else:
-                    print(f"  ✓ sanity: rim/ball ratio {ratio:.2f} (plausible)")
+            print(rim_sanity(rad, _median_ball_diameter(clip))[1])
             print("  press 's' or close the window to save")
         for i, (cx, cy) in enumerate(state["clicks"]):
             cv2.circle(disp, gv.to_display_xy(cx, cy, scale), 4, (0, 0, 255), -1)
@@ -183,6 +202,12 @@ def _selftest():
         segs = rs.segments(loaded, 5000)
         assert [s[2].rim_x for s in segs] == [1134, 1244], segs
         os.remove(p)
+
+        # rim-radius sanity: the half-radius mis-click must NOT read as ok
+        assert rim_sanity(126, 126)[0] == "ok"
+        assert rim_sanity(63, 126)[0] == "small"     # center-then-edge click
+        assert rim_sanity(8, 47)[0] == "fail"        # the 07-23 corruption
+        assert rim_sanity(126, None)[0] == "unknown"
         print("verify_rim selftest OK")
     finally:
         rs.CONFIG_DIR = orig
