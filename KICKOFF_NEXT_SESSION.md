@@ -1,6 +1,6 @@
 # ShotLab — KICKOFF (read this first on restart)
 
-Last updated: **2026-07-23** · HEAD `67aebde` · all pushed, tree clean.
+Last updated: **2026-07-29** · all pushed, tree clean.
 Location: `C:\Users\jmaku\Desktop\ShotLab`. Read-order: **this → `PROJECT_NOTES.md`
 (the living log) → `process/reviews/2026-07-23_broad_*` → `process/EVAL_HARNESS_RUNBOOK.md`**.
 
@@ -25,10 +25,19 @@ Location: `C:\Users\jmaku\Desktop\ShotLab`. Read-order: **this → `PROJECT_NOTE
    (camera-aware angle confidence, `--camera`; `process/ARC_METRIC_HONESTY.md`).
 
 ## OPEN — the only things left, both need the OWNER
-1. **An untouched test session (NEW footage).** The detector was trained on clips 1-2 / val
-   clip 3, so the *absolute* 86%/81% won't fully generalize (the tracker *delta* will). Film a
-   fresh session (different day/framing/clothing/cadence), hand-count + rim it, and run the eval
-   FROZEN. This is the highest-value next step. Workflow in `process/EVAL_HARNESS_RUNBOOK.md`.
+1. **An untouched test session — THE FOOTAGE IS HERE (2026-07-29), the hand-count is not.**
+   Extracted and smoke-tested; details in the PROJECT_NOTES 07-29 section. Two wide clips,
+   **4K30 CFR**, and the ball now reads ~22 px radius in model space (vs ~10 px on 0720) —
+   he filmed closer. The detector was trained on the 0720 clips, so the *absolute* 86%/81%
+   is what this session tests (the tracker *delta* should hold regardless). Run FROZEN:
+   ```
+   python -X utf8 tools\verify_rim.py "data\raw\Camera 1\PXL_20260729_155320813.mp4"
+   python -X utf8 tools\verify_rim.py "data\raw\Camera 1\PXL_20260729_160743954.mp4"
+   python -X utf8 tools\hand_count.py  "data\raw\Camera 1\PXL_20260729_155320813.mp4"
+   python -X utf8 tools\hand_count.py  "data\raw\Camera 1\PXL_20260729_160743954.mp4"
+   ```
+   ⚠️ **A separate rim per clip — the camera moved between them.** Count FRESH (never seeded
+   from detections; that's what makes the eval honest). Workflow: `process/EVAL_HARNESS_RUNBOOK.md`.
 2. **Arc-metric VALUE changes (coaching-facing, owner judgment).** Listed in
    `process/ARC_METRIC_HONESTY.md`: apex as a rim..ball ruler range; entry angle constrained to
    the descending arc; release angle anchored to the release frame; deprecate `apex_height_ft`.
@@ -41,6 +50,14 @@ Location: `C:\Users\jmaku\Desktop\ShotLab`. Read-order: **this → `PROJECT_NOTE
   old center+near-center click gave an 8px radius that corrupted make/miss + apex scaling.
 - **`--camera side_on` ONLY when filmed perpendicular** — otherwise angles are low-confidence
   image-space diagnostics (the 0720 footage is oblique/behind).
+- **Close-cam clips: use `data/raw/Camera 2/upright/`, not `data/raw/Camera 2/`.** The 07-29 S8
+  was mounted inverted with a bogus `-90` rotation flag; the `upright/` copies are the fixed
+  ones (lossless stream copy). Pass `--close-dir` to the close-cam tools; `flare_report.py` has
+  `CLOSE_DIR` hardcoded.
+- **Previous session's raw clips live in `data/raw/Camera 1/Old/`** (verified byte-identical to
+  the footage behind the frozen baseline). No pipeline glob is recursive, so `Old/` and
+  `upright/` never leak into a `Camera 1`/`Camera 2` clip glob — but don't point `--clips` at them
+  by accident either.
 - ⚠️ **HARDWARE:** 6 silent power-losses in 5 days under GPU load → suspect PSU. Watch temps on long runs.
 
 ## Full detail

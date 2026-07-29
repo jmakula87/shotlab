@@ -6,7 +6,7 @@
 > (recall 86% / precision 0.99 / make-miss 81% via `build_session --validated`, HEAD
 > 67aebde) and the two open owner-dependent items. The dated sections below are the log.
 
-Last updated: 2026-07-23 · Location: `C:\Users\jmaku\Desktop\ShotLab`
+Last updated: 2026-07-29 · Location: `C:\Users\jmaku\Desktop\ShotLab`
 (GPU is the default for **detection** — DirectML/ONNX, proven, re-verified
 5.1 ms/frame after fixing a silent CPU-fallback regression on 07-22 (onnxruntime
 conflict). ⛔ **GPU TRAINING IS ON HOLD**: the ROCm path hard-locked the whole
@@ -40,6 +40,56 @@ backfilled from git.)
    ~3s, THEN Live — so it locks onto you, not passers-by/objects/you rebounding.
 8. Same camera position session-to-session (metrics aren't cross-comparable
    otherwise). The close 2nd camera (S8) is the real form-detail fix.
+9. **Mount each phone right-side up and don't move it mid-session.** The 07-29 S8
+   was clamped inverted (fixable, but only because it was caught before analysis)
+   and the wide cam moved between clip 1 and clip 2 (⇒ a separate rim per clip).
+
+## 🎥 NEW SESSION 2026-07-29 — first untouched test footage (the KICKOFF open item #1)
+Four Google-Takeout zips landed in `data/raw` and were extracted. **This is the fresh,
+never-trained-on session the frozen eval has been waiting for.**
+
+| Cam | Clips | Format | Length |
+|---|---|---|---|
+| Camera 1 (wide, Pixel) | 2 | **3840×2160 @ 30 fps, CFR** | 5:08 + 6:29 |
+| Camera 2 (close, S8) | 4 | 1080×1920 @ 30 fps, CFR | ~25 min |
+
+- **Constant frame rate on all six clips** — first session needing no VFR correction
+  (`is_variable_fps` False everywhere; dt spread 32.9–33.7 ms on the wide cam).
+- **Framing improved materially.** Detector smoke probe (validated ONNX weights, imgsz
+  1280, 300 sampled frames of wide clip 1): **86% of frames yield a candidate @ conf 0.01,
+  53% @ 0.25, median conf 0.52**, median ball radius **66 px at 4K**. Top-confidence crops
+  are unmistakably the real ball in flight. ⚠️ **The 4K itself is not the win** — 3840→1280
+  letterboxes at ×0.333 vs 1920→1280 at ×0.667, so model-space ball size is unchanged by
+  resolution alone. The gain is FRAMING: ~22 px ball radius in model space vs ~10 px on
+  0720. The "film closer" lever finally got pulled.
+- ⚠️ **The wide camera moved between clip 1 and clip 2** → each needs its own `verify_rim`.
+- ⚠️ **The close cam was mounted UPSIDE DOWN** and the files carry a spurious `-90`
+  display-rotation flag, so cv2 (auto-orientation on by default) delivered frames rotated
+  90°, and the raw stream is 180° off. MediaPipe would have produced garbage.
+  **FIXED AS DATA, NOT CODE:** `ffmpeg -display_rotation 180 -i <clip> -c copy` →
+  `data/raw/Camera 2/upright/` (stream copy: seconds per clip, zero re-encode, zero quality
+  loss). Verified: cv2 now reports 1920×1080 upright with matching frame counts.
+  **Why data over code:** ~15 direct `cv2.VideoCapture` call sites would each need the same
+  rotation or they'd disagree about coordinates; the ffmpeg/browser paths (`to_h264`,
+  `cut_review_clips`, the dashboard player) honor rotation *differently* than cv2 does; and
+  cache signatures key on video *content identity* (`video_id` = size:mtime), so a rotation
+  applied in code is a new interpretation of the same bytes → same key, different pixels =
+  exactly the stale-cache footgun that has bitten this project three times. Fixing the file
+  makes every consumer agree for free. **Close-cam tools need `--close-dir
+  "data/raw/Camera 2/upright"`; `flare_report.py`'s `CLOSE_DIR` is a module constant.**
+
+**Old session restored** to `data/raw/Camera 1/Old/` (10 clips: 5 wide 0720 + 5 S8) after
+being deleted during the re-download. **Verified byte-identical** to the footage that
+produced the frozen baseline — `video_id` matches the cached detection params on all three
+hand-counted clips (e.g. `1085507173:1784554566`). So the 86%/81% baseline is fully
+re-runnable and the **1,340 human ball labels** in `data/labels/ball_labels_0720.json` are
+live again. `Old/` and `upright/` are subfolders, and no pipeline glob is recursive, so
+neither can contaminate the new session. Note only clip 1's detection cache is at current
+weights; clips 2–3 caches carry older weights + pre-recalibration rims and will re-detect.
+
+**GATE (unchanged, owner ~1 hr):** `verify_rim` then `hand_count` on the two new wide clips
+— counted FRESH, not seeded from detections — then `eval_ablations` frozen. That answers the
+one question the 86%/81% numbers cannot: do they generalize off the training clips?
 
 ## ⭐⭐⭐ BROAD DUAL REVIEW → MAKE/MISS FIXED + RIM RECALIBRATED (2026-07-23, later)
 Owner asked "are there OTHER areas to improve?" → dual adversarial review (Codex + Fable, broad).
