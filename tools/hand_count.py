@@ -27,6 +27,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+from tools import guiview as gv
 from shotlab.video_io import probe
 
 CLIP_DIR = ROOT / "data" / "raw" / "Camera 1"
@@ -77,6 +78,9 @@ def gui(clip):
     frame, playing = 0, False
     win = f"hand_count {clip}  [m]make [n]miss [b]airball [u]undo [s]save [esc]quit"
     cv2.namedWindow(win, cv2.WINDOW_NORMAL)
+    # 4K frames don't fit on screen; scale for display so the overlay stays legible
+    scale = gv.display_scale(info.width, info.height)
+    cv2.resizeWindow(win, round(info.width * scale), round(info.height * scale))
 
     def read(fno):
         cap.set(cv2.CAP_PROP_POS_FRAMES, fno)
@@ -89,7 +93,7 @@ def gui(clip):
         fr = read(frame)
         if fr is None:
             frame = max(0, frame - 1); playing = False; continue
-        disp = fr.copy()
+        disp = gv.to_display(fr, scale).copy()
         near = [a for a in attempts if abs(int(a["rim_frame"]) - frame) <= 45]
         cv2.putText(disp, f"f {frame}/{info.n_frames}  attempts={len(attempts)}"
                     f"  {'PLAY' if playing else 'PAUSE'}", (12, 30),

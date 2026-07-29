@@ -30,6 +30,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+from tools import guiview as gv
 from tools import rim_segments as rs
 from shotlab.video_io import probe
 
@@ -76,13 +77,22 @@ def gui(clip):
     doc = {"clip": clip, "image_w": info.width, "image_h": info.height, "rims": []}
     state = {"frame": info.n_frames // 3, "clicks": []}
 
+    # 4K does not fit on screen. Scale for display ourselves and map clicks back,
+    # so the rim never depends on how the window manager resized the window.
+    scale = gv.display_scale(info.width, info.height)
+
     def on_mouse(ev, mx, my, flags, param):
         if ev == cv2.EVENT_LBUTTONDOWN and len(state["clicks"]) < 2:
-            state["clicks"].append((mx, my))
+            state["clicks"].append(gv.to_image_xy(mx, my, scale))
 
     win = f"verify_rim {clip}"
     cv2.namedWindow(win, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(win, round(info.width * scale), round(info.height * scale))
     cv2.setMouseCallback(win, on_mouse)
+    if scale < 1.0:
+        print(f"display scaled {scale:.3f}x ({info.width}x{info.height} -> "
+              f"{round(info.width*scale)}x{round(info.height*scale)}); clicks are "
+              f"mapped back to full-res pixels")
 
     def read(fno):
         cap.set(cv2.CAP_PROP_POS_FRAMES, fno)
@@ -93,14 +103,13 @@ def gui(clip):
         fr = read(state["frame"])
         if fr is None:
             state["frame"] = max(0, state["frame"] - 1); continue
-        disp = fr.copy()
-        # existing rims covering this frame
+        disp = gv.to_display(fr, scale).copy()
+        # existing rims covering this frame (drawn in DISPLAY space)
         c = rs.calib_at(doc, state["frame"])
         if c is not None:
-            cv2.circle(disp, (int(c.rim_x), int(c.rim_y)), int(c.rim_radius_px),
-                       (0, 255, 0), 2)
-            cv2.circle(disp, (int(c.rim_x), int(c.rim_y)),
-                       int(c.shot_gate_px), (0, 180, 0), 1)
+            ctr = gv.to_display_xy(c.rim_x, c.rim_y, scale)
+            cv2.circle(disp, ctr, max(1, int(c.rim_radius_px * scale)), (0, 255, 0), 2)
+            cv2.circle(disp, ctr, max(1, int(c.shot_gate_px * scale)), (0, 180, 0), 1)
         # AUTO-COMMIT: click the rim's LEFT edge then RIGHT edge -> center is the
         # midpoint, radius is HALF the span. (Clicking center+near-center gave a
         # 4-6x-too-small radius that corrupted make/miss + apex-height scaling.)
@@ -126,7 +135,7 @@ def gui(clip):
                     print(f"  ✓ sanity: rim/ball ratio {ratio:.2f} (plausible)")
             print("  press 's' or close the window to save")
         for i, (cx, cy) in enumerate(state["clicks"]):
-            cv2.circle(disp, (int(cx), int(cy)), 4, (0, 0, 255), -1)
+            cv2.circle(disp, gv.to_display_xy(cx, cy, scale), 4, (0, 0, 255), -1)
         txt = f"f {state['frame']}/{info.n_frames}  rims={len(doc['rims'])} (click LEFT then RIGHT rim edge)"
         cv2.putText(disp, txt, (12, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
                     (255, 255, 255), 2)
