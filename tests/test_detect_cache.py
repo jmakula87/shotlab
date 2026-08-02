@@ -94,6 +94,34 @@ def test_weights_id_tracks_content():
     assert _weights_id("no_such_weights.pt").endswith("@absent")
 
 
+def test_params_key_includes_rim_radius_and_gate():
+    """A re-clicked rim with the SAME centre but a different radius must miss the
+    cache. shot_gate_px = max(2r, 90) drives segmentation, so a centre-only key
+    serves stale shots. Latent at 0720 (r~36 pins the gate to 90); live at 4K
+    (r~127 -> gate 254). Found by the 2026-08-02 audit."""
+    import tempfile
+    from shotlab.detect_cache import _params
+
+    class C:
+        def __init__(self, r):
+            self.rim_x, self.rim_y = 616.0, 232.0
+            self.rim_radius_px = r
+            self.shot_gate_px = max(2 * r, 90.0)
+
+    with tempfile.TemporaryDirectory() as td:
+        vid = os.path.join(td, "clip.mp4")
+        with open(vid, "wb") as f:
+            f.write(b"v" * 10)
+        kw = dict(weights="w.pt", imgsz=1280, stride=1, max_frames=None)
+        small = _params(vid, calib=C(36.0), **kw)
+        big = _params(vid, calib=C(127.0), **kw)
+        assert small != big, "radius change must change the cache key"
+        assert small == _params(vid, calib=C(36.0), **kw), "same rim -> same key"
+        # the gate itself must be in the key: two radii that both pin the gate to
+        # 90 still differ in radius, which make/miss and apex scaling read.
+        assert _params(vid, calib=C(20.0), **kw) != _params(vid, calib=C(30.0), **kw)
+
+
 if __name__ == "__main__":
     import traceback
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

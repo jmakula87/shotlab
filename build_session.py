@@ -62,6 +62,24 @@ def chart(df: pd.DataFrame, out_path: str):
     return out_path
 
 
+def resolve_audio(explicit, validated):
+    """Whether to fuse audio into the make/miss call.
+
+    ON by default (2026-07-02 A/B), but OFF under --validated. `--validated` is
+    supposed to BE the configuration the hand-count eval measured, and the eval
+    scores only the visual/geometric call -- audio fills the *unknowns*, a role in
+    which it measured wrong 13 of 20, and none of those filled calls are scored.
+    Shipping it on under the validated profile means the profile's advertised
+    make/miss accuracy does not describe what it outputs.
+
+    An explicit --audio / --no-audio always wins (`explicit` is None when the user
+    said nothing). Found by the 2026-08-02 audit.
+    """
+    if explicit is not None:
+        return bool(explicit)
+    return not validated
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--calib", default=None,
@@ -81,10 +99,12 @@ def main(argv=None):
                          "(yolo only) so long exercise clips finish + resume within the job cap")
     ap.add_argument("--pose", action="store_true")
     # default ON since the 2026-07-02 A/B: zero contradictions with the visual
-    # call, resolved 9/12 unknowns, classifiable 83%->96% on session 0701
-    ap.add_argument("--audio", action=argparse.BooleanOptionalAction, default=True,
-                    help="fuse rim/backboard SOUND with the visual make/miss call "
-                         "(--no-audio to disable)")
+    # call, resolved 9/12 unknowns, classifiable 83%->96% on session 0701.
+    # BUT default OFF under --validated -- see resolve_audio().
+    ap.add_argument("--audio", action=argparse.BooleanOptionalAction, default=None,
+                    help="fuse rim/backboard SOUND with the visual make/miss call. "
+                         "ON by default, but OFF under --validated (the eval never "
+                         "scores audio-filled calls). --audio/--no-audio always wins.")
     ap.add_argument("--no-spin", action="store_true")
     ap.add_argument("--handedness", default="right")
     ap.add_argument("--out", default="data/out/session")
@@ -136,7 +156,12 @@ def main(argv=None):
         args.stride = "1"
         args.beam = True
         print("VALIDATED profile: yolo/best.onnx, imgsz 1280, stride 1, beam, "
-              "make-model auto, verify_rim rims")
+              "make-model auto, verify_rim rims, audio OFF")
+
+    args.audio = resolve_audio(args.audio, args.validated)
+    if args.validated and args.audio:
+        print("  note: --audio forced ON under --validated -- the eval does not "
+              "score audio-filled make/miss calls, so its accuracy no longer applies")
 
     # resolve the learned make/miss model: 'auto' -> the re-fit model if present
     if args.make_model == "auto":

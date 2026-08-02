@@ -67,9 +67,10 @@ Location: `C:\Users\jmaku\Desktop\ShotLab`. Read-order: **this → `PROJECT_NOTE
   by accident either. ⚠️ To re-run the 0720 eval you must move those clips back UP into
   `data/raw/Camera 1/`: `hand_count`/`verify_rim`/`eval_ablations` resolve `--clip` as
   `data/raw/Camera 1/<stem>.mp4` and will say "clip not found" while they sit in `Old/`.
-- **`--audio` defaults ON, including under `--validated`.** Audio fusion fills make/miss
-  unknowns and was measured wrong 13/20 in exactly that role; the eval never scores
-  audio-filled calls. Pass `--no-audio` for anything you intend to compare to an eval number.
+- **`--audio` is now OFF under `--validated`** (fixed 2026-08-02) so the profile matches what
+  the eval measured — audio fills make/miss *unknowns*, was wrong 13/20 in that role, and none
+  of those fills are scored. It stays ON by default otherwise, and an explicit
+  `--audio`/`--no-audio` always wins.
 - ⚠️ **HARDWARE:** 6 silent power-losses in 5 days under GPU load → suspect PSU. Watch temps on long runs.
 
 ## Full detail

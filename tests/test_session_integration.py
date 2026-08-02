@@ -248,6 +248,18 @@ def test_cache_sig_tracks_record_schema():
         assert must in names, must     # the new fields are part of the schema sig
 
 
+def test_validated_profile_turns_audio_off():
+    """--validated must BE the measured configuration. The eval scores only the
+    visual/geometric call; audio fills unknowns (measured wrong 13/20 there) and
+    none of those fills are scored, so shipping it on made the profile's advertised
+    make/miss accuracy not describe its own output. 2026-08-02 audit."""
+    from build_session import resolve_audio
+    assert resolve_audio(None, False) is True       # plain default: audio on
+    assert resolve_audio(None, True) is False       # validated default: audio off
+    assert resolve_audio(True, True) is True        # explicit --audio still wins
+    assert resolve_audio(False, False) is False     # explicit --no-audio still wins
+
+
 if __name__ == "__main__":
     import traceback
     funcs = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

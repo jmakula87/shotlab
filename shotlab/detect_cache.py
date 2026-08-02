@@ -92,7 +92,15 @@ def _params(video_path, weights, imgsz, stride, max_frames, calib, tiles=None,
             "tiles": tiles if isinstance(tiles, str) else tiles,
             "conf": round(float(conf), 3),
             "beam": bool(use_beam),
-            "rim": [round(calib.rim_x, 1), round(calib.rim_y, 1)],
+            # Rim RADIUS and the derived shot gate belong in the key too, not just
+            # the centre: segmentation keys off shot_gate_px = max(2r, 90). On the
+            # 0720 footage r~36 pinned the gate to 90, so a radius-only re-click
+            # was accidentally harmless; at 4K (r~127 -> gate 254) it changes which
+            # shots exist while leaving a centre-only key identical, and the stale
+            # detection gets served.
+            "rim": [round(calib.rim_x, 1), round(calib.rim_y, 1),
+                    round(float(getattr(calib, "rim_radius_px", 0.0) or 0.0), 1),
+                    round(float(getattr(calib, "shot_gate_px", 0.0) or 0.0), 1)],
             "video": video_id(video_path)}
 
 
