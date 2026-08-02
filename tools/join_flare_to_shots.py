@@ -30,6 +30,7 @@ from shotlab.video_io import frame_times, probe
 
 # wide clip <-> close clip pairing (single source: shotlab.feelreview)
 from shotlab.feelreview import DEFAULT_PAIRS as PAIRS
+from shotlab import paths
 
 
 def main():
@@ -37,7 +38,8 @@ def main():
     ap.add_argument("--session", required=True)
     ap.add_argument("--a3d", required=True)
     ap.add_argument("--wide-dir", default=os.path.join("data", "raw", "Camera 1"))
-    ap.add_argument("--close-dir", default=os.path.join("data", "raw", "Camera 2"))
+    # prefers data/raw/Camera 2/upright when present -- see shotlab.paths
+    ap.add_argument("--close-dir", default=paths.close_cam_dir())
     a = ap.parse_args()
 
     a3d = json.load(open(a.a3d, encoding="utf-8"))

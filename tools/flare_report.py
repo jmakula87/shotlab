@@ -32,15 +32,19 @@ from shotlab.sync import sync_clips
 from shotlab.detect_cache import _path as track_path, deserialize_detection
 from shotlab.correlate import correlate_label
 from shotlab.analysis3d import Analysis3D, refine_release_frame
+from shotlab import paths
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UP = (0.0, -1.0, 0.0)
-PAIRS = [("PXL_20260710_175751234", "20260710_135805"),
-         ("PXL_20260710_180449842", "20260710_140431"),
-         ("PXL_20260710_181146426", "20260710_141132"),
-         ("PXL_20260710_181811930", "20260710_141758")]
-WIDE_DIR = os.path.join(ROOT, "data", "raw", "Camera 1")
-CLOSE_DIR = os.path.join(ROOT, "data", "raw", "Camera 2")
+# The 0710 session's pairs, kept as the default so the original invocation still
+# works. Any other session supplies its own with --pair WIDE:CLOSE (repeatable).
+DEFAULT_PAIRS = [("PXL_20260710_175751234", "20260710_135805"),
+                 ("PXL_20260710_180449842", "20260710_140431"),
+                 ("PXL_20260710_181146426", "20260710_141132"),
+                 ("PXL_20260710_181811930", "20260710_141758")]
+PAIRS = DEFAULT_PAIRS
+WIDE_DIR = paths.wide_cam_dir(ROOT)
+CLOSE_DIR = paths.close_cam_dir(ROOT)     # prefers the rotation-corrected upright/
 OUT = os.path.join(ROOT, "data", "out", "session_0710_3d")
 STILLS = os.path.join(OUT, "flare_stills")
 
@@ -144,7 +148,38 @@ def process_pair(wide_stem, close_stem):
     return rows
 
 
-def main():
+def main(argv=None):
+    global WIDE_DIR, CLOSE_DIR, OUT, STILLS, PAIRS
+    import argparse
+    ap = argparse.ArgumentParser(
+        description="Elbow-flare stills + flare-vs-make for a 2-camera session.")
+    ap.add_argument("--pair", action="append", metavar="WIDE:CLOSE",
+                    help="clip stems to pair, repeatable. Default: the 0710 session.")
+    ap.add_argument("--wide-dir", default=WIDE_DIR)
+    ap.add_argument("--close-dir", default=CLOSE_DIR,
+                    help="close-cam clips; defaults to data/raw/Camera 2/upright "
+                         "when it exists (the rotation-corrected copies)")
+    ap.add_argument("--out", default=OUT, help="session output dir for analysis3d.json")
+    args = ap.parse_args(argv)
+
+    WIDE_DIR, CLOSE_DIR = args.wide_dir, args.close_dir
+    OUT = args.out
+    STILLS = os.path.join(OUT, "flare_stills")
+    if args.pair:
+        PAIRS = []
+        for spec in args.pair:
+            if ":" not in spec:
+                ap.error(f"--pair needs WIDE:CLOSE, got {spec!r}")
+            w, c = spec.split(":", 1)
+            PAIRS.append((w.strip(), c.strip()))
+
+    print(f"wide  {WIDE_DIR}\nclose {CLOSE_DIR}\nout   {OUT}")
+    if not paths.close_cam_is_corrected(CLOSE_DIR):
+        alt = os.path.join(CLOSE_DIR, "upright")
+        if os.path.isdir(alt):
+            print("  ⚠️ using the RAW close-cam dir while a rotation-corrected "
+                  "upright/ exists -- pose on sideways frames is garbage")
+
     all_rows = []
     for w, c in PAIRS:
         print(f"pair {w} <-> {c} ...", flush=True)

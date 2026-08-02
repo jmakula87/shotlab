@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pandas as pd
 
+from shotlab import paths
 from shotlab.feelreview import (DEFAULT_PAIRS, close_window, review_candidates,
                                 shot_windows)
 
@@ -42,7 +43,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--session", required=True)
     ap.add_argument("--wide-dir", default=os.path.join("data", "raw", "Camera 1"))
-    ap.add_argument("--close-dir", default=os.path.join("data", "raw", "Camera 2"))
+    # prefers data/raw/Camera 2/upright when present -- see shotlab.paths
+    ap.add_argument("--close-dir", default=paths.close_cam_dir())
     ap.add_argument("--no-close", action="store_true",
                     help="single-camera session: skip the close angle")
     ap.add_argument("--overwrite", action="store_true")
