@@ -44,6 +44,45 @@ def to_display_xy(ix: float, iy: float, scale: float) -> tuple[int, int]:
     return int(round(ix * scale)), int(round(iy * scale))
 
 
+class FrameReader:
+    """Decoded-frame cache over a cv2.VideoCapture, for the review GUIs.
+
+    Both GUIs redraw every ~20-30ms and re-read the SAME frame, and SPACE plays a
+    clip one frame at a time. Seeking (`CAP_PROP_POS_FRAMES`) before every read
+    costs ~16x on 4K -- measured 3.8 fps vs 63 fps sequential, i.e. ~91 minutes of
+    pure playback stall over a 20,915-frame session instead of ~6.
+
+    So: return the cached frame when the same index is asked for again, and only
+    seek when the wanted frame is not the one the capture would return next.
+    `seeks`/`decodes` are counters the tests assert on.
+    """
+
+    def __init__(self, cap, pos_prop: int = 1):   # 1 == cv2.CAP_PROP_POS_FRAMES
+        self._cap = cap
+        self._pos_prop = pos_prop
+        self._idx = None
+        self._img = None
+        self._next = None
+        self.seeks = 0
+        self.decodes = 0
+
+    def read(self, fno: int):
+        """The frame at `fno`, or None at end of stream."""
+        if self._idx == fno and self._img is not None:
+            return self._img
+        if self._next != fno:
+            self._cap.set(self._pos_prop, fno)
+            self.seeks += 1
+        ok, fr = self._cap.read()
+        self.decodes += 1
+        self._idx = fno if ok else None
+        self._img = fr if ok else None
+        # A failed read leaves the capture position undefined -- force a seek next
+        # time rather than assuming it advanced.
+        self._next = (fno + 1) if ok else None
+        return fr if ok else None
+
+
 def _selftest():
     assert display_scale(1280, 720) == 1.0             # fits -> no scaling
     assert display_scale(0, 0) == 1.0                  # degenerate -> safe

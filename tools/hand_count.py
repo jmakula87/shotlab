@@ -82,10 +82,9 @@ def gui(clip):
     scale = gv.display_scale(info.width, info.height)
     cv2.resizeWindow(win, round(info.width * scale), round(info.height * scale))
 
-    def read(fno):
-        cap.set(cv2.CAP_PROP_POS_FRAMES, fno)
-        ok, fr = cap.read()
-        return fr if ok else None
+    # cached/sequential decoding -- seeking every frame costs ~16x on 4K
+    reader = gv.FrameReader(cap, cv2.CAP_PROP_POS_FRAMES)
+    read = reader.read
 
     LOG = {ord('m'): ("make", "rim"), ord('n'): ("miss", "rim"),
            ord('b'): ("miss", "airball")}

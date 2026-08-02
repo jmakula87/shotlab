@@ -46,6 +46,9 @@ def _median_ball_diameter(clip):
     if not cache.exists():
         return None
     raw = json.load(open(cache))
+    # since 2026-08-02 the cloud carries an identity header: {"params", "cands"}
+    if isinstance(raw, dict) and "cands" in raw:
+        raw = raw["cands"]
     rads = [c[2] for cs in raw.values() for c in cs if c[3] >= 0.4]
     return float(np.median(rads)) * 2.0 if rads else None
 
@@ -99,10 +102,16 @@ def gui(clip):
     path = _clip_path(clip)
     info = probe(str(path))
     cap = cv2.VideoCapture(str(path))
-    # start FRESH each run (do not append to a prior file) -- re-clicking a rim
-    # simply replaces it. For a mid-clip camera move, click all positions in this
-    # one session (first at frame 0, then navigate + click the later one).
+    # Start FRESH each run: click every rim position this clip needs in ONE
+    # session (first at frame 0, then navigate + click each later one), and 'x'
+    # deletes the last one if you mis-click. Until 2026-08-02 this only LOOKED
+    # fresh -- add_rim reloaded config/rim_<clip>.json from disk and appended, so
+    # a stale rim from an earlier run could still govern part of the clip.
     doc = {"clip": clip, "image_w": info.width, "image_h": info.height, "rims": []}
+    prior = rs.load_rims(clip)
+    if prior and prior.get("rims"):
+        print(f"NOTE {len(prior['rims'])} rim(s) from a previous run will be "
+              f"REPLACED when you save. Click every position you need now.")
     state = {"frame": info.n_frames // 3, "clicks": []}
 
     # 4K does not fit on screen. Scale for display ourselves and map clicks back,
@@ -122,10 +131,9 @@ def gui(clip):
               f"{round(info.width*scale)}x{round(info.height*scale)}); clicks are "
               f"mapped back to full-res pixels")
 
-    def read(fno):
-        cap.set(cv2.CAP_PROP_POS_FRAMES, fno)
-        ok, fr = cap.read()
-        return fr if ok else None
+    # cached/sequential decoding -- the redraw loop re-reads the same frame every
+    # ~30ms, and seeking each time costs ~16x on 4K
+    read = gv.FrameReader(cap, cv2.CAP_PROP_POS_FRAMES).read
 
     while True:
         fr = read(state["frame"])
@@ -147,7 +155,7 @@ def gui(clip):
             rad = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5 / 2.0
             f0 = 0 if not doc["rims"] else state["frame"]   # first rim covers frame 0
             doc = rs.add_rim(clip, info.width, info.height, rim_x=cx, rim_y=cy,
-                             rim_radius_px=rad, f0=f0, f1=None,
+                             rim_radius_px=rad, f0=f0, f1=None, doc=doc,
                              note=f"manual edge-to-edge @f{state['frame']}")
             state["clicks"] = []
             print(f"added rim center=({cx:.0f},{cy:.0f}) r={rad:.0f} from frame {f0}")

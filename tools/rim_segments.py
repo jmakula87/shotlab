@@ -46,10 +46,17 @@ def save_rims(doc: dict) -> Path:
 
 
 def add_rim(clip: str, image_w: int, image_h: int, *, rim_x, rim_y,
-            rim_radius_px, f0=0, f1=None, gate_mult=2.0, note="") -> dict:
-    """Append (or start) a frame-ranged rim entry. f1=None means 'to end of clip'."""
-    doc = load_rims(clip) or {"clip": clip, "image_w": int(image_w),
-                              "image_h": int(image_h), "rims": []}
+            rim_radius_px, f0=0, f1=None, gate_mult=2.0, note="", doc=None) -> dict:
+    """Append (or start) a frame-ranged rim entry. f1=None means 'to end of clip'.
+
+    `doc`: append into THIS doc instead of reloading the one on disk. The GUI
+    passes its in-memory doc, because reloading meant a re-run silently inherited
+    the previous run's rims -- so a stale (possibly mis-clicked) rim could still
+    govern part of the clip even though the GUI announced a fresh start.
+    """
+    if doc is None:
+        doc = load_rims(clip) or {"clip": clip, "image_w": int(image_w),
+                                  "image_h": int(image_h), "rims": []}
     doc["rims"].append({
         "rim_x": float(rim_x), "rim_y": float(rim_y),
         "rim_radius_px": float(rim_radius_px),

@@ -118,5 +118,41 @@ check("zero ball size does not divide by zero", VR.rim_sanity(126, 0)[0] == "unk
 check("every verdict carries an actionable message",
       all(len(VR.rim_sanity(r, 126)[1]) > 40 for r in (8, 63, 126, 200, 400)))
 
+# --- add_rim(doc=) must NOT inherit rims from disk (verify_rim's "fresh start") ---
+# Before 2026-08-02 the GUI built a fresh doc but add_rim reloaded the file and
+# appended, so a stale rim from an earlier run still governed part of the clip.
+_orig_cfg = rs.CONFIG_DIR
+try:
+    rs.CONFIG_DIR = Path(tempfile.mkdtemp())
+    stale = rs.add_rim("FRESH", 1920, 1080, rim_x=100, rim_y=100, rim_radius_px=40, f0=0)
+    stale = rs.add_rim("FRESH", 1920, 1080, rim_x=999, rim_y=999, rim_radius_px=40,
+                       f0=2000, doc=stale)
+    rs.save_rims(stale)
+
+    # a new GUI session: fresh in-memory doc, one click
+    fresh = {"clip": "FRESH", "image_w": 1920, "image_h": 1080, "rims": []}
+    fresh = rs.add_rim("FRESH", 1920, 1080, rim_x=616, rim_y=232, rim_radius_px=40,
+                       f0=0, doc=fresh)
+    check("fresh run keeps only the new rim", len(fresh["rims"]) == 1)
+    check("no stale rim governs a later frame",
+          rs.calib_at(fresh, 3000).rim_x == 616)
+    # and the old default (no doc=) still reads disk, for non-GUI callers
+    appended = rs.add_rim("FRESH", 1920, 1080, rim_x=1, rim_y=1, rim_radius_px=40, f0=5000)
+    check("without doc= the disk file is still the base", len(appended["rims"]) == 3)
+finally:
+    rs.CONFIG_DIR = _orig_cfg
+
+# --- the eval must score the model production actually ships ---
+_src = (Path(__file__).resolve().parent.parent / "tools" / "eval_ablations.py").read_text(
+    encoding="utf-8")
+check("eval resolves make_visual_0720 like build_session --make-model auto",
+      "make_visual_0720.joblib" in _src)
+check("eval records WHICH make model it scored", '"visual_model"' in _src)
+check("make-model scoring no longer swallows every exception",   # (as code, not
+      # in the comment that documents the old form)
+      "except (FileNotFoundError, ImportError, Exception):" not in _src)
+check("...and says what failed instead of 'not available'", "SCORING FAILED" in _src)
+check("candidate-cloud cache carries an identity header", "_cloud_params" in _src)
+
 print(f"{PASS}/{TOTAL} passed")
 sys.exit(0 if PASS == TOTAL else 1)

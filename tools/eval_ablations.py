@@ -231,11 +231,17 @@ def score_make(clip, raw, rim_doc, attempts, tol=30):
         elif mr.made == truth:
             geom["correct"] += 1
             geom["make_hit"] += truth
-    # learned visual model, if the file exists
-    vis = None
+    # learned visual model -- resolve EXACTLY as build_session --make-model auto
+    # does. `mv.load()` defaults to models/make_visual.joblib, the superseded
+    # 07-11 model, so this gate was scoring an artifact production does not use.
+    vis, vis_model = None, None
     try:
         import shotlab.make_visual as mv
-        model = mv.load()
+        mpath = ROOT / "models" / "make_visual_0720.joblib"
+        if not mpath.exists():
+            mpath = ROOT / "models" / "make_visual.joblib"
+        model = mv.load(str(mpath))
+        vis_model = mpath.name
         vp = str(CLIP_DIR / f"{clip}.mp4")
         vis = {"correct": 0, "na": 0, "make_hit": 0, "make_tot": 0}
         for s, a in pairs:
@@ -247,9 +253,14 @@ def score_make(clip, raw, rim_doc, attempts, tol=30):
             made, _ = mv.predict(model, feats)
             if made == truth:
                 vis["correct"] += 1; vis["make_hit"] += truth
-    except (FileNotFoundError, ImportError, Exception):
-        vis = None
-    return {"n_matched": len(pairs), "geometric": geom, "visual": vis}
+    except Exception as e:
+        # was `except (FileNotFoundError, ImportError, Exception)`, which made a
+        # CRASH (e.g. features failing on a new resolution) look identical to
+        # "no model installed". Say what actually happened.
+        print(f"   [make_visual] SCORING FAILED: {type(e).__name__}: {e}")
+        vis, vis_model = None, None
+    return {"n_matched": len(pairs), "geometric": geom, "visual": vis,
+            "visual_model": vis_model}
 
 
 def _fmt_make(name, m, n):
@@ -262,6 +273,17 @@ def _fmt_make(name, m, n):
             f"make-recall {m['make_hit']}/{m['make_tot']}={mr:.0%}")
 
 
+def _cloud_params(clip):
+    """Identity of a cached candidate cloud. Production caches learned this the
+    hard way three times (`9885875`): key on CONTENT, not on a name. A retrain is
+    on the roadmap the moment 07-29 labels exist, and a stem-only key would serve
+    the old detector's cloud into every eval condition, invisibly."""
+    from shotlab.detect_cache import _weights_id
+    from shotlab.video_io import video_id
+    return {"weights": _weights_id(WEIGHTS), "imgsz": 1280, "conf": 0.01,
+            "video": video_id(str(CLIP_DIR / f"{clip}.mp4"))}
+
+
 def _detect_full_clip(clip):
     """Detect the ball every frame at conf 0.01 (cloud). Baseline @0.25 is a
     subset (filter by conf), so ONE YOLO pass serves both conditions. Cached."""
@@ -269,10 +291,16 @@ def _detect_full_clip(clip):
     from shotlab.phase1_ball.detect_yolo import YoloBallDetector
     CAND_CACHE.mkdir(parents=True, exist_ok=True)
     cache = CAND_CACHE / f"{clip}_cloud01.json"
+    want = _cloud_params(clip)
     if cache.exists():
-        print(f"  using cached candidates {cache.name}")
-        raw = json.load(open(cache))
-        return {int(k): v for k, v in raw.items()}
+        data = json.load(open(cache))
+        got = data.get("params") if isinstance(data, dict) else None
+        cands = data.get("cands") if got is not None else data
+        if got == want:
+            print(f"  using cached candidates {cache.name}")
+            return {int(k): v for k, v in cands.items()}
+        why = "no identity recorded (pre-08-02 cache)" if got is None else f"{got} != {want}"
+        print(f"  ⚠️ cached {cache.name} does NOT match this config -- re-detecting ({why})")
     path = CLIP_DIR / f"{clip}.mp4"
     if not path.exists():
         raise SystemExit(f"clip not found: {path}")
@@ -290,7 +318,8 @@ def _detect_full_clip(clip):
             print(f"    frame {idx}")
         idx += 1
     cap.release()
-    json.dump({str(k): v for k, v in out.items()}, open(cache, "w"))
+    json.dump({"params": want, "cands": {str(k): v for k, v in out.items()}},
+              open(cache, "w"))
     print(f"  cached {idx} frames -> {cache.name}")
     return out
 
@@ -344,9 +373,10 @@ def run(clip, tol):
           f"{sum(a['outcome']=='make' for a in attempts)}/{len(attempts)}):")
     print(_fmt_make("geometric (production default)", mk["geometric"], mk["n_matched"]))
     if mk["visual"] is not None:
-        print(_fmt_make("make_visual (learned model)", mk["visual"], mk["n_matched"]))
+        print(_fmt_make(f"make_visual [{mk['visual_model']}]", mk["visual"],
+                        mk["n_matched"]))
     else:
-        print("   [make_visual] model not available")
+        print("   [make_visual] not scored (see the reason printed above)")
     out = HANDCOUNT_DIR / f"{clip}_eval.json"
     json.dump({"clip": clip, "tol": tol, "n_attempts": len(attempts),
                "conditions": rows, "make_miss": mk, "union_tol_sweep": sweep},

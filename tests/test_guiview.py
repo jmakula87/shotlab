@@ -79,5 +79,59 @@ try:
 except ImportError:                                   # pragma: no cover
     print("NOTE numpy/cv2 unavailable -- skipped frame-resize checks")
 
+# --- FrameReader: the 16x playback fix (measured 3.8 -> 63 fps on 4K) ---
+class FakeCap:
+    """Minimal VideoCapture stand-in that records seeks and tracks position."""
+
+    def __init__(self, n=1000):
+        self.n = n
+        self.pos = 0
+        self.seeks = 0
+
+    def set(self, prop, val):
+        self.seeks += 1
+        self.pos = int(val)
+        return True
+
+    def read(self):
+        if self.pos >= self.n:
+            return False, None
+        fr = ("frame", self.pos)
+        self.pos += 1
+        return True, fr
+
+
+cap = FakeCap()
+r = gv.FrameReader(cap)
+check("returns the requested frame", r.read(10) == ("frame", 10))
+check("first access seeks once", cap.seeks == 1)
+
+r.read(10); r.read(10)
+check("re-reading the same frame decodes nothing more", r.decodes == 1)
+check("...and does not seek", cap.seeks == 1)
+
+for f in range(11, 40):
+    r.read(f)
+check("sequential playback never seeks again", cap.seeks == 1)
+check("sequential playback decodes each frame once", r.decodes == 30)
+check("sequential frames are correct", r.read(39) == ("frame", 39))
+
+r.read(500)
+check("a jump does seek", cap.seeks == 2)
+check("frame after a jump is correct", r.read(500) == ("frame", 500))
+r.read(499)
+check("stepping BACKWARD seeks (not sequential)", cap.seeks == 3)
+check("backward frame is correct", r.read(499) == ("frame", 499))
+
+# end of stream must not poison the position bookkeeping
+short = FakeCap(n=3)
+r2 = gv.FrameReader(short)
+check("reads up to the end", r2.read(2) == ("frame", 2))
+check("past the end returns None", r2.read(3) is None)
+s_before = short.seeks
+r2.read(0)
+check("a failed read forces a seek next time", short.seeks == s_before + 1)
+check("recovers after end of stream", r2.read(0) == ("frame", 0))
+
 print(f"{PASS}/{TOTAL} passed")
 raise SystemExit(0 if PASS == TOTAL else 1)

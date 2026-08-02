@@ -87,9 +87,48 @@ live again. `Old/` and `upright/` are subfolders, and no pipeline glob is recurs
 neither can contaminate the new session. Note only clip 1's detection cache is at current
 weights; clips 2–3 caches carry older weights + pre-recalibration rims and will re-detect.
 
-**GATE (unchanged, owner ~1 hr):** `verify_rim` then `hand_count` on the two new wide clips
-— counted FRESH, not seeded from detections — then `eval_ablations` frozen. That answers the
-one question the 86%/81% numbers cannot: do they generalize off the training clips?
+**GATE (owner):** `hand_count` then `verify_rim` on the wide clips — counted FRESH, not
+seeded from detections — then `eval_ablations` frozen. That answers the one question the
+86%/81% numbers cannot: do they generalize off the training clips?
+
+**⚠️ CORRECTION (08-02): there are FOUR wide clips, not two.** `PXL_20260729_155914855-001`
+(13,306f, 7:24) and `PXL_20260729_161439291-002` (13,423f, 7:27) are also 3840×2160@30 and
+also real shooting footage — 47,644 frames / ~26.5 min of wide cam in total. They arrived
+after the initial intake listing. **Decide WHICH clips are in the eval before seeing any
+result** (see pre-registration below); a subset chosen after the fact is not a frozen test.
+A production `--clips "data/raw/Camera 1/*.mp4"` run would sweep all four and fall through
+to `auto_calibrate` on any clip lacking a rim file — the auto-rim is known to lock onto the
+shooter's shirt, so rim every clip you include and exclude the rest explicitly.
+
+## ⭐ PRE-REGISTRATION for the 07-29 frozen eval (written 2026-08-02, BEFORE any result)
+From the Fable audit. These are alternative explanations recorded in advance so that a poor
+07-29 number is not automatically read as "the detector didn't generalize" — and, more
+importantly, so **nobody re-tunes a knob on the held-out session.** There is only one
+untouched session; spending it on tuning destroys the only honest measurement available.
+
+1. **Pixel-constant gates are scale-dependent and were tuned at ~50 px/ft (0720). The new
+   footage is ~170 px/ft** (ball r≈65px vs ≈24px). Measured from the cached clouds:
+   in-flight consecutive-frame ball displacement is now median ~30px / p95 60-80px (0720:
+   median 14 / p95 29), and 2-4% of steps exceed 90px. Affected, none of which scale with
+   frame size or rim radius: `track.assemble_track` `gate_px=120` and `30*conf`;
+   `track_beam` `motion_gate=90`, `conf_bonus=25`, `size_penalty=3*|Δr|`, `coast_penalty=40`;
+   `court.detect_shots_to_rim` `launch_drop=200px` (was ~4ft of required launch depth, now
+   ~1.2ft → bounce FP risk) and RANSAC `threshold_px=8` (was ~0.8 ball radii, now ~0.12 →
+   inlier starvation → recall risk); `court.is_real_shot` `below<120` / `apex_y>rim_y+90`;
+   `rim_recovery` `x_corridor=650px` (was ~13ft of backward arc, now ~3.8ft — the pass that
+   bought 79%→86%). **Prediction: a meaningful share of any recall/precision drop is these
+   gates, not the detector.** The fix is to express them in rim-radius / px-per-foot units —
+   but do that as a SEPARATE, re-measured change, not as a rescue of a bad number.
+2. **`make_visual` features are not scale-normalized.** Three of seven (`o_below`, `o_side`,
+   `o_net`) are `log` of raw orange-pixel counts in rr-scaled regions, so their areas scale
+   with rr² — rr ≈36 → ≈127 shifts those masses ~×12 (≈ +2.5 in log space), far outside the
+   scaler+GBM's training distribution (89 shots at one scale). **Therefore 07-29 make/miss
+   accuracy tests "model + representation", not the modelling idea.** Normalising by rr²
+   and re-fitting is a legitimate follow-up; doing it before the frozen run would forfeit
+   the test.
+3. **Already-known and unchanged:** the detector trained on 0720 clips 1-2, and the union
+   dedup window, apex-below-rim FP gate, beam `max_coast` 4→6 and the recovery pass were all
+   tuned against those same 111 attempts. The 07-29 run is the first measurement free of that.
 
 ## ⭐⭐⭐ BROAD DUAL REVIEW → MAKE/MISS FIXED + RIM RECALIBRATED (2026-07-23, later)
 Owner asked "are there OTHER areas to improve?" → dual adversarial review (Codex + Fable, broad).
