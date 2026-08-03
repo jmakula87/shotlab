@@ -190,6 +190,47 @@ just no longer trustworthy. Fix is item 2's: normalise by rr² and re-fit.
 - ⛔ **Nothing was tuned before or during this run.** Next knob turned on this session
   invalidates it as a held-out measurement.
 
+## ⭐⭐⭐ RECALL 85% → 96% (2026-08-03) — and the cause was NOT what I built
+Chasing the segmenter produced a large win, but the attribution is the lesson.
+
+| | frozen 08-02 | **now** |
+|---|---|---|
+| Detection recall | 122/143 = 85% | **137/143 = 96%** [CI 91-98] |
+| Precision | 0.984 (2 FP) | **0.986 (2 FP)** |
+| Per clip | 86/82/89/85% | **93 / 95 / 95 / 100%** |
+| Airballs | 5/5 | 5/5 |
+
+**The whole gain came from one line: RANSAC's `threshold_px`.** It was a raw `8.0`, which is
+0.22 rim radii at 0720 (rr≈36) but only 0.07 at 4K (rr≈120) — three times tighter in
+physical terms, so a perfectly good arc could not find inliers. Unlike `launch_drop`, this
+one genuinely IS a measurement tolerance on pixel positions, and the same physical wobble
+covers 3× the pixels at 4K. It is now `(8/36)·rr`, which reproduces 8.0 exactly at the 0720
+rim, so that session's behaviour is preserved by construction rather than by hope.
+
+⛔ **The backward extension I built for this is MEASURED INERT.** `shotlab/back_extend.py`
+works — it recovers 6/19/40-point runs where the track had 2-6, and its 14 synthetic tests
+pass — but once RANSAC stopped starving, condition **C6 (with extension) is byte-identical to
+C5 (without)** on every clip. The module stays as an opt-in `cloud=` argument (default None,
+so production is untouched) with C6 kept in the eval as the standing ablation that shows it
+inert. It may earn its keep on weaker footage; on this footage it does nothing.
+⭐ **The diagnosis chain was right and the fix was wrong, twice over:** "every miss is the
+segmenter" was correct and led to the win, but both mechanisms I proposed (scaled
+`launch_drop`, backward extension) were duds. What actually found it was instrumenting the
+rejections — the new `reject_log=` argument on `detect_shots_to_rim`, which turned "RANSAC
+failed" from invisible into 7-of-11.
+
+⚠️ **This 96% is NOT a held-out number.** It was obtained by diagnosing failures on the same
+143 attempts that produced the frozen 85%. The scaling constant has no free parameter (it is
+pinned to reproduce 0720), so this is diagnosis rather than tuning — but it still needs a
+fresh session to stand as a claim. **The frozen 85% remains the last clean held-out result.**
+
+⛔ **RESUBSTITUTION TRAP, caught same day.** Preferring the newest model made the eval score
+`make_visual_0729.joblib` on the very 122 shots it was fitted on, printing a glorious 94%.
+The honest figure is unchanged at **89% LOCO**. Fixed with machinery, not a note:
+`models/<model>.trained_on.json` records the training clips, and `eval_ablations` now prints
+a loud RESUBSTITUTION warning and tags the model name when the clip under test is in that
+list.
+
 ## ⛔⭐ RIM-SCALING `launch_drop` — BUILT, MEASURED, REJECTED (2026-08-03)
 Having found every miss is the segmenter, the obvious fix was that `launch_drop` is a fixed
 200px while `shot_gate_px` scales with the rim — at 4K the gate (240px) had grown PAST the

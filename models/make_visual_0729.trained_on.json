@@ -1,0 +1,13 @@
+{
+  "model": "make_visual_0729.joblib",
+  "fitted": "2026-08-03",
+  "n_shots": 122,
+  "loco_accuracy": 0.89,
+  "clips": [
+    "PXL_20260729_155320813",
+    "PXL_20260729_155914855-001",
+    "PXL_20260729_160743954",
+    "PXL_20260729_161439291-002"
+  ],
+  "note": "Scoring this model on any clip listed here is RESUBSTITUTION, not a result. The honest figure is the 89% leave-one-clip-out. eval_ablations reads this file and warns."
+}

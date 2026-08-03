@@ -128,9 +128,13 @@ def _shot_rim_frame(shot, calib):
     return int(np.asarray(shot.frames)[int(np.argmin(d))])
 
 
-def _segment_full_clip(cands_by_frame, rim_doc, n_frames):
+def _segment_full_clip(cands_by_frame, rim_doc, n_frames, cloud=None):
     """Production segmentation over a full-clip candidate stream, honoring
-    frame-ranged rims (camera-move safe). Returns produced-shot event list."""
+    frame-ranged rims (camera-move safe). Returns produced-shot event list.
+
+    `cloud` (frame -> candidate list) lets the segmenter walk BACKWARD from a
+    confirmed rim arrival to recover flight the track dropped; see back_extend.
+    """
     from shotlab.phase1_ball.track import assemble_track
     from shotlab.court import detect_shots_to_rim
     track = assemble_track(cands_by_frame)
@@ -139,7 +143,7 @@ def _segment_full_clip(cands_by_frame, rim_doc, n_frames):
         sub = {f: c for f, c in track.items() if f0 <= f < f1}
         if not sub:
             continue
-        for s in detect_shots_to_rim(sub, calib):
+        for s in detect_shots_to_rim(sub, calib, cloud=cloud):
             sid += 1
             produced.append({"shot": sid, "rim_frame": _shot_rim_frame(s, calib),
                              "first_frame": int(s.frames[0]),
@@ -243,6 +247,22 @@ def score_make(clip, raw, rim_doc, attempts, tol=30):
                       if p.exists()), ROOT / "models" / "make_visual.joblib")
         model = mv.load(str(mpath))
         vis_model = mpath.name
+        # A model auto-resolved from models/ may have been FITTED on the very clip
+        # under test, in which case its score is resubstitution, not a result. This
+        # bit us on 2026-08-03: preferring the newest model made the eval report 94%
+        # for a model trained on those exact 122 shots, against an honest 89% LOCO.
+        prov = mpath.with_suffix("").with_suffix("")
+        prov = mpath.parent / (mpath.stem + ".trained_on.json")
+        if prov.exists():
+            try:
+                info = json.load(open(prov, encoding="utf-8"))
+                if clip in (info.get("clips") or []):
+                    vis_model += "  ⚠️ RESUBSTITUTION"
+                    print(f"   ⚠️  {mpath.name} was FITTED on {clip} -- the accuracy "
+                          f"below is resubstitution, not a result. Honest figure: "
+                          f"{info.get('loco_accuracy')} leave-one-clip-out.")
+            except Exception as e:
+                print(f"   (could not read {prov.name}: {e})")
         vp = str(CLIP_DIR / f"{clip}.mp4")
         vis = {"correct": 0, "na": 0, "make_hit": 0, "make_tot": 0}
         for s, a in pairs:
@@ -358,6 +378,13 @@ def run(clip, tol):
     recov = _recovery_shots(raw, rim_doc, n_frames, [u["rim_frame"] for u in union])
     union = _union(union, recov)     # C5 = production candidate (greedy u beam u recovery)
     rows.append(report("C5 + rim-recovery (production candidate)", union, attempts, tol))
+    # C6 adds BACKWARD TRACK EXTENSION. C1-C5 are left byte-identical on purpose so
+    # the 2026-08-02 frozen numbers stay comparable and the delta is attributable.
+    cloud01 = _cands_at_conf(raw, 0.01)
+    greedy_bx = _segment_full_clip(_cands_at_conf(raw, 0.25), rim_doc, n_frames,
+                                   cloud=cloud01)
+    union_bx = _union(_union(greedy_bx, beam), recov)
+    rows.append(report("C6 + backward extension", union_bx, attempts, tol))
     # tolerance sweep for the production candidate -- shows how much the ±tol window
     # buys (a tight sweep = matches are real, not chance timing coincidences).
     sweep = {}

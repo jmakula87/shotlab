@@ -248,7 +248,8 @@ def launch_drop_px(calib: Calibration) -> float:
 
 def detect_shots_to_rim(track, calib: Calibration, *, max_rim_gap: int = 20,
                         launch_drop: float | None = None, min_points: int = 8,
-                        threshold_px: float = 8.0, max_launch_gap: int = 45):
+                        threshold_px: float | None = None, max_launch_gap: int = 45,
+                        cloud=None, reject_log=None):
     """Find shots in a CONTINUOUS ball track (the case a good detector produces).
 
     Gap-based segmentation fails when the ball is tracked unbroken through
@@ -263,8 +264,18 @@ def detect_shots_to_rim(track, calib: Calibration, *, max_rim_gap: int = 20,
     """
     if launch_drop is None:
         launch_drop = 200.0
+    if threshold_px is None:
+        # RANSAC's inlier tolerance is a MEASUREMENT error on pixel positions, so
+        # unlike launch_drop it genuinely does scale with resolution: the same
+        # physical wobble covers 3x the pixels at 4K. The historic 8px is 0.22 rim
+        # radii at 0720 (rr~36) but only 0.07 at 4K (rr~120), which starves a
+        # perfectly good arc of inliers -- measured 2026-08-03 as the check killing
+        # nearly every backward-extended segment.
+        _rr = float(getattr(calib, "rim_radius_px", 0.0) or 0.0)
+        threshold_px = (8.0 / 36.0) * _rr if _rr > 0 else 8.0
     from .phase1_ball.track import Shot
     from .arc import fit_parabola_ransac
+    from .back_extend import extend_backward
 
     if not track:
         return []
@@ -305,29 +316,78 @@ def detect_shots_to_rim(track, calib: Calibration, *, max_rim_gap: int = 20,
         if int(frames[j]) in seen_launch:
             continue
         seen_launch.add(int(frames[j]))
-        if (i - j + 1) < min_points or (y[j] - y[i]) < 0.8 * launch_drop:
-            continue
+
         seg = slice(j, i + 1)
         f_seg = frames[seg]
         x_seg, y_seg = x[seg], y[seg]
         r_seg = np.array([track[int(f)].r for f in f_seg])
-        fit = fit_parabola_ransac(x_seg, y_seg, threshold_px=threshold_px)
-        if fit is None or fit.coeffs[0] >= 0:
+
+        # The segment can be too short simply because the TRACK stops partway into
+        # the flight -- measured 2026-08-03, that is the sole cause of every missed
+        # attempt on the 07-29 hand-count. The detector saw the ball on those
+        # frames, so walk backward through the candidate cloud from this confirmed
+        # rim arrival and recover them, rather than weakening the test below.
+        if cloud is not None and (len(f_seg) < min_points
+                                  or (y_seg[0] - y_seg[-1]) < 0.8 * launch_drop):
+            rr_c = float(getattr(calib, "rim_radius_px", 0.0) or 0.0)
+            sf, sx, sy, sr = f_seg, x_seg, y_seg, r_seg
+            # The greedy tracker can TELEPORT between objects (measured: 3-point
+            # segments spanning 745px vertically). Extrapolating a parabola through
+            # that predicts nowhere the ball is, so trim leading points that are
+            # separated by a physically impossible step before seeding the search.
+            if rr_c > 0 and len(sf) >= 2:
+                step = np.hypot(np.diff(sx), np.diff(sy))
+                k = 0
+                while k < len(step) and step[k] > 2.0 * rr_c:
+                    k += 1
+                if k:
+                    sf, sx, sy, sr = sf[k:], sx[k:], sy[k:], sr[k:]
+            # Search back to the RELEASE height. This is where the physical 4.2ft
+            # drop legitimately belongs -- as how far to look, not as how much drop
+            # to demand (scaling the acceptance bar was measured and rejected).
+            ef, ex, ey, er = extend_backward(
+                sf, sx, sy, cloud, rr_c,
+                stop_below_y=calib.rim_y + launch_drop_px(calib))
+            if len(sf) < len(f_seg):        # keep the trimmed, coherent portion
+                f_seg, x_seg, y_seg, r_seg = sf, sx, sy, sr
+            if ef:
+                f_seg = np.concatenate([np.asarray(ef, frames.dtype), f_seg])
+                x_seg = np.concatenate([np.asarray(ex, float), x_seg])
+                y_seg = np.concatenate([np.asarray(ey, float), y_seg])
+                r_seg = np.concatenate([np.asarray(er, float), r_seg])
+
+        def _drop(reason):
+            """Record WHY a rim event produced no shot. Every miss on the 07-29
+            hand-count died in this function, so the reasons are the work-list."""
+            if reject_log is not None:
+                reject_log.append({"t_rim": int(t_rim), "n": int(len(f_seg)),
+                                   "drop": float(y_seg[0] - y_seg[-1]),
+                                   "reason": reason})
+
+        if len(f_seg) < min_points:
+            _drop(f"too few points ({len(f_seg)} < {min_points})"); continue
+        if (y_seg[0] - y_seg[-1]) < 0.8 * launch_drop:
+            _drop(f"insufficient drop ({y_seg[0]-y_seg[-1]:.0f} < {0.8*launch_drop:.0f})")
             continue
+        fit = fit_parabola_ransac(x_seg, y_seg, threshold_px=threshold_px)
+        if fit is None:
+            _drop("RANSAC failed"); continue
+        if fit.coeffs[0] >= 0:
+            _drop("arc curves the wrong way"); continue
         # reject non-shots that survive the rim test: near-vertical tosses/rebounds
         # (both ends ~vertical) and noisy fits with too few inlier points.
         if fit.n_used < 7:
-            continue
+            _drop(f"too few inliers ({fit.n_used} < 7)"); continue
         # a real shot's ball rises ABOVE the rim (to drop in, or hit the rim from
         # above); if the arc's highest tracked point never gets above rim height
         # it is a post-miss bounce / roll near the rim, not a shot (dual-review
         # bounce-FP class, confirmed on clip-3 hand-count 2026-07-23).
         if y_seg.min() >= calib.rim_y:
-            continue
+            _drop("never rose above rim height (bounce/roll)"); continue
         rel = fit.release_angle_deg()
         ent = fit.entry_angle_deg(calib.rim_x)
         if min(rel, ent) > 78:
-            continue
+            _drop(f"78deg gate (rel {rel:.0f}, ent {ent:.0f})"); continue
         s = Shot(index=len(shots) + 1, frames=f_seg, xs=x_seg, ys=y_seg,
                  radii=r_seg, fit=fit,
                  meta={"rim_dist_px": round(float(dist[i]), 1),

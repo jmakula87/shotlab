@@ -4,6 +4,19 @@ Last updated: **2026-07-29** · all pushed, tree clean.
 Location: `C:\Users\jmaku\Desktop\ShotLab`. Read-order: **this → `PROJECT_NOTES.md`
 (the living log) → `process/reviews/2026-07-23_broad_*` → `process/EVAL_HARNESS_RUNBOOK.md`**.
 
+## ⭐⭐⭐ RECALL 85% → 96% (2026-08-03), from one scale-correct constant
+`detect_shots_to_rim`'s RANSAC `threshold_px` was a raw `8.0` — 0.22 rim radii at 0720 but
+0.07 at 4K, starving good arcs of inliers. Now `(8/36)·rr`, which reproduces 8.0 exactly at
+the 0720 rim. **137/143 = 96% [CI 91-98], precision 0.986, per clip 93/95/95/100%.**
+- ⛔ The backward extension built for this (`shotlab/back_extend.py`) is **MEASURED INERT** —
+  eval condition C6 is byte-identical to C5. Kept opt-in (`cloud=`, default None) with C6 as
+  the standing ablation. What actually found the bug was the new `reject_log=` argument.
+- ⚠️ **96% is NOT held-out** — same 143 attempts that produced the frozen 85%. The constant
+  has no free parameter, so this is diagnosis not tuning, but **a fresh session is needed
+  before quoting it.** The frozen 85% remains the last clean held-out number.
+- ⛔ Make/miss stays **89% LOCO**. The eval briefly printed 94% by scoring a model on its own
+  training shots; `models/<model>.trained_on.json` + a RESUBSTITUTION warning now prevent it.
+
 ## ⭐⭐ FROZEN RESULT — COMPLETE. Held-out 07-29, all 4 clips, 143 hand-counted attempts
 - **DETECTION GENERALIZED — settled. recall 122/143 = 85% [CI 79-90], precision 0.984.**
   Per clip 86% / 82% / 89% / 85%; the CI straddles the 86% baseline, on a session never
