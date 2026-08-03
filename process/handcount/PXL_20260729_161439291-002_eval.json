@@ -1,0 +1,89 @@
+{
+  "clip": "PXL_20260729_161439291-002",
+  "tol": 30,
+  "n_attempts": 40,
+  "conditions": [
+    {
+      "condition": "C1 baseline@0.25 (greedy)",
+      "produced": 32,
+      "tp": 32,
+      "fp": 0,
+      "fn": 8,
+      "precision": 1.0,
+      "recall_all": 0.8,
+      "recall_rim": 0.8205128205128205,
+      "recall_airball": 0,
+      "n_airball": 1
+    },
+    {
+      "condition": "C2 cloud@0.01 (greedy)",
+      "produced": 29,
+      "tp": 29,
+      "fp": 0,
+      "fn": 11,
+      "precision": 1.0,
+      "recall_all": 0.725,
+      "recall_rim": 0.717948717948718,
+      "recall_airball": 1,
+      "n_airball": 1
+    },
+    {
+      "condition": "C3 beam (cloud MHT)",
+      "produced": 29,
+      "tp": 29,
+      "fp": 0,
+      "fn": 11,
+      "precision": 1.0,
+      "recall_all": 0.725,
+      "recall_rim": 0.717948717948718,
+      "recall_airball": 1,
+      "n_airball": 1
+    },
+    {
+      "condition": "C4 greedy u beam",
+      "produced": 34,
+      "tp": 34,
+      "fp": 0,
+      "fn": 6,
+      "precision": 1.0,
+      "recall_all": 0.85,
+      "recall_rim": 0.8461538461538461,
+      "recall_airball": 1,
+      "n_airball": 1
+    },
+    {
+      "condition": "C5 + rim-recovery (production candidate)",
+      "produced": 34,
+      "tp": 34,
+      "fp": 0,
+      "fn": 6,
+      "precision": 1.0,
+      "recall_all": 0.85,
+      "recall_rim": 0.8461538461538461,
+      "recall_airball": 1,
+      "n_airball": 1
+    }
+  ],
+  "make_miss": {
+    "n_matched": 34,
+    "geometric": {
+      "correct": 12,
+      "na": 16,
+      "make_hit": 7,
+      "make_tot": 16
+    },
+    "visual": {
+      "correct": 23,
+      "na": 0,
+      "make_hit": 10,
+      "make_tot": 16
+    },
+    "visual_model": "make_visual_0720.joblib"
+  },
+  "union_tol_sweep": {
+    "5": 0.075,
+    "10": 0.55,
+    "15": 0.8,
+    "30": 0.85
+  }
+}

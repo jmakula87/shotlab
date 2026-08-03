@@ -108,31 +108,39 @@ The pre-registration below was written before any of this existed. Read it first
 (3.1s) against a ±30f matcher window — over 3× margin, no double-taps, attempts spread
 10/9/9 across thirds. This is a clean ground truth.
 
-Three of four clips counted (28 + 38 + 37 = 103 attempts), each QA'd for spacing before use
-(minimum inter-attempt gaps 92f / 122f, all ≥3× the ±30f matcher window).
+**ALL FOUR CLIPS COUNTED AND EVALUATED — 143 attempts. The eval is COMPLETE.** Each count
+was QA'd for spacing before use (min inter-attempt gaps 92f / 122f / 58f; only clip 4's 58f
+pair sits inside 2× the ±30f window — attempts #39/#40, both makes, 1.9s apart).
 
-| | 0720 (detector TRAINED on it) | **07-29 FROZEN, 3 clips** |
+| | 0720 (detector TRAINED on it) | **07-29 FROZEN, all 4 clips** |
 |---|---|---|
-| Detection recall | 96/111 = **86%** [CI 79-92] | 88/103 = **85%** [CI 77-91] |
-| Precision | 0.99 (1 FP) | **0.98 (2 FP)** |
-| Airball recall | ~0 (blind by design) | **4/4** (all via rim-recovery) |
-| Make/miss (learned) | **81%** LOCO (claimed) | 44/88 = **50%** [CI 40-60] |
-| Make/miss (geometric) | ~51% | 45/88 = **51%** |
+| Detection recall | 96/111 = **86%** [CI 79-92] | 122/143 = **85%** [CI 79-90] |
+| Precision | 0.99 (1 FP) | **0.984 (2 FP)** |
+| Airball recall | ~0 (blind by design) | **5/5** (all via rim-recovery) |
+| Make/miss (learned) | **81%** LOCO (claimed) | 67/122 = **55%** [CI 46-63] |
+| Make/miss (geometric) | ~51% | 57/122 = **47%** [CI 38-56] |
 
-**DETECTION GENERALIZED — settled.** 85% on 103 held-out attempts, CI straddling the
-baseline, precision 0.98. Per clip: 86% / 82% / 92%. The C1→C5 ladder reproduced its shape
-every time, so the beam and rim-recovery passes are not artefacts of the clips they were
-built on. This is the result the whole eval harness was built to obtain.
+Per clip, detection: **86% / 82% / 89% / 85%**, precision 1.00 / 0.97 / 0.97 / 1.00.
 
-**MAKE/MISS IS DEAD ON THIS FOOTAGE — both methods at chance on 88 matched shots.** The
-learned model 50%, the geometric rule 51%. Per clip the geometric number swings 33/52/64
-while the learned one sits flat at 54/48/48 — the swing is base-rate noise (clip make-rates
-are 57% / 45% / 35%), not skill. 81% is far outside the interval. The mechanism was
-**pre-registered before any of this existed**: three of seven `make_visual` features are logs
-of RAW orange-pixel counts in rr-scaled regions, whose areas go as rr², and rr moved 36 →
-~120. Task 6 (normalise by rr², re-fit) is the single highest-value item left.
-⭐ **Airballs 4/4, every one recovered by the rim-recovery pass and none by C1-C4** — a pass
-added for rim-reaching shots is what makes the "blind by design" airball case visible.
+**DETECTION GENERALIZED — settled, on a full session.** 85% over 143 held-out attempts with
+a CI straddling the baseline, and precision essentially perfect (2 false positives in 124
+produced shots). The C1→C5 ladder reproduced its shape on every clip, so the beam tracker and
+rim-recovery pass are not artefacts of the three clips they were built on. This is the result
+the entire eval harness existed to obtain, and it is a clean pass.
+
+**MAKE/MISS FAILED — 55%, and the honest reading is "no usable signal".** 81% sits far
+outside the interval; **chance sits inside it**. The learned model beats the geometric rule
+(55% vs 47%) but neither is usable. Per-clip learned scores are 54/48/48/**68** — clip 4's 68%
+is the one above-chance clip and, at n=34, is within sampling noise of the rest; nothing about
+clip 4 distinguishes it (its make-rate, 48%, is the most balanced of the four, which flatters
+any weak classifier). Geometric swings 33/52/64/35 while abstaining on 5-16 shots per clip —
+base-rate noise, not skill. The mechanism was **pre-registered before any of these numbers
+existed**: three of seven `make_visual` features are logs of RAW orange-pixel counts in
+rr-scaled regions, whose areas go as rr², and rr moved 36 → ~120. **Task 6 (normalise by rr²,
+re-fit) is now the single highest-value item in the project.**
+⭐ **Airballs 5/5, every one recovered by the rim-recovery pass and none by C1-C4** — a pass
+added for rim-reaching shots is what makes the "blind by design" airball case visible. Worth
+understanding before task 5 rescales any gate.
 
 ⭐ **RIM MEASUREMENT — the instrument, and one judgement call.** Rims were measured from the
 rim's orange paint, not clicked, after clip 1's click came in 22% short. Two contaminants

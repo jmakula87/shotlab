@@ -1,0 +1,16 @@
+{
+  "clip": "PXL_20260729_161439291-002",
+  "image_w": 3840,
+  "image_h": 2160,
+  "rims": [
+    {
+      "rim_x": 878.0,
+      "rim_y": 854.0,
+      "rim_radius_px": 120.0,
+      "shot_gate_px": 240.0,
+      "f0": 0,
+      "f1": null,
+      "note": "Centre measured from the rim's orange paint over 100 ball-free frames (878,854), which puts it within 3px of clips 155914855-001 (880,857) and 160743954 (878,858) -- all three share a camera position. RADIUS again taken from 155914855-001 (120px) rather than this clip's own 112px: that clip is the only one of the three whose width distribution plateaus (p90 237, p97 240, max 242), while this one is still climbing at the top (p90 222, p97 232, max 235) and is therefore never fully unoccluded. Same camera and same hoop means one radius, and occlusion can only shorten a measured run."
+    }
+  ]
+}
