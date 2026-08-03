@@ -220,8 +220,25 @@ def summarize_drivers(assocs: list[MetricMakeAssoc], subject="makes") -> str:
             and a.cohen_d is not None]
     if not real:
         return empty_msg
+
+    # Nothing reached medium confidence => report the NULL, with the effect size
+    # this sample could actually have seen. Listing the three largest low-confidence
+    # results as things that "lean" turns noise into advice: on 2026-08-03 that
+    # printed "entry angle leans" for d=0.15, p=0.38 on 137 shots, where the
+    # detectable floor was d~0.34 and nothing came close.
+    best = [a for a in real if a.confidence == "medium"]
+    if not best:
+        n = max((a.n_made + a.n_miss) for a in real)
+        floor = 2.8 / float(np.sqrt(max(n, 4) / 2))
+        top = max(real, key=lambda a: abs(a.cohen_d))
+        return (f"**Nothing separates your {pos} from your {neg}** in this sample. "
+                f"With n={n} the smallest effect detectable is about d={floor:.2f}; "
+                f"the largest seen is {top.label} at d={top.cohen_d} (p={top.p_perm}), "
+                f"which is inside the noise. That is a real result, not a gap in the "
+                f"data -- {caveat}. More shots would lower the floor.")
+
     lines = [f"**What tracks with your {pos}** (advisory -- samples are small):"]
-    shown = [a for a in real if a.confidence == "medium"] or real[:3]
+    shown = best
     for a in shown[:4]:
         unit = _UNITS.get(a.metric, "")
         strength = "stands out" if a.confidence == "medium" else "leans"

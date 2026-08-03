@@ -165,13 +165,26 @@ def generate_review(df: pd.DataFrame) -> dict:
             focus.append(f"You took most shots from **{vc.index[0]}** ({vc.iloc[0]}). "
                          f"If that's not a game spot for you, mix the floor more.")
 
-    # ---- entry vs ideal (flagged approximate) ----
+    # ---- entry angle: a TARGET only when the geometry can support one ----
+    # Prescribing "aim for 45deg" off a foreshortened reading is worse than saying
+    # nothing: the true angle may already BE 45. Foreshortening biases the LEVEL,
+    # but a roughly constant bias cancels in the SPREAD -- so on an oblique camera
+    # we can honestly coach consistency and must not coach a target. (Measured
+    # 2026-08-03 on 137 shots against hand-counted truth: entry angle does not
+    # separate this shooter's makes from misses, d=0.08, so a target would be
+    # unsupported here even if the number were unbiased.)
     if "entry_angle_deg" in df.columns and df["entry_angle_deg"].notna().sum() >= 5:
         from .metric_ranges import gate
-        avg = gate(df, "entry_angle_deg")["entry_angle_deg"].mean()   # drop artifacts
-        focus.append(f"Aim toward a ~45° entry angle (yours averages {avg:.0f}°, but "
-                     f"that number is foreshortened by the camera — calibrate next "
-                     f"session for a true read).")
+        ea = gate(df, "entry_angle_deg")["entry_angle_deg"]            # drop artifacts
+        cams = set(df["camera_angle"].dropna()) if "camera_angle" in df.columns else set()
+        if cams == {"side_on"}:
+            focus.append(f"Aim toward a ~45° entry angle — yours averages {ea.mean():.0f}°.")
+        else:
+            focus.append(
+                f"Entry angle varies ±{ea.std():.0f}° shot to shot — that SPREAD is the "
+                f"honest read from this camera, and tightening it is the goal. The "
+                f"average ({ea.mean():.0f}°) is foreshortened, so no target is quoted; "
+                f"film perpendicular to the shot if you want a true angle.")
 
     summary = (f"{n} shots over {dur:.0f} min. "
                + ("Strong stamina and repeatability in spots; "

@@ -11,6 +11,36 @@ from shotlab.correlate import (correlate_makes, summarize_make_drivers,
                                correlate_feel, summarize_feel_drivers)
 
 
+def _null_rows(n=70, seed=3):
+    """NO planted signal: makes and misses drawn from the same distributions."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for i in range(2 * n):
+        rows.append({"made": i < n,
+                     "entry_angle_deg": float(rng.normal(47, 3)),
+                     "release_angle_deg": float(rng.normal(52, 3))})
+    return rows
+
+
+def test_a_null_result_is_reported_as_a_null_not_as_a_lean():
+    """The summary used to fall back to the three largest LOW-confidence assocs
+    and call them 'leans'. On 2026-08-03 that printed 'entry angle leans' for
+    d=0.15 / p=0.38 on 137 real shots, where the detectable floor was d~0.34 --
+    turning noise into coaching advice."""
+    txt = summarize_make_drivers(correlate_makes(_null_rows()))
+    assert "leans" not in txt, txt
+    assert "Nothing separates" in txt, txt
+    assert "detectable" in txt, txt          # states the power floor
+    assert "real result" in txt, txt         # a null is a finding, not missing data
+
+
+def test_a_real_signal_is_still_reported():
+    """The null path must not swallow a genuine effect."""
+    txt = summarize_make_drivers(correlate_makes(_rows(40, 40)))
+    assert "Nothing separates" not in txt, txt
+    assert "entry" in txt.lower(), txt
+
+
 def _rows(n_made, n_miss, seed=0):
     """Makes have entry_angle ~+5deg vs misses (planted); release_angle is noise
     (no signal). knee_bend present but with too few of one outcome to qualify."""
