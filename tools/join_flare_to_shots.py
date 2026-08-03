@@ -29,7 +29,7 @@ from shotlab.sync import sync_clips
 from shotlab.video_io import frame_times, probe
 
 # wide clip <-> close clip pairing (single source: shotlab.feelreview)
-from shotlab.feelreview import DEFAULT_PAIRS as PAIRS
+from shotlab.feelreview import pairs_for
 from shotlab import paths
 
 
@@ -57,7 +57,7 @@ def main():
 
     out = {}
     readings = []          # per-reading, for the flare-review gallery
-    for wide_name, close_name in PAIRS:
+    for wide_name, close_name in pairs_for(a.session):
         wp = os.path.join(a.wide_dir, wide_name)
         cp = os.path.join(a.close_dir, close_name + ".mp4")
         if not (os.path.exists(wp) and os.path.exists(cp)):

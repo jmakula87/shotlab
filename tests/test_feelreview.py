@@ -11,9 +11,33 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from shotlab.feelreview import (FAULTS, FEEL, MISS_DIR, MOVEMENT, SETUP,
-                                apply_review, close_window, load_review,
-                                review_candidates, save_entry)
+from shotlab.feelreview import (DEFAULT_PAIRS, FAULTS, FEEL, MISS_DIR, MOVEMENT,
+                                SETUP, apply_review, close_window, load_review,
+                                pairs_for, review_candidates, save_entry)
+
+
+def test_pairs_come_from_the_session_not_a_hardcoded_list():
+    """Every two-camera tool read a hard-coded 0710 pair list, so the whole
+    feel/flare review layer silently applied to exactly one session."""
+    assert pairs_for(None) == DEFAULT_PAIRS          # no session -> fallback
+    with tempfile.TemporaryDirectory() as d:
+        assert pairs_for(d) == DEFAULT_PAIRS         # no file -> fallback
+        with open(os.path.join(d, "cam_pairs.json"), "w", encoding="utf-8") as f:
+            json.dump([["W1.mp4", "C1"], ["W2.mp4", "C2"]], f)
+        assert pairs_for(d) == [("W1.mp4", "C1"), ("W2.mp4", "C2")]
+
+
+def test_broken_pairs_file_is_loud_not_silent():
+    """A malformed pairs file must NOT fall back to another session's clips --
+    that would pair the wrong footage and produce confident nonsense."""
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "cam_pairs.json"), "w", encoding="utf-8") as f:
+            f.write('{"not": "a list of pairs"}')
+        try:
+            pairs_for(d)
+        except ValueError:
+            return
+        raise AssertionError("a malformed cam_pairs.json silently fell back")
 
 
 def _df():

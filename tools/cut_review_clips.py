@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 
 from shotlab import paths
-from shotlab.feelreview import (DEFAULT_PAIRS, close_window, review_candidates,
+from shotlab.feelreview import (pairs_for, close_window, review_candidates,
                                 shot_windows)
 
 
@@ -59,7 +59,8 @@ def main(argv=None) -> int:
     os.makedirs(outdir, exist_ok=True)
 
     # audio-sync offsets, cached (each sync is a full audio pass)
-    pairs = dict(DEFAULT_PAIRS)
+    # per-session pairs from <session>/cam_pairs.json, 0710 fallback
+    pairs = dict(pairs_for(a.session))
     sync_p = os.path.join(d, "cam_sync.json")
     sync = json.load(open(sync_p, encoding="utf-8")) if os.path.exists(sync_p) else {}
 

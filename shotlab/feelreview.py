@@ -44,6 +44,9 @@ USER_REVIEW_COLS = ["feel", "review_movement", "review_setup", "review_tags",
 
 # wide clip <-> close (S8) clip pairing per two-camera session, filename-matched.
 # wide_time = close_time + offset (shotlab.sync.sync_clips convention).
+# ⚠️ These are the 0710 pairs and are only a FALLBACK -- per-session pairs belong
+# in <session_dir>/cam_pairs.json; see pairs_for(). Hard-coding them here is what
+# kept the feel review usable on exactly one session.
 DEFAULT_PAIRS = [("PXL_20260710_175751234.mp4", "20260710_135805"),
                  ("PXL_20260710_180449842.mp4", "20260710_140431"),
                  ("PXL_20260710_181146426.mp4", "20260710_141132"),
@@ -52,6 +55,28 @@ DEFAULT_PAIRS = [("PXL_20260710_175751234.mp4", "20260710_135805"),
 # review window: approach footwork ... landing balance (user-approved 2026-07-15)
 PRE_S = 3.0     # before the first tracked flight frame (the gather + approach)
 POST_S = 1.5    # after the last tracked flight frame (rim + landing)
+
+
+def pairs_for(session_dir: str | None = None):
+    """(wide, close) clip pairs for a session.
+
+    Reads `<session_dir>/cam_pairs.json` -- a list of [wide, close] pairs -- and
+    falls back to DEFAULT_PAIRS (0710) only when that file is absent. Every
+    two-camera tool read the hard-coded list, so the whole feel/flare review layer
+    silently applied to one session; this is the seam that generalises it.
+    """
+    if session_dir:
+        p = os.path.join(session_dir, "cam_pairs.json")
+        if os.path.exists(p):
+            try:
+                with open(p, encoding="utf-8") as f:
+                    data = json.load(f)
+                pairs = [(str(a), str(b)) for a, b in data]
+                if pairs:
+                    return pairs
+            except Exception as e:                      # a broken file must be loud
+                raise ValueError(f"{p} is not a list of [wide, close] pairs: {e}") from e
+    return DEFAULT_PAIRS
 
 
 def review_path(session_dir: str) -> str:
