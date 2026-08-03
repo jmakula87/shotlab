@@ -4,7 +4,19 @@ Last updated: **2026-07-29** · all pushed, tree clean.
 Location: `C:\Users\jmaku\Desktop\ShotLab`. Read-order: **this → `PROJECT_NOTES.md`
 (the living log) → `process/reviews/2026-07-23_broad_*` → `process/EVAL_HARNESS_RUNBOOK.md`**.
 
-## Where the pipeline is (all measured against a hand-count of 3 clips = 111 attempts)
+## ⭐ FROZEN RESULT (2026-08-02) — held-out 07-29 clip 1, 28 hand-counted attempts
+- **Detection GENERALIZED: recall 24/28 = 86%, precision 1.00, airballs 2/2** — same recall
+  as the training session, better precision, on footage never trained on. The C1→C5 ladder
+  reproduced its shape (greedy 68% → union 82% → +recovery 86%).
+- **Make/miss COLLAPSED to 54%** (13/24) against the claimed 81% LOCO — outside the CI, and
+  **pre-registered in advance**: `make_visual`'s raw-orange-mass features scale with rr², and
+  rr went 36 → 112. Geometric is 33% here, worse than a coin flip. Fix = normalise by rr²
+  and re-fit (task 6), which is now unblocked.
+- ⚠️ Caveats that bound this: n=1 clip; I corrected the rim radius (measured 112 vs clicked
+  88) before running, which also raised the shot gate 177→224; three clips still uncounted.
+  Full detail + deviations in the PROJECT_NOTES "FROZEN 07-29 RESULT" section.
+
+## Where the pipeline WAS (baseline, hand-count of 3 clips = 111 attempts, detector trained on them)
 - **Shot detection: recall 86% / precision 0.99** (greedy tracker ∪ beam-MHT ∪ rim-recovery).
 - **Make/miss: 81% LOCO** (learned `make_visual` re-fit on the 89 new labels; geometric was ~51% coin-flip).
 - **Run the validated pipeline with ONE flag:** `build_session --validated`

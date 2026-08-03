@@ -1,0 +1,16 @@
+{
+  "clip": "PXL_20260729_155320813",
+  "image_w": 3840,
+  "image_h": 2160,
+  "rims": [
+    {
+      "rim_x": 608.0,
+      "rim_y": 589.0,
+      "rim_radius_px": 112.0,
+      "shot_gate_px": 224.0,
+      "f0": 0,
+      "f1": null,
+      "note": "measured from the rim's orange paint at frames 1121/3000/5000 (span x496..721 = 225px diameter, agreeing within 4px); supersedes the manual click (654,589) r=88, which landed right-shifted and 22% short. The click is kept at rim_PXL_20260729_155320813.json.clicked_backup"
+    }
+  ]
+}

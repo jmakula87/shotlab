@@ -100,6 +100,57 @@ A production `--clips "data/raw/Camera 1/*.mp4"` run would sweep all four and fa
 to `auto_calibrate` on any clip lacking a rim file — the auto-rim is known to lock onto the
 shooter's shirt, so rim every clip you include and exclude the rest explicitly.
 
+## ⭐⭐⭐ FROZEN 07-29 RESULT — clip 1 (2026-08-02). DETECTION HELD, MAKE/MISS DID NOT.
+The pre-registration below was written before any of this existed. Read it first, then this.
+
+**Owner hand-counted `PXL_20260729_155320813` fresh: 28 attempts (16 make / 10 rim-miss /
+2 airball), spanning frames 1121-8556.** QA before use: minimum gap between attempts 92f
+(3.1s) against a ±30f matcher window — over 3× margin, no double-taps, attempts spread
+10/9/9 across thirds. This is a clean ground truth.
+
+| | 0720 (detector TRAINED on it) | **07-29 FROZEN (never seen)** |
+|---|---|---|
+| Detection recall | 96/111 = **86%** [CI 79-92] | 24/28 = **86%** [CI 69-94] |
+| Precision | 0.99 (1 FP) | **1.00 (0 FP)** |
+| Airball recall | ~0 (blind by design) | **2/2** |
+| Make/miss | **81%** LOCO (claimed) | 13/24 = **54%** [CI 35-72] |
+
+**DETECTION GENERALIZED.** Same recall, better precision, on a session the detector has
+never trained on, at a ball scale it has never seen. The C1→C5 ladder also reproduced the
+0720 *shape*: greedy 68% → union 82% → +rim-recovery 86%, i.e. the beam and recovery passes
+each still earn their keep off their training clips. This is the first honest measurement
+of this pipeline and it is a good one.
+
+**MAKE/MISS COLLAPSED, exactly as pre-registered.** 54% against a claimed 81% — 81% sits
+outside the 95% CI, so the drop is real, not sampling. Cause was predicted in advance
+(item 2 below): three of seven `make_visual` features are logs of RAW orange-pixel counts
+in rr-scaled regions, so their areas scale with rr². rr went 36 → 112, moving those masses
+~10× outside the scaler's training distribution. **Geometric is worse than a coin flip
+here — 33%, abstaining on 12 of 24** — so the learned model is still the better of the two,
+just no longer trustworthy. Fix is item 2's: normalise by rr² and re-fit.
+
+⚠️ **Deviations and caveats, recorded because they bound the claim:**
+- **I corrected the rim radius after the owner set it, before running the eval.** The click
+  gave (654,589) r=88; measuring the rim's orange paint at frames 1121/3000/5000 gave a
+  225px span (x496..721, agreeing within 4px) = centre 608, r≈112. The click was
+  right-shifted and 22% short. Done for measured reasons and recorded in the rim file, with
+  the original kept at `rim_*.json.clicked_backup` — but it is an intervention on a frozen
+  input and must be read as one. It also RAISES `shot_gate_px` 177→224, which plausibly
+  contributes to why pre-registered item 1 (pixel gates too tight at 4K) did not bite.
+- **Pre-registered item 1 did NOT materialise**: recall held, so the scale-dependent gates
+  did not cost measurable recall on this clip. That does not clear them — the corrected,
+  larger gate may be masking the problem. Item 1 stays open.
+- **n = 1 clip, 28 attempts.** Detection's CI is 69-94%; "86%" is not precise to the point.
+  Three clips remain uncounted.
+- **The stored 0720 eval JSONs' make/miss (75%) is NOT comparable** — those runs predate
+  today's fix and scored the superseded `make_visual.joblib`. The 81% is the re-fit's own
+  LOCO figure. An apples-to-apples 0720 re-run needs the clips moved back out of `Old/`.
+- **Match tolerance is load-bearing**: sweep gives ±5f=14%, ±10f=50%, ±15f=82%, ±30f=86%.
+  Half the matches sit 10-30 frames from the hand-marked frame, which is expected when a
+  human parks "near" the rim moment by eye, but it means ±30 is doing real work.
+- ⛔ **Nothing was tuned before or during this run.** Next knob turned on this session
+  invalidates it as a held-out measurement.
+
 ## ⭐ PRE-REGISTRATION for the 07-29 frozen eval (written 2026-08-02, BEFORE any result)
 From the Fable audit. These are alternative explanations recorded in advance so that a poor
 07-29 number is not automatically read as "the detector didn't generalize" — and, more

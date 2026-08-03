@@ -1,0 +1,16 @@
+{
+  "clip": "PXL_20260729_155320813",
+  "image_w": 3840,
+  "image_h": 2160,
+  "rims": [
+    {
+      "rim_x": 654.0,
+      "rim_y": 589.2,
+      "rim_radius_px": 88.26324263247983,
+      "shot_gate_px": 176.52648526495966,
+      "f0": 0,
+      "f1": null,
+      "note": "manual edge-to-edge @f3080"
+    }
+  ]
+}
