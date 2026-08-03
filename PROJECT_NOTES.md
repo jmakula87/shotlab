@@ -108,12 +108,23 @@ The pre-registration below was written before any of this existed. Read it first
 (3.1s) against a ±30f matcher window — over 3× margin, no double-taps, attempts spread
 10/9/9 across thirds. This is a clean ground truth.
 
-| | 0720 (detector TRAINED on it) | **07-29 FROZEN (never seen)** |
+**Clip 2 (`PXL_20260729_155914855-001`) counted + evaluated the same day: 38 attempts
+(17 make / 20 rim-miss / 1 airball), recall 31/38 = 82%, precision 0.97, make/miss 48%.**
+
+| | 0720 (detector TRAINED on it) | **07-29 FROZEN, 2 clips** |
 |---|---|---|
-| Detection recall | 96/111 = **86%** [CI 79-92] | 24/28 = **86%** [CI 69-94] |
-| Precision | 0.99 (1 FP) | **1.00 (0 FP)** |
-| Airball recall | ~0 (blind by design) | **2/2** |
-| Make/miss | **81%** LOCO (claimed) | 13/24 = **54%** [CI 35-72] |
+| Detection recall | 96/111 = **86%** [CI 79-92] | 55/66 = **83%** [CI 73-90] |
+| Precision | 0.99 (1 FP) | **0.98 (1 FP)** |
+| Airball recall | ~0 (blind by design) | **3/3** (all via rim-recovery) |
+| Make/miss | **81%** LOCO (claimed) | 28/55 = **51%** [CI 38-64] |
+
+**Two clips make the verdict firm.** Detection's CI covers the baseline — it generalized.
+Make/miss is now measured at **coin-flip on 55 matched shots**, with 81% far outside the
+interval; on clip 2 the *geometric* rule (52%) even edged the learned model (48%), which is
+what "no signal" looks like. The rr² feature defect is the whole story and is fixable.
+⭐ **Airballs 3/3, every one recovered by the rim-recovery pass, none by C1-C4** — the pass
+that was added for rim-reaching shots turns out to be what makes the "blind by design"
+airball case visible at all. Unexpected and worth keeping in mind when item 1 is worked.
 
 **DETECTION GENERALIZED.** Same recall, better precision, on a session the detector has
 never trained on, at a ball scale it has never seen. The C1→C5 ladder also reproduced the

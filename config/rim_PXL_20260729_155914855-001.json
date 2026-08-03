@@ -1,0 +1,16 @@
+{
+  "clip": "PXL_20260729_155914855-001",
+  "image_w": 3840,
+  "image_h": 2160,
+  "rims": [
+    {
+      "rim_x": 880.0,
+      "rim_y": 857.0,
+      "rim_radius_px": 119.0,
+      "shot_gate_px": 238.0,
+      "f0": 0,
+      "f1": null,
+      "note": "measured from the rim's orange paint over 37 sampled frames. Occlusion (foliage, net, blur) only SHORTENS a visible run, so the estimate is the upper plateau, not the median: p50=198 p75=226 p90=236 max=249; the 8 widest frames span x760..998 = 238px. Max sits only 11px above p90, so no ball merged with the rim in those frames. Method validated on clip 1, where it reproduced the filed rim within 2-3px."
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "clip": "PXL_20260729_155914855-001",
+  "tol": 30,
+  "n_attempts": 38,
+  "conditions": [
+    {
+      "condition": "C1 baseline@0.25 (greedy)",
+      "produced": 28,
+      "tp": 27,
+      "fp": 1,
+      "fn": 11,
+      "precision": 0.9642857142857143,
+      "recall_all": 0.7105263157894737,
+      "recall_rim": 0.7297297297297297,
+      "recall_airball": 0,
+      "n_airball": 1
+    },
+    {
+      "condition": "C2 cloud@0.01 (greedy)",
+      "produced": 29,
+      "tp": 28,
+      "fp": 1,
+      "fn": 10,
+      "precision": 0.9655172413793104,
+      "recall_all": 0.7368421052631579,
+      "recall_rim": 0.7567567567567568,
+      "recall_airball": 0,
+      "n_airball": 1
+    },
+    {
+      "condition": "C3 beam (cloud MHT)",
+      "produced": 28,
+      "tp": 27,
+      "fp": 1,
+      "fn": 11,
+      "precision": 0.9642857142857143,
+      "recall_all": 0.7105263157894737,
+      "recall_rim": 0.7297297297297297,
+      "recall_airball": 0,
+      "n_airball": 1
+    },
+    {
+      "condition": "C4 greedy u beam",
+      "produced": 31,
+      "tp": 30,
+      "fp": 1,
+      "fn": 8,
+      "precision": 0.967741935483871,
+      "recall_all": 0.7894736842105263,
+      "recall_rim": 0.8108108108108109,
+      "recall_airball": 0,
+      "n_airball": 1
+    },
+    {
+      "condition": "C5 + rim-recovery (production candidate)",
+      "produced": 32,
+      "tp": 31,
+      "fp": 1,
+      "fn": 7,
+      "precision": 0.96875,
+      "recall_all": 0.8157894736842105,
+      "recall_rim": 0.8108108108108109,
+      "recall_airball": 1,
+      "n_airball": 1
+    }
+  ],
+  "make_miss": {
+    "n_matched": 31,
+    "geometric": {
+      "correct": 16,
+      "na": 7,
+      "make_hit": 9,
+      "make_tot": 15
+    },
+    "visual": {
+      "correct": 15,
+      "na": 0,
+      "make_hit": 10,
+      "make_tot": 15
+    },
+    "visual_model": "make_visual_0720.joblib"
+  },
+  "union_tol_sweep": {
+    "5": 0.05263157894736842,
+    "10": 0.42105263157894735,
+    "15": 0.7105263157894737,
+    "30": 0.8157894736842105
+  }
+}
