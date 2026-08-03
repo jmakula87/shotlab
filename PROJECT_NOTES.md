@@ -190,6 +190,40 @@ just no longer trustworthy. Fix is item 2's: normalise by rr² and re-fit.
 - ⛔ **Nothing was tuned before or during this run.** Next knob turned on this session
   invalidates it as a held-out measurement.
 
+## ⛔⭐ RIM-SCALING `launch_drop` — BUILT, MEASURED, REJECTED (2026-08-03)
+Having found every miss is the segmenter, the obvious fix was that `launch_drop` is a fixed
+200px while `shot_gate_px` scales with the rim — at 4K the gate (240px) had grown PAST the
+drop, so a point could be "at the rim" while already below launch height. Using the rim as a
+ruler (18in across → px_per_ft = 2·rr/1.5), 200px is 4.2ft at 0720 and only 1.2ft at 4K, so
+scaling it gives ~670px.
+
+**Result: recall COLLAPSED 85% → 40%** (46/34/54/33% per clip). Reverted; the banked
+122/143 = 85% at precision 0.984 is restored exactly, 41/41 tests green.
+
+⭐ **Why the physics doesn't apply — and this is the useful part.** The walk-back can only
+measure what the TRACK contains, and the track does not extend back to the shooter's hands:
+the detector picks the ball up partway into the flight. So `launch_drop` is **not** measuring
+"how far below the rim the release is" — it measures **"how much of the flight was tracked"**.
+That is a frame-count-like quantity, not a physical height, and it must NOT scale with the
+rim. Demanding the true physical drop rejects nearly every real shot.
+
+⛔ **Second hypothesis in a row that was right in principle and wrong in fact** (after the
+rr² make/miss mechanism). Both were pre-registered, both were tested against a control or a
+revert, and both died on measurement rather than on argument — which is the process working,
+but it is a standing warning about this footage: *the plausible mechanism has been wrong
+twice, so build the check before the fix.*
+
+⛔ **Do not re-derive this.** `launch_drop_px()` is kept in `court.py` as a documented dead
+letter with the arithmetic, so the next reader does not rediscover it.
+
+**What the evidence now points at instead.** The failures are "drop 105-153px vs a 160px bar"
+and "n = 2-6 points" — i.e. *not enough of the flight is in the track*. The principled fix is
+therefore to EXTEND THE TRACK BACKWARD from the rim (backward association from a confirmed
+rim event, using the cloud), not to move a threshold. Lowering the bar would admit these
+shots by weakening the test that keeps precision at 0.984, and — decisively — it would be
+tuning on the 143 attempts that are our only held-out measurement. ⚠️ Any threshold chosen by
+sweeping these clips is no longer a held-out number and needs a fresh session to validate.
+
 ## ⭐⭐⭐ EVERY REMAINING MISS IS THE SEGMENTER (2026-08-03) — detection is not the wall
 `diagnose_misses` over all four 07-29 clips, baseline condition, 34 missed attempts:
 

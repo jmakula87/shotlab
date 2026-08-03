@@ -222,8 +222,32 @@ def filter_shots_by_rim(shots, calib: Calibration):
     return kept, len(shots) - len(kept)
 
 
+# ⛔ DEAD LETTER -- rim-scaling `launch_drop` was BUILT, MEASURED AND REJECTED
+# (2026-08-03). The physics is sound: a rim is 18in across, so px_per_ft =
+# 2*rim_radius_px/1.5, and the release really does sit ~4.2ft below the rim (which
+# is what the historic 200px means at 0720's ~48 px/ft). Scaling it to 4K gives
+# ~670px -- and recall COLLAPSED 85% -> 40% across all four clips.
+#
+# Why the physics does not apply: the walk-back can only measure what the TRACK
+# contains, and the track does not extend back to the shooter's hands -- the
+# detector picks the ball up partway into the flight. So the drop threshold is not
+# measuring "how far below the rim the release is", it is measuring "how much of
+# the flight was tracked". Demanding the true physical drop rejects almost every
+# real shot. Kept here so nobody re-derives it: this is the second hypothesis about
+# this footage that was right in principle and wrong in fact.
+LAUNCH_DROP_FT = 4.2
+
+
+def launch_drop_px(calib: Calibration) -> float:
+    """Rim-scaled launch drop. NOT used by default -- see the DEAD LETTER above."""
+    rr = float(getattr(calib, "rim_radius_px", 0.0) or 0.0)
+    if rr <= 0:
+        return 200.0
+    return LAUNCH_DROP_FT * (2.0 * rr / 1.5)
+
+
 def detect_shots_to_rim(track, calib: Calibration, *, max_rim_gap: int = 20,
-                        launch_drop: float = 200.0, min_points: int = 8,
+                        launch_drop: float | None = None, min_points: int = 8,
                         threshold_px: float = 8.0, max_launch_gap: int = 45):
     """Find shots in a CONTINUOUS ball track (the case a good detector produces).
 
@@ -232,7 +256,13 @@ def detect_shots_to_rim(track, calib: Calibration, *, max_rim_gap: int = 20,
     path reaches the rim, we walk back to where it launched from well below the
     rim, and treat that ascending arc as a shot. This naturally ignores dribbling
     (which never reaches the rim) without needing detection gaps.
+
+    `launch_drop` stays a FIXED 200px on purpose: it bounds how much of the flight
+    must be tracked, not a physical height, so it must not scale with the rim.
+    Scaling it was measured and rejected -- see the DEAD LETTER above.
     """
+    if launch_drop is None:
+        launch_drop = 200.0
     from .phase1_ball.track import Shot
     from .arc import fit_parabola_ransac
 
