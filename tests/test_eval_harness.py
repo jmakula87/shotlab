@@ -118,6 +118,24 @@ check("zero ball size does not divide by zero", VR.rim_sanity(126, 0)[0] == "unk
 check("every verdict carries an actionable message",
       all(len(VR.rim_sanity(r, 126)[1]) > 40 for r in (8, 63, 126, 200, 400)))
 
+# --- opening hand_count and quitting must not fabricate a zero-attempt count ---
+# The GUI saves on quit, so a header-only CSV would read downstream as "this clip
+# was counted and had no shots" -- recall scored against n=0.
+_orig_hc = HC.HANDCOUNT_DIR
+try:
+    HC.HANDCOUNT_DIR = Path(tempfile.mkdtemp())
+    HC.save_attempts("NEVERCOUNTED", [])
+    check("empty count on a fresh clip writes no file",
+          not HC.csv_path("NEVERCOUNTED").exists())
+    HC.save_attempts("REAL", [{"attempt_id": 1, "rim_frame": 10, "outcome": "make",
+                               "reached": "rim", "note": ""}])
+    check("a real count still writes", HC.csv_path("REAL").exists())
+    HC.save_attempts("REAL", [])          # deliberately emptying an existing count
+    check("clearing an EXISTING count still persists", HC.csv_path("REAL").exists())
+    check("...and it round-trips as empty", HC.load_attempts("REAL") == [])
+finally:
+    HC.HANDCOUNT_DIR = _orig_hc
+
 # --- add_rim(doc=) must NOT inherit rims from disk (verify_rim's "fresh start") ---
 # Before 2026-08-02 the GUI built a fresh doc but add_rim reloaded the file and
 # appended, so a stale rim from an earlier run still governed part of the clip.

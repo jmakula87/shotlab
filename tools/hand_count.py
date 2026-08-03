@@ -40,6 +40,12 @@ def csv_path(clip):
 
 
 def save_attempts(clip, attempts):
+    """Write the ground truth. An EMPTY list with no existing file writes nothing:
+    the GUI saves on quit, so opening a clip and closing it without counting would
+    otherwise leave a header-only CSV that every downstream reader treats as a
+    completed count of zero attempts -- silently scoring recall against n=0."""
+    if not attempts and not csv_path(clip).exists():
+        return
     HANDCOUNT_DIR.mkdir(parents=True, exist_ok=True)
     with open(csv_path(clip), "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
