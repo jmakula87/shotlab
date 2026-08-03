@@ -190,6 +190,29 @@ just no longer trustworthy. Fix is item 2's: normalise by rr² and re-fit.
 - ⛔ **Nothing was tuned before or during this run.** Next knob turned on this session
   invalidates it as a held-out measurement.
 
+## THE LAST 6 MISSES (2026-08-03) — three causes, one of them already built for
+137/143 leaves 6, and they are not six unrelated problems:
+
+| cause | n | detail |
+|---|---|---|
+| **78° near-vertical gate** | 2 | healthy segments (n=32, drop 249-263) rejected at rel 81/ent 86 and rel 78/ent 84 |
+| **fragmented track** | 3 | segments of n = 2, 4, 5 points |
+| **never reached the rim gate** | 1 | no rim event within 60f of the hand-counted frame |
+
+⭐ **The 78° gate is a hard-coded IMAGE-SPACE angle**, and `ARC_METRIC_HONESTY.md` already
+establishes that release/entry angles are only physically valid SIDE-ON — this footage is
+oblique/behind, where real shots read steeper than they are. So a fixed 78° threshold is
+geometry-dependent in exactly the way the pixel constants were scale-dependent. That is a
+principled reason to make it camera-aware, but the *value* is arbitrary either way, so it
+must not be dialled against these 143 attempts.
+⭐ **The 3 fragmented-track misses are precisely what `back_extend` was built for**, and it
+does not catch them: it needs 2-3 coherent points to seed a fit, and after trimming the
+teleport these segments are down to ~1. Seeding from the rim event itself (position known,
+velocity unknown) is the obvious next attempt — the module is inert today but this is the
+case that could earn it back.
+⛔ Deliberately NOT acted on yet. Three of my hypotheses about this footage died today;
+these are candidates, not fixes, and the tail is worth 4% of recall.
+
 ## ⭐⭐⭐ RECALL 85% → 96% (2026-08-03) — and the cause was NOT what I built
 Chasing the segmenter produced a large win, but the attribution is the lesson.
 

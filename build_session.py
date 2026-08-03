@@ -118,17 +118,23 @@ def main(argv=None):
                          "on the current downscale-trained model (measured 11->2 "
                          "shots); only useful after a native-scale retrain.")
     ap.add_argument("--validated", action="store_true",
-                    help="THE hand-count-validated profile (recall 86%%/precision 0.99, "
-                         "make/miss 81%% LOCO): sets --detector yolo --weights "
+                    help="THE hand-count-measured profile: --detector yolo --weights "
                          "runs/detect/ball_gpu_kaggle/weights/best.onnx --imgsz 1280 "
-                         "--stride 1 --beam --make-model auto, and uses the verify_rim "
-                         "config/rim_<clip>.json rims. This is the eval config; plain "
-                         "defaults (motion / imgsz 768 / yolo11n) are NOT validated.")
+                         "--stride 1 --beam --make-model auto --no-audio, using the "
+                         "verify_rim config/rim_<clip>.json rims. Plain defaults "
+                         "(motion / imgsz 768 / yolo11n) are NOT measured. "
+                         "DETECTION: 85%% recall / 0.984 precision HELD OUT on the 07-29 "
+                         "session (143 hand-counted attempts); 96%% on that same session "
+                         "after diagnosing it, which is NOT a held-out number. "
+                         "MAKE/MISS: 89%% leave-one-clip-out WITHIN a session -- it does "
+                         "NOT transfer (55-62%% across sessions), so a new session needs "
+                         "its own labels and its own re-fit.")
     ap.add_argument("--beam", action="store_true",
                     help="union the multi-hypothesis beam tracker (over the conf-0.01 "
                          "cloud) with the greedy tracker -- recovers fragmented-arc "
-                         "shots (validated: recall 55%%->80%% at precision 0.96 across "
-                         "3 hand-counted clips). Slower (detects the full cloud).")
+                         "shots. Measured on the held-out 07-29 session: the greedy->union "
+                         "->+rim-recovery ladder runs 68%%->82%%->86%% on clip 1 and holds "
+                         "its shape on all four. Slower (detects the full cloud).")
     ap.add_argument("--camera", default="unknown",
                     choices=["side_on", "oblique", "behind", "unknown"],
                     help="camera geometry -- gates arc-angle confidence. release/entry "
@@ -137,11 +143,13 @@ def main(argv=None):
                          "Default 'unknown' treats angles as low-confidence -- pass "
                          "--camera side_on ONLY when you filmed perpendicular to the shot.")
     ap.add_argument("--make-model", default="auto",
-                    help="learned make/miss model (joblib). 'auto' uses "
-                         "models/make_visual_0720.joblib if present, else geometric. "
-                         "Geometric classify_make is ~coin-flip on real footage "
-                         "(measured); the re-fit visual model is 81%% LOCO. Pass "
-                         "'none' to force geometric.")
+                    help="learned make/miss model (joblib). 'auto' picks the NEWEST "
+                         "models/make_visual_*.joblib, else geometric. ⚠️ make/miss is "
+                         "SESSION-SPECIFIC (measured 2026-08-03): ~89%% leave-one-clip-out "
+                         "within the session it was fitted on, 55-62%% on a different one, "
+                         "so 'auto' is a convenience and NOT a claim that any model "
+                         "transfers -- fit one per session. Geometric is ~coin-flip on "
+                         "real footage (44-51%% measured). Pass 'none' to force geometric.")
     ap.add_argument("--conf", type=float, default=0.25,
                     help="ball-detection confidence floor (default 0.25). Lower "
                          "(e.g. 0.05) recovers ~38%% more ball frames for the "
