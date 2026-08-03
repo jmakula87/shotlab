@@ -189,6 +189,31 @@ def main(argv=None):
 
     shooter_ft = parse_height(args.shooter_height)
 
+    def warn_if_self_labelled(clip_paths):
+        """Loud if the make/miss model was FITTED on the clips it is about to label.
+
+        The resulting make% is resubstitution, not a measurement. This bit us on
+        2026-08-03: the session build reported 49.3% using a model trained on those
+        exact shots. The guard existed in eval_ablations only, so the PRODUCT --
+        the thing whose number the owner would actually believe -- had none.
+        """
+        if not make_model:
+            return
+        prov = os.path.splitext(make_model)[0] + ".trained_on.json"
+        if not os.path.exists(prov):
+            return
+        try:
+            with open(prov, encoding="utf-8") as f:
+                trained = set(json.load(f).get("clips") or [])
+        except Exception:
+            return
+        hit = sorted({os.path.splitext(os.path.basename(c))[0] for c in clip_paths} & trained)
+        if hit:
+            print(f"  ⚠️  {os.path.basename(make_model)} was FITTED on "
+                  f"{len(hit)} of these clips ({', '.join(h[-13:] for h in hit)}).")
+            print("  ⚠️  The make% below is RESUBSTITUTION, not a measurement -- it "
+                  "reflects how well the model memorised this session.")
+
     fixed_calib = Calibration.load(args.calib) if args.calib else None
 
     # optional map of clip-substring -> calibration name (from calibrate.py)
@@ -229,6 +254,7 @@ def main(argv=None):
         print("No clips matched.")
         return 1
     print(f"Processing {len(clips)} clips ...")
+    warn_if_self_labelled(clips)
 
     all_records = []
     for c in clips:
