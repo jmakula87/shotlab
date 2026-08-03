@@ -165,8 +165,14 @@ def main(argv=None):
 
     # resolve the learned make/miss model: 'auto' -> the re-fit model if present
     if args.make_model == "auto":
-        _cand = os.path.join("models", "make_visual_0720.joblib")
-        make_model = _cand if os.path.exists(_cand) else None
+        # Make/miss is SESSION-specific, measured 2026-08-03: within a session
+        # leave-one-clip-out is ~89%, but a model trained on one session scores
+        # 58-62% on another. So prefer the NEWEST model and expect to re-fit per
+        # session; 'auto' is a convenience, not a claim that any model transfers.
+        _cands = [os.path.join("models", n) for n in
+                  ("make_visual_0729.joblib", "make_visual_0720.joblib",
+                   "make_visual.joblib")]
+        make_model = next((c for c in _cands if os.path.exists(c)), None)
     elif args.make_model in ("none", "", None):
         make_model = None
     else:

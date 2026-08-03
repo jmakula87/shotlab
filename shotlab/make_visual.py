@@ -24,6 +24,16 @@ FEATURE_NAMES = ["netVSflank", "netVSbase", "o_below", "o_side", "o_net",
 PRE, POST = 20, 55          # frames sampled before/after the rim frame
 _MODEL_PATH_DEFAULT = "models/make_visual.joblib"
 
+# Every region below is defined in units of the rim radius, so each region's AREA
+# scales with rr**2 -- and o_below / o_side / o_net are raw PIXEL COUNTS inside
+# them. A model trained at one rim scale therefore cannot read another: measured
+# 2026-08-02, rr 36 -> 120 moved those masses ~11x (about +2.4 in log space), far
+# outside the scaler's training range, and make/miss fell to 55% on held-out 4K
+# footage while detection generalized fine. Normalising each mass to a reference
+# radius makes the three count features scale-invariant. The other four are
+# already ratios or log-differences, where scale cancels.
+REF_RR = 40.0               # ~the 0720 rim radii (35.6-39.3), so magnitudes stay familiar
+
 
 def _orange_mask(bgr):
     import cv2
@@ -100,7 +110,11 @@ def extract_signals(clip_path, rim_frame, rim) -> dict | None:
         cap.release()
     if len(sig["o_in_rim"]) < 10:
         return None
-    return {k: np.asarray(v, float) for k, v in sig.items()}
+    out = {k: np.asarray(v, float) for k, v in sig.items()}
+    # carried so features_from_signals can make the pixel-count features
+    # scale-invariant; see REF_RR
+    out["_rr"] = np.asarray([rr], float)
+    return out
 
 
 def _win(a, t0, lo, hi):
@@ -109,11 +123,19 @@ def _win(a, t0, lo, hi):
 
 
 def features_from_signals(sig: dict) -> np.ndarray:
-    """The 7 make/miss features from the per-frame signals (see FEATURE_NAMES)."""
+    """The 7 make/miss features from the per-frame signals (see FEATURE_NAMES).
+
+    The three orange-MASS features are pixel counts inside rr-scaled regions, so
+    they are normalised to REF_RR before the log -- otherwise the model is tied to
+    the rim scale it was trained at (see REF_RR). Signals captured before this fix
+    carry no `_rr` and fall through unnormalised, which is the old behaviour.
+    """
     o = sig["o_in_rim"]
     lo, hi = max(0, PRE - 15), min(len(o), PRE + 16)
     t0 = (lo + int(o[lo:hi].argmax())) if (len(o[lo:hi]) and o[lo:hi].max() > 50) else PRE
     L = np.log1p
+    rr = float(sig["_rr"][0]) if "_rr" in sig and len(sig["_rr"]) else 0.0
+    a = (REF_RR / rr) ** 2 if rr > 0 else 1.0        # area normaliser
     nb = np.median(_win(sig["net_motion"], t0, -18, -6))
     fp = _win(sig["flank_motion"], t0, 0, 20).max()
     net_pk = _win(sig["net_motion"], t0, 0, 20).max()
@@ -122,9 +144,9 @@ def features_from_signals(sig: dict) -> np.ndarray:
     return np.array([
         L(net_pk) - L(fp),
         L(net_pk) - L(nb),
-        L(_win(sig["o_below_net"], t0, 0, 30).max()),
-        L(_win(sig["o_side"], t0, 2, 30).max()),
-        L(_win(sig["o_net"], t0, 0, 15).max()),
+        L(_win(sig["o_below_net"], t0, 0, 30).max() * a),
+        L(_win(sig["o_side"], t0, 2, 30).max() * a),
+        L(_win(sig["o_net"], t0, 0, 15).max() * a),
         (wbase - wmin) / (wbase + 1.0),
         L(_win(sig["net_motion"], t0, 8, 30).max()) - L(fp),
     ], float)

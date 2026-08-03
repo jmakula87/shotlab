@@ -237,9 +237,10 @@ def score_make(clip, raw, rim_doc, attempts, tol=30):
     vis, vis_model = None, None
     try:
         import shotlab.make_visual as mv
-        mpath = ROOT / "models" / "make_visual_0720.joblib"
-        if not mpath.exists():
-            mpath = ROOT / "models" / "make_visual.joblib"
+        mpath = next((p for p in (ROOT / "models" / "make_visual_0729.joblib",
+                                  ROOT / "models" / "make_visual_0720.joblib",
+                                  ROOT / "models" / "make_visual.joblib")
+                      if p.exists()), ROOT / "models" / "make_visual.joblib")
         model = mv.load(str(mpath))
         vis_model = mpath.name
         vp = str(CLIP_DIR / f"{clip}.mp4")

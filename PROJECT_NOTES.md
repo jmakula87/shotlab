@@ -190,6 +190,47 @@ just no longer trustworthy. Fix is item 2's: normalise by rr² and re-fit.
 - ⛔ **Nothing was tuned before or during this run.** Next knob turned on this session
   invalidates it as a held-out measurement.
 
+## ⛔⭐ THE PRE-REGISTERED MAKE/MISS MECHANISM WAS WRONG (2026-08-03)
+Pre-registered item 2 said make/miss failed because three features are raw pixel counts in
+rr²-scaled regions, and rr moved 36 → 120. **Tested and refuted.**
+
+Normalising those masses to a reference radius (`REF_RR`, `make_visual.py`) and re-fitting
+on 0720, then testing ONCE on 07-29: **58%**. An identical re-fit with normalisation OFF —
+the control that exists precisely to catch this — scored **62%**. The fix did nothing; the
+control was, if anything, slightly better. Scale was not the binding constraint.
+
+**The real diagnosis, from leave-one-clip-out WITHIN each session:**
+
+| training set | tested on | accuracy |
+|---|---|---|
+| 07-29, LOCO (3 clips → 4th) | 07-29 | **89-90%** [CI 82-94] |
+| 0720, LOCO | 0720 | 83-84% [CI 75-90] |
+| 0720 (all 96) | 07-29 | **58-62%** |
+| 0720 + 3× 07-29 clips | 07-29 | 84-86% (worse than 4K alone) |
+
+Per clip within 07-29: 92/87/94/82% normalised, 96/84/94/88% control. Base rate is 48%
+makes, so majority-guessing scores 52%.
+
+**Make/miss is SESSION-specific, not scale-specific.** The cues are *stronger* on the 4K
+footage than they ever were on 0720 (89% vs 84% within-session) — the net whip, the orange
+mass below the rim and the white-occlusion dip are all plainly there. What does not survive
+is a model fitted to one session's lighting, background and camera geometry. Adding the 0720
+clips to the 4K training folds makes it *worse*, so the old session is not merely unhelpful,
+it is misleading.
+
+**This reframes the original 81% too: it was never a cross-session number.** It was a
+within-session LOCO figure (reproduced here at 83-84%), and the error was in the claim's
+scope, not the model. `--validated`'s "make/miss 81%" implied a generality it never had.
+
+**Actions taken:** `models/make_visual_0729.joblib` fitted on all 122 labelled 4K shots
+(LOCO 89%); `--make-model auto` now prefers the newest model in both `build_session` and
+`eval_ablations`, with a comment that auto is a convenience and not a transfer claim.
+The rr-normalisation is **KEPT but corpse-marked MEASURED-INERT** — the geometry argument is
+correct and will matter if rim scale ever varies *within* a session, but it moved nothing
+here (89 vs 90 LOCO) and must not be cited as a fix.
+⛔ **Standing rule this earns: a make/miss accuracy is meaningless without naming the session
+it was fitted on.** Quote it as "N% within-session LOCO", never bare.
+
 ## ⭐ PRE-REGISTRATION for the 07-29 frozen eval (written 2026-08-02, BEFORE any result)
 From the Fable audit. These are alternative explanations recorded in advance so that a poor
 07-29 number is not automatically read as "the detector didn't generalize" — and, more

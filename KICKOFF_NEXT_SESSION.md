@@ -10,10 +10,14 @@ Location: `C:\Users\jmaku\Desktop\ShotLab`. Read-order: **this → `PROJECT_NOTE
   trained on at a ball scale never seen, with 2 false positives in 124 produced shots. The
   C1→C5 ladder reproduced its shape on every clip — the beam and rim-recovery passes are not
   artefacts of the clips they were built on. **This is a clean pass and the harness's payoff.**
-- **MAKE/MISS FAILED — 67/122 = 55% [CI 46-63]; chance is INSIDE that interval, 81% is far
-  outside.** Geometric is worse (47%). Per-clip learned 54/48/48/68. No usable signal.
-  **Pre-registered in advance**: `make_visual`'s raw-orange-mass features scale with rr², and
-  rr moved 36 → ~120. **Task 6 (normalise by rr², re-fit) is now THE highest-value item.**
+- **MAKE/MISS is SESSION-SPECIFIC — diagnosed 08-03, and my pre-registered mechanism was
+  WRONG.** The shipped (0720-trained) model scores 55% on 07-29, but **leave-one-clip-out
+  WITHIN 07-29 is 89%** — the cues are stronger on this footage than they ever were on 0720
+  (84% LOCO there). Normalising the rr²-scaled mass features, the pre-registered fix, moved
+  nothing: 58% vs a 62% unnormalised control. **The original "81%" was always a within-session
+  number, never a cross-session one.** ✅ `models/make_visual_0729.joblib` fitted on the 122
+  labelled 4K shots; `--make-model auto` now prefers the newest model.
+  ⛔ **Never quote a make/miss accuracy without naming the session it was fitted on.**
 - ⭐ **Airballs 5/5, all via the rim-recovery pass, none by C1-C4** — the pass added for
   rim-reaching shots is what makes the "blind by design" airball case visible. Understand this
   before task 5 rescales any gate.
