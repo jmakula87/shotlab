@@ -108,23 +108,43 @@ The pre-registration below was written before any of this existed. Read it first
 (3.1s) against a ±30f matcher window — over 3× margin, no double-taps, attempts spread
 10/9/9 across thirds. This is a clean ground truth.
 
-**Clip 2 (`PXL_20260729_155914855-001`) counted + evaluated the same day: 38 attempts
-(17 make / 20 rim-miss / 1 airball), recall 31/38 = 82%, precision 0.97, make/miss 48%.**
+Three of four clips counted (28 + 38 + 37 = 103 attempts), each QA'd for spacing before use
+(minimum inter-attempt gaps 92f / 122f, all ≥3× the ±30f matcher window).
 
-| | 0720 (detector TRAINED on it) | **07-29 FROZEN, 2 clips** |
+| | 0720 (detector TRAINED on it) | **07-29 FROZEN, 3 clips** |
 |---|---|---|
-| Detection recall | 96/111 = **86%** [CI 79-92] | 55/66 = **83%** [CI 73-90] |
-| Precision | 0.99 (1 FP) | **0.98 (1 FP)** |
-| Airball recall | ~0 (blind by design) | **3/3** (all via rim-recovery) |
-| Make/miss | **81%** LOCO (claimed) | 28/55 = **51%** [CI 38-64] |
+| Detection recall | 96/111 = **86%** [CI 79-92] | 88/103 = **85%** [CI 77-91] |
+| Precision | 0.99 (1 FP) | **0.98 (2 FP)** |
+| Airball recall | ~0 (blind by design) | **4/4** (all via rim-recovery) |
+| Make/miss (learned) | **81%** LOCO (claimed) | 44/88 = **50%** [CI 40-60] |
+| Make/miss (geometric) | ~51% | 45/88 = **51%** |
 
-**Two clips make the verdict firm.** Detection's CI covers the baseline — it generalized.
-Make/miss is now measured at **coin-flip on 55 matched shots**, with 81% far outside the
-interval; on clip 2 the *geometric* rule (52%) even edged the learned model (48%), which is
-what "no signal" looks like. The rr² feature defect is the whole story and is fixable.
-⭐ **Airballs 3/3, every one recovered by the rim-recovery pass, none by C1-C4** — the pass
-that was added for rim-reaching shots turns out to be what makes the "blind by design"
-airball case visible at all. Unexpected and worth keeping in mind when item 1 is worked.
+**DETECTION GENERALIZED — settled.** 85% on 103 held-out attempts, CI straddling the
+baseline, precision 0.98. Per clip: 86% / 82% / 92%. The C1→C5 ladder reproduced its shape
+every time, so the beam and rim-recovery passes are not artefacts of the clips they were
+built on. This is the result the whole eval harness was built to obtain.
+
+**MAKE/MISS IS DEAD ON THIS FOOTAGE — both methods at chance on 88 matched shots.** The
+learned model 50%, the geometric rule 51%. Per clip the geometric number swings 33/52/64
+while the learned one sits flat at 54/48/48 — the swing is base-rate noise (clip make-rates
+are 57% / 45% / 35%), not skill. 81% is far outside the interval. The mechanism was
+**pre-registered before any of this existed**: three of seven `make_visual` features are logs
+of RAW orange-pixel counts in rr-scaled regions, whose areas go as rr², and rr moved 36 →
+~120. Task 6 (normalise by rr², re-fit) is the single highest-value item left.
+⭐ **Airballs 4/4, every one recovered by the rim-recovery pass and none by C1-C4** — a pass
+added for rim-reaching shots is what makes the "blind by design" airball case visible.
+
+⭐ **RIM MEASUREMENT — the instrument, and one judgement call.** Rims were measured from the
+rim's orange paint, not clicked, after clip 1's click came in 22% short. Two contaminants
+push in opposite directions: occlusion (foliage/net/blur) SHORTENS a visible run, a ball
+touching the rim EXTENDS it. Ball frames are excluded using the cached candidate cloud, so
+what remains can only be truncated and the upper plateau is the truth. Clips 2 and 3 share a
+camera position (centres 2px apart) yet measured 120 vs 112 — clip 2's distribution plateaus
+(p90 237, p97 240, max 242) while clip 3's is still climbing (p90 217, p97 223, max 228), so
+clip 3's rim is never fully unoccluded and **takes clip 2's radius by physical necessity**:
+same camera, same hoop, one number. Recorded in each rim file. Clip 1 was deliberately NOT
+updated when re-measurement suggested 116 vs its filed 112 — its result is banked, and
+re-tuning a frozen input for a 3% refinement is what voids a held-out measurement.
 
 **DETECTION GENERALIZED.** Same recall, better precision, on a session the detector has
 never trained on, at a ball scale it has never seen. The C1→C5 ladder also reproduced the

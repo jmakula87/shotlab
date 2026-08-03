@@ -1,0 +1,89 @@
+{
+  "clip": "PXL_20260729_160743954",
+  "tol": 30,
+  "n_attempts": 37,
+  "conditions": [
+    {
+      "condition": "C1 baseline@0.25 (greedy)",
+      "produced": 32,
+      "tp": 31,
+      "fp": 1,
+      "fn": 6,
+      "precision": 0.96875,
+      "recall_all": 0.8378378378378378,
+      "recall_rim": 0.8333333333333334,
+      "recall_airball": 1,
+      "n_airball": 1
+    },
+    {
+      "condition": "C2 cloud@0.01 (greedy)",
+      "produced": 32,
+      "tp": 31,
+      "fp": 1,
+      "fn": 6,
+      "precision": 0.96875,
+      "recall_all": 0.8378378378378378,
+      "recall_rim": 0.8333333333333334,
+      "recall_airball": 1,
+      "n_airball": 1
+    },
+    {
+      "condition": "C3 beam (cloud MHT)",
+      "produced": 26,
+      "tp": 26,
+      "fp": 0,
+      "fn": 11,
+      "precision": 1.0,
+      "recall_all": 0.7027027027027027,
+      "recall_rim": 0.6944444444444444,
+      "recall_airball": 1,
+      "n_airball": 1
+    },
+    {
+      "condition": "C4 greedy u beam",
+      "produced": 33,
+      "tp": 32,
+      "fp": 1,
+      "fn": 5,
+      "precision": 0.9696969696969697,
+      "recall_all": 0.8648648648648649,
+      "recall_rim": 0.8611111111111112,
+      "recall_airball": 1,
+      "n_airball": 1
+    },
+    {
+      "condition": "C5 + rim-recovery (production candidate)",
+      "produced": 34,
+      "tp": 33,
+      "fp": 1,
+      "fn": 4,
+      "precision": 0.9705882352941176,
+      "recall_all": 0.8918918918918919,
+      "recall_rim": 0.8888888888888888,
+      "recall_airball": 1,
+      "n_airball": 1
+    }
+  ],
+  "make_miss": {
+    "n_matched": 33,
+    "geometric": {
+      "correct": 21,
+      "na": 5,
+      "make_hit": 8,
+      "make_tot": 12
+    },
+    "visual": {
+      "correct": 16,
+      "na": 0,
+      "make_hit": 6,
+      "make_tot": 12
+    },
+    "visual_model": "make_visual_0720.joblib"
+  },
+  "union_tol_sweep": {
+    "5": 0.1891891891891892,
+    "10": 0.3783783783783784,
+    "15": 0.8108108108108109,
+    "30": 0.8918918918918919
+  }
+}

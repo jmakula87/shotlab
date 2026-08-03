@@ -4,20 +4,22 @@ Last updated: **2026-07-29** · all pushed, tree clean.
 Location: `C:\Users\jmaku\Desktop\ShotLab`. Read-order: **this → `PROJECT_NOTES.md`
 (the living log) → `process/reviews/2026-07-23_broad_*` → `process/EVAL_HARNESS_RUNBOOK.md`**.
 
-## ⭐ FROZEN RESULT (2026-08-02) — held-out 07-29, 2 of 4 clips, 66 hand-counted attempts
-- **Detection GENERALIZED: recall 55/66 = 83% [CI 73-90], precision 0.98** — the CI covers
-  the 86% baseline, on footage never trained on at a ball scale never seen. The C1→C5 ladder
-  reproduced its shape, so the beam and recovery passes are not overfit to their own clips.
-- **Make/miss is a COIN FLIP: 28/55 = 51% [CI 38-64]** against a claimed 81%. On clip 2 the
-  geometric rule (52%) edged the learned model (48%) — the signature of no signal.
-  **Pre-registered in advance**: `make_visual`'s raw-orange-mass features scale with rr², and
-  rr went 36 → ~115. Fix = normalise by rr² and re-fit (task 6), now unblocked and the single
-  highest-value thing left.
-- ⭐ **Airballs 3/3, all recovered by the rim-recovery pass and none by C1-C4.** A pass added
-  for rim-reaching shots is what makes the supposedly-invisible airball case visible.
-- ⚠️ Rims were MEASURED from the rim's paint, not clicked — clip 1's click was 22% short.
-  Method validated by reproducing clip 1's filed rim within 2-3px. Clips 3-4 uncounted.
-  Full detail + deviations in the PROJECT_NOTES "FROZEN 07-29 RESULT" section.
+## ⭐ FROZEN RESULT — held-out 07-29, 3 of 4 clips, 103 hand-counted attempts
+- **DETECTION GENERALIZED — settled. recall 88/103 = 85% [CI 77-91], precision 0.98.**
+  Per clip 86% / 82% / 92%; the CI straddles the 86% baseline, on footage never trained on at
+  a ball scale never seen. The C1→C5 ladder reproduced its shape every time, so the beam and
+  rim-recovery passes are not artefacts of the clips they were built on.
+- **MAKE/MISS IS AT CHANCE: learned 44/88 = 50% [CI 40-60], geometric 45/88 = 51%.** Both.
+  81% is far outside. The per-clip geometric swing (33/52/64) tracks clip make-rate, not
+  skill. **Pre-registered in advance**: `make_visual`'s raw-orange-mass features scale with
+  rr², and rr moved 36 → ~120. **Task 6 (normalise by rr², re-fit) is the highest-value item
+  left** and is unblocked.
+- ⭐ **Airballs 4/4, all via the rim-recovery pass, none by C1-C4** — the pass added for
+  rim-reaching shots is what makes the "blind by design" airball case visible.
+- ⚠️ Rims are MEASURED from the rim's paint, not clicked (clip 1's click was 22% short), with
+  ball frames excluded so only truncation remains. Clip 3 takes clip 2's radius: same camera
+  position, and clip 3's rim is never fully unoccluded. Clip 1 deliberately left at its filed
+  value. Clip 4 uncounted. Detail in PROJECT_NOTES "FROZEN 07-29 RESULT".
 
 ## Where the pipeline WAS (baseline, hand-count of 3 clips = 111 attempts, detector trained on them)
 - **Shot detection: recall 86% / precision 0.99** (greedy tracker ∪ beam-MHT ∪ rim-recovery).
