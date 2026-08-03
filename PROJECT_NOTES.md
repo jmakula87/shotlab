@@ -190,6 +190,37 @@ just no longer trustworthy. Fix is item 2's: normalise by rr² and re-fit.
 - ⛔ **Nothing was tuned before or during this run.** Next knob turned on this session
   invalidates it as a held-out measurement.
 
+## ⭐⭐⭐ EVERY REMAINING MISS IS THE SEGMENTER (2026-08-03) — detection is not the wall
+`diagnose_misses` over all four 07-29 clips, baseline condition, 34 missed attempts:
+
+| bucket | count |
+|---|---|
+| DETECTION (detector never saw the ball at the rim) | **0** |
+| TRACKER (candidate reached the rim, track didn't follow) | **0** |
+| SEGMENTER (track reached the rim, no shot emitted) | **34 / 34** |
+
+**This overturns the 0720-era conclusion that ~10 misses per clip were detection-limited.**
+On 4K footage the detector sees the ball at the rim on *every single missed attempt* and the
+tracker follows it there *every time*. `detect_shots_to_rim` then throws it away.
+
+Reasons, from the tool's own diagnosis:
+- **insufficient launch drop — ~19 of 34**, and *most of the drops are NEGATIVE*
+  (−11, −66, −88, −115, −120, −142, −156, −171, −188, −261, −365). A negative drop means the
+  segment's start is ABOVE the rim, i.e. the walk-back never reached the release point and
+  the segment begins mid-flight.
+- **too few points (n = 2,3,5,6,7 < 8) — ~8**. With a detector hitting ~80% of frames at
+  stride 1, a ~1s flight should yield ~25 points. n=2 means the segment is a fragment.
+- **RANSAC fit failed (gather-poisoned) — 3**; **78° gate — 1**.
+
+⛔ **This reframes task 5.** The pre-registration guessed the pixel gates were too TIGHT at
+4K, but the arithmetic runs the other way: `launch_drop=200px` was ~4ft at 0720's ~50 px/ft
+and is only ~1.2ft at ~170 px/ft, i.e. *easier* to satisfy. The failure is not a mis-scaled
+threshold — it is that **the walk-back is not assembling whole flights on dense 4K tracks**,
+so the segment it measures the drop across is a fragment starting above the rim. Rescaling
+the gates without fixing that would be tuning around a broken measurement.
+⭐ The prize is large and unusually well-localised: 34 baseline misses (21 after C5 recovery)
+all in one function, with detection and tracking exonerated by measurement.
+
 ## ⛔⭐ THE PRE-REGISTERED MAKE/MISS MECHANISM WAS WRONG (2026-08-03)
 Pre-registered item 2 said make/miss failed because three features are raw pixel counts in
 rr²-scaled regions, and rr moved 36 → 120. **Tested and refuted.**

@@ -91,8 +91,11 @@ def main(argv=None):
     calib = rs.calib_at(rim_doc, 0)
     attempts = E.load_attempts(clip)
     eval_json = json.load(open(E.HANDCOUNT_DIR / f"{clip}_eval.json"))
-    cache = json.load(open(E.CAND_CACHE / f"{clip}_cloud01.json"))
-    raw = {int(k): v for k, v in cache.items()}
+    # go through the canonical loader rather than reading the cache file directly:
+    # it validates the stored identity header and understands both the pre- and
+    # post-2026-08-02 shapes. Reading the raw JSON here broke when the header was
+    # added -- one reader, not two.
+    raw = E._detect_full_clip(clip)
     base = E._cands_at_conf(raw, 0.25)
     cloud = E._cands_at_conf(raw, 0.01)
     track = assemble_track(base)
