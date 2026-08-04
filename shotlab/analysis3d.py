@@ -248,3 +248,13 @@ class Analysis3D:
     def load(path: str) -> "Analysis3D":
         with open(path, encoding="utf-8") as f:
             return Analysis3D(**json.load(f))
+
+    @staticmethod
+    def load_or_new(path: str) -> "Analysis3D":
+        """Load, or start an empty one if the file does not exist yet.
+
+        A session that has never run analyze3d.py has no analysis3d.json, and
+        flare_report only wanted to ADD its flare block to it. Requiring the file
+        cost a completed 20-minute pose pass over four clips on 2026-08-03 --
+        every release measured, then discarded at the write step."""
+        return Analysis3D.load(path) if os.path.exists(path) else Analysis3D()

@@ -190,6 +190,16 @@ def main(argv=None):
     labeled = [r for r in all_rows if r["made"] is not None]
     print(f"\n{len(all_rows)} releases, {len(labeled)} matched to a make/miss")
 
+    # PERSIST FIRST. Posing four clips costs ~20 minutes, and on 2026-08-03 all of
+    # it was lost to a missing-file error in the write step below. Expensive work
+    # goes to disk the moment it exists, before anything that can fail.
+    if all_rows:
+        os.makedirs(OUT, exist_ok=True)
+        raw_path = os.path.join(OUT, "flare_readings_raw.json")
+        with open(raw_path, "w", encoding="utf-8") as f:
+            json.dump(all_rows, f, indent=2)
+        print(f"raw readings -> {raw_path}")
+
     corr = None
     if len(labeled) >= 8:
         res = correlate_label([{"flare_deg": r["flare_deg"], "made": r["made"]}
@@ -201,7 +211,9 @@ def main(argv=None):
     summary = {"n": int(len(fl)), "median_deg": round(float(np.median(fl)), 1),
                "sd_deg": round(float(fl.std()), 1)} if len(fl) else None
 
-    a = Analysis3D.load(os.path.join(OUT, "analysis3d.json"))
+    # load_or_new: a session that never ran analyze3d.py has no analysis3d.json,
+    # and we only want to ADD the flare block to it
+    a = Analysis3D.load_or_new(os.path.join(OUT, "analysis3d.json"))
     a.flare = dict(a.flare or {}, shots=all_rows, summary=summary,
                    confidence="low-med",
                    note="monocular world-landmark flare; session-relative. "
