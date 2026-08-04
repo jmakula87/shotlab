@@ -601,6 +601,27 @@ split found the effect living in the ambiguous 25%.
 of ~0.44.** The instrument is materially better than it was this morning — correctly anchored,
 correctly windowed, honestly gated, and no longer anchor-dependent — and it has produced no
 finding. Both statements are worth keeping.
+#### ⛔ FINAL VERDICT ON THE FIXED METRIC — the sessions DISAGREE IN SIGN
+Clip 4 re-ran clean and merged back (141 rows, per-clip counts identical to the original
+29/37/33/42), so both sessions are complete on the corrected metric:
+
+| session | release anchor | mid-flight anchor | anchor swing | n | detectable floor |
+|---|---|---|---|---|---|
+| 07-29 | **−0.41** | −0.41 | **0.00** | 109 | 0.38 |
+| 07-20 | **+0.19** | +0.18 | **0.01** | 82 | 0.44 |
+| **POOLED** | **−0.15** | 95% CI **[−0.44, +0.14]** | | | **includes 0** |
+
+⭐ **The anchor swing is now ZERO** (0.00 / 0.01, from 0.60 / 0.24) — the join instability is
+fully resolved, which confirms window truncation was the single root cause of both symptoms.
+⛔ **And with the metric corrected the two sessions have OPPOSITE SIGNS.** Pooled d=−0.15 with a
+CI spanning zero: the pre-registered promotion criterion is **NOT met**. `knee_bend_3d_deg` is
+**dead as a make/miss candidate**, not merely unresolved.
+⚠️⚠️ **Read this before ever trusting a single session again:** post-fix 07-29 reads **−0.41,
+which CLEARS its 0.38 floor** — so a session-of-one analysis today would license "makes bend
+MORE", the exact opposite of the claim I made this morning from the same clips. Two
+floor-clearing, opposite-signed results from one shooter at one hoop is the strongest possible
+statement that **single-session effects in this data are noise wearing a p-value.**
+
 ⚠️ **REPRODUCIBILITY HAZARD:** the 07-29 re-run **crashed on clip 4** with a native
 `access violation writing 0x0000000000000020` in the pose stack, silently losing 42 of 141
 releases (141 → 99). The persist-before-fragile-steps change from earlier that day saved the
