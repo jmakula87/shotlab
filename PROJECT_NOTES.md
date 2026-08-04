@@ -190,6 +190,43 @@ just no longer trustworthy. Fix is item 2's: normalise by rr² and re-fit.
 - ⛔ **Nothing was tuned before or during this run.** Next knob turned on this session
   invalidates it as a held-out measurement.
 
+## ⛔⛔⛔ THE BODY-METRICS FRONT IS CLOSED ON MEASUREMENT GROUNDS (2026-08-04)
+Not on another inconclusive session — on the instrument's own reproducibility, measured from
+footage that already existed. The same 07-20 clip-1 shots were re-measured under two
+perturbations (`--pose-variant heavy`, `--no-smooth`), which are repeated measurements of
+IDENTICAL physical events and therefore give a within-shot SD and a **smallest detectable
+change** (SDC = 1.96·√2·SD_within).
+
+**Perturbation A — a different pose MODEL (`heavy` vs `full`), same video, n=22 matched:**
+
+| metric | r | bias | within-shot SD | **SDC (95%)** |
+|---|---|---|---|---|
+| `knee_bend_3d_deg` | **0.07** | −7.1° | 8.5° | **23.7°** |
+| `knee_bend_deg` (2D) | 0.83 | +0.3° | 6.7° | 18.6° |
+| `elbow_angle_at_release_3d_deg` | 0.21 | −4.6° | 7.5° | 20.8° |
+| `flare_deg` | 0.62 | +10.3° | 5.5° | 15.3° |
+
+**Perturbation B — smoothing on/off, n=28:** knee_3d **r=0.99, SDC 3.0°**; knee 2D r=0.99,
+SDC 4.1°; elbow 3D r=0.92, SDC 7.8°; flare r=0.76, SDC 13.8°.
+
+⭐⭐⭐ **The One-Euro filter is NOT the noise source — the MODEL is.** Two versions of the same
+estimator, on the same pixels, agree at **r=0.07** on the 3D knee. The per-shot value is close
+to arbitrary. **Every effect chased today was ~5°, against an SDC of 23.7°.**
+⛔⛔ **This retires single-camera pose body metrics as a per-shot make/miss instrument on this
+footage, and this time the reason is measured rather than inferred** — unlike the 08-03
+"camera-dependent" claim, which was retracted for being unsupported.
+⚠️⚠️ **THE 3D LANDMARKS ARE WORSE THAN THE 2D ONES: r=0.07 vs 0.83.** I added them this morning
+expecting camera-invariance. Monocular depth is model-INFERRED and unconstrained; the
+image-plane projection is directly OBSERVED. ⭐ **"More physically principled" is not the same
+as "more reproducible", and only one of those can be measured.**
+⚠️ The heavy model also moved the RELEASE detection — only 22 of 39 releases matched within ±3
+frames — so the anchor itself is estimator-dependent, on top of the metric.
+⚠️ Scope: one clip, 22-28 matched releases, one shooter. But r=0.07 needs no large n to be
+damning, and it agrees with published BlazePose-World error of 7.1-17.2° MAE.
+✅ **What survives:** group-level *distribution* work may still be defensible where random error
+averages down — but nothing per-shot, and nothing at the ~5° scale. Before any future body-form
+claim, **run this reliability check first and quote the SDC.**
+
 ## ✅ FROZEN EVAL RE-BANKED AFTER THE 08-04 EDITS — NO REGRESSION
 Today changed the default detection path (`back_extend` now fed the cloud), `form.py`'s `span`,
 `metric_ranges`, `correlate`, `session.py` and the dashboard. Re-ran the ablation ladder on all

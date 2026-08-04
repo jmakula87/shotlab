@@ -1,0 +1,42 @@
+wide  data/raw/Camera 1/Old
+close data/raw/Camera 1/Old
+out   data/out/_rel_heavy
+pair PXL_20260720_151519220 <-> 20260720_111510 ...
+  PXL_20260720_151519220 <-> 20260720_111510: sync -6.99s conf 0.90, 7 wide shots
+INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
+W0000 00:00:1785878050.757254   20180 inference_feedback_manager.cc:121] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
+W0000 00:00:1785878050.790089   20180 inference_feedback_manager.cc:121] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
+W0000 00:00:1785878050.884416   48316 landmark_projection_calculator.cc:81] Using NORM_RECT without IMAGE_DIMENSIONS is only supported for the square ROI. Provide IMAGE_DIMENSIONS or use PROJECTION_MATRIX.
+E0000 00:00:1785878170.849143   42652 portable_clearcut_uploader.cc:90] Failed to send to clearcut: FAILED_PRECONDITION: Not valid for uploading until: 2026-08-04T21:30:10.843092048+00:00
+=== Source Location Trace: ===
+wireless/android/play/playlog/cplusplus/portable_clearcut_uploader.cc:180
+E0000 00:00:1785878230.859303   42652 portable_clearcut_uploader.cc:90] Failed to send to clearcut: FAILED_PRECONDITION: Not valid for uploading until: 2026-08-04T21:30:10.843092048+00:00
+=== Source Location Trace: ===
+wireless/android/play/playlog/cplusplus/portable_clearcut_uploader.cc:180
+E0000 00:00:1785878290.867923   42652 portable_clearcut_uploader.cc:90] Failed to send to clearcut: FAILED_PRECONDITION: Not valid for uploading until: 2026-08-04T21:30:10.843092048+00:00
+=== Source Location Trace: ===
+wireless/android/play/playlog/cplusplus/portable_clearcut_uploader.cc:180
+E0000 00:00:1785878350.870938   42652 portable_clearcut_uploader.cc:90] Failed to send to clearcut: FAILED_PRECONDITION: Not valid for uploading until: 2026-08-04T21:30:10.843092048+00:00
+=== Source Location Trace: ===
+wireless/android/play/playlog/cplusplus/portable_clearcut_uploader.cc:180
+E0000 00:00:1785878410.876779   42652 portable_clearcut_uploader.cc:90] Failed to send to clearcut: FAILED_PRECONDITION: Not valid for uploading until: 2026-08-04T21:30:10.843092048+00:00
+=== Source Location Trace: ===
+wireless/android/play/playlog/cplusplus/portable_clearcut_uploader.cc:180
+E0000 00:00:1785878470.879717   42652 portable_clearcut_uploader.cc:90] Failed to send to clearcut: FAILED_PRECONDITION: Not valid for uploading until: 2026-08-04T21:30:10.843092048+00:00
+=== Source Location Trace: ===
+wireless/android/play/playlog/cplusplus/portable_clearcut_uploader.cc:180
+E0000 00:00:1785878530.883216   42652 portable_clearcut_uploader.cc:90] Failed to send to clearcut: FAILED_PRECONDITION: Not valid for uploading until: 2026-08-04T21:30:10.843092048+00:00
+=== Source Location Trace: ===
+wireless/android/play/playlog/cplusplus/portable_clearcut_uploader.cc:180
+E0000 00:00:1785878590.888484   42652 portable_clearcut_uploader.cc:90] Failed to send to clearcut: FAILED_PRECONDITION: Not valid for uploading until: 2026-08-04T21:30:10.843092048+00:00
+=== Source Location Trace: ===
+wireless/android/play/playlog/cplusplus/portable_clearcut_uploader.cc:180
+E0000 00:00:1785878599.467651   42652 portable_clearcut_uploader.cc:90] Failed to send to clearcut: FAILED_PRECONDITION: Not valid for uploading until: 2026-08-04T21:30:10.843092048+00:00
+=== Source Location Trace: ===
+wireless/android/play/playlog/cplusplus/portable_clearcut_uploader.cc:180
+    7/37 releases matched one-to-one to 7 wide shots; 30 unmatched
+
+37 releases, 7 matched to a make/miss
+raw readings -> data/out/_rel_heavy\flare_readings_raw.json
+flare make vs miss: make -0.3 (6) vs miss 4.0 (1), d=None p=None
+stills -> data/out/_rel_heavy\flare_stills
