@@ -436,7 +436,18 @@ def compute_form(shot, ball_track, poses, fps, *, handedness="right",
     rel_f, rel_t = rel.frame, rel.t
     move = movement_direction(rel_f, poses, keys, rim_xy, fps)
     frames = [int(f) for f in shot.frames]
-    span = range(max(min(poses) if poses else frames[0], frames[0] - 20),
+    # The pre-roll must be measured from the release ACTUALLY USED, not from the
+    # first tracked frame. find_release re-derives rel_f and it can land up to 18
+    # frames BEFORE frames[0]; with a hardcoded `frames[0] - 20` that leaves as
+    # little as 2 frames of pre-release history, so the knee loop (which stops at
+    # rel_f) never reaches the dip and reports a nearly straight leg.
+    # MEASURED 2026-08-04: corr(knee_bend_3d_deg, release_frame_delta) = -0.62 on
+    # 07-29 and -0.72 on 07-20; rows whose internal release preceded the anchor by
+    # >=15 frames averaged 156-159 deg of "bend" against 104-107 deg elsewhere.
+    # That artifact carried an entire apparent make/miss effect (+0.40 -> -0.00 on
+    # the discovery session once boundary-truncated shots were dropped).
+    # min(frames[0], rel_f) guarantees the same pre-roll whichever release wins.
+    span = range(max(min(poses) if poses else frames[0], min(frames[0], rel_f) - 20),
                  frames[-1] + 1)
     # depth-correct ruler from the shooter's known height (falls back to rim).
     # Measured over the planted gather->release window, NOT the full flight

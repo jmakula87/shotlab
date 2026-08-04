@@ -554,6 +554,34 @@ single defensible event and that choice is justified rather than inherited.
 the rows you kept, and the defect was in which rows you keep. **Confound checks conditioned on a
 sample cannot see a defect in sample selection.**
 
+#### ⛔⭐ AND A SECOND, INDEPENDENT KILL — WINDOW TRUNCATION (Codex, same day)
+Codex reached the same retraction by a completely different route and supplied the **mechanism**,
+which is a defect in the anchor fix I wrote that morning. `compute_form` re-derives its own
+release, and `span` began at a hardcoded `frames[0] - 20` — but the internal release can land up
+to **18 frames BEFORE** `frames[0]`, leaving as little as **2 frames** of pre-release history.
+The knee loop stops at `rel_f`, so it never reaches the dip and reports a nearly straight leg.
+- **corr(knee_bend_3d_deg, release_frame_delta) = −0.62 (07-29), −0.72 (07-20)** — the metric is
+  substantially measuring *how far the two release detectors disagreed*.
+- Rows whose internal release preceded the anchor by ≥15 frames: **156.5° / 159.2°** of "bend"
+  versus **103.8° / 107.4°** elsewhere.
+- Dropping likely boundary-truncated shots takes 07-29 from **+0.40 → −0.00**, with a residual
+  **+0.31–0.36** on 07-20 — **converging with my stable-core split (−0.07 / +0.47) by an
+  independent route.** Two decompositions, same verdict: the discovery effect was artifact.
+✅ **FIXED**: `span` now starts at `min(frames[0], rel_f) - 20`, so the pre-roll is guaranteed
+against whichever release is actually used. Both close passes re-running.
+⚠️ **`release_frame_delta` is what made this findable** — I emitted it that morning as an
+honesty diagnostic with no idea it would expose a defect in the same change. Cheap diagnostics
+pay for themselves.
+⚠️⚠️ **Scale reality check, with citations:** published BlazePose-World knee-angle error is
+**7.1° MAE (lateral, dynamic)** to **17.2° MAE**, against an observed contrast of **5.4°**. The
+effect is *below the per-observation noise floor*. Random error averages down, but the error
+here is **systematic with window geometry**, and averaging does not cure that.
+⚠️ Codex also measured close-vs-wide 3D knee on 36 shared shots: **r=0.05, CCC=0.029, MAE 30.6°,
+only 25% within 10°** — consistent with my r=+0.07 (n=35). **Metric "world" landmarks do NOT
+make the camera choice irrelevant on this footage.**
+⭐ Knee is NOT a proxy for tempo (tempo's make-direction is opposite) — it is a proxy for **how
+much valid pre-release history survived**, which no metric reported directly.
+
 ### ⛔ SUPERSEDED — the promotion this retracts (kept for the record)
 **It did not need a new session.** 07-20 was untouched for this hypothesis, carries 111
 hand-counted outcomes, and its close-cam clips were on disk all along (as S8-named files in
