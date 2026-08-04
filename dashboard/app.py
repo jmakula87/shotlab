@@ -468,7 +468,9 @@ def view_session():
     with st.sidebar:
         sd = st.selectbox("Session", sdirs, format_func=_session_label)
     d = os.path.join(OUT_DIR, sd)
-    raw_df = pd.read_csv(os.path.join(d, "session_shots.csv"))
+    # gated: implausible pose reads become ABSENT rather than numbers on screen
+    # (the CSV itself keeps them -- see _gate_metrics)
+    raw_df = _gate_metrics(pd.read_csv(os.path.join(d, "session_shots.csv")))
     if raw_df.empty:
         st.warning("No shots in this session.")
         return
@@ -869,10 +871,12 @@ def view_compare_sessions():
     a = c[0].selectbox("Session A", sdirs, index=0, key="cmpA")
     b = c[1].selectbox("Session B", sdirs, index=min(1, len(sdirs) - 1), key="cmpB")
     from shotlab.curate import apply_excludes
-    dfa = apply_excludes(pd.read_csv(os.path.join(OUT_DIR, a, "session_shots.csv")),
-                         os.path.join(OUT_DIR, a))
-    dfb = apply_excludes(pd.read_csv(os.path.join(OUT_DIR, b, "session_shots.csv")),
-                         os.path.join(OUT_DIR, b))
+    dfa = apply_excludes(_gate_metrics(
+        pd.read_csv(os.path.join(OUT_DIR, a, "session_shots.csv"))),
+        os.path.join(OUT_DIR, a))
+    dfb = apply_excludes(_gate_metrics(
+        pd.read_csv(os.path.join(OUT_DIR, b, "session_shots.csv"))),
+        os.path.join(OUT_DIR, b))
 
     def _mkpct(df):
         if "made" not in df.columns:
@@ -957,8 +961,8 @@ def view_progress():
     sessions = []
     for sd in session_dirs():
         try:
-            sdf = apply_excludes(
-                pd.read_csv(os.path.join(OUT_DIR, sd, "session_shots.csv")),
+            sdf = apply_excludes(_gate_metrics(
+                pd.read_csv(os.path.join(OUT_DIR, sd, "session_shots.csv"))),
                 os.path.join(OUT_DIR, sd))
         except Exception:
             continue
@@ -1472,12 +1476,40 @@ def _shots_sig():
 
 
 @st.cache_data(show_spinner="loading shots…")
+def _gate_metrics(df):
+    """Blank physically-implausible reads so they are ABSENT, not numbers.
+
+    The session CSV deliberately keeps RAW pose values: it is the analysis
+    artifact, and 2026-08-04 established that the 30-150° knee window is a
+    CENSORING CHOICE rather than physics (of 58 raw wide knees, 6 were below 30°
+    but 21 were above 150°; a 178° knee is STRAIGHT, not impossible), with weak
+    evidence the gate discards real signal along with the artifacts — ungated
+    wide-vs-close knee gives Spearman ρ=+0.37. So the raw values must stay on
+    disk where they can still be studied.
+
+    But every DISPLAY surface has to gate. A mis-detected read shown as a number
+    is read as fact, and averaged into one it moves the average silently. This is
+    the same rule flare_report already applies at emission ("implausible ->
+    absent, never a number"); the dashboard was the surface that never got it.
+
+    NaN rather than dropping rows, so one bad knee does not also hide that shot's
+    arc, outcome and video.
+    """
+    from shotlab.metric_ranges import VALID_RANGE, in_range
+    out = df.copy()
+    for c in out.columns:
+        if c in VALID_RANGE:
+            out[c] = out[c].map(
+                lambda v, _c=c: v if (pd.notna(v) and in_range(_c, v)) else float("nan"))
+    return out
+
+
 def _all_shots(_sig):
     rows = []
     for sd in session_dirs():
         d = os.path.join(OUT_DIR, sd)
         try:
-            df = pd.read_csv(os.path.join(d, "session_shots.csv"))
+            df = _gate_metrics(pd.read_csv(os.path.join(d, "session_shots.csv")))
         except Exception:
             continue
         tp = os.path.join(d, "make_truth.json")
