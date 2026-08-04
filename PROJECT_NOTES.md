@@ -190,6 +190,32 @@ just no longer trustworthy. Fix is item 2's: normalise by rr² and re-fit.
 - ⛔ **Nothing was tuned before or during this run.** Next knob turned on this session
   invalidates it as a held-out measurement.
 
+## ⭐⭐ "EVERY SESSION NEEDS ITS OWN LABELS" IS TRUE OF THE MODEL, NOT THE FEATURES (2026-08-04)
+Found by Fable during a labelling-design review, then **independently replicated on a
+separately-built 137-shot feature matrix** (`tools/transfer_check.py`, both directions):
+
+| transfer | GBM raw | z-scored + logistic | majority |
+|---|---|---|---|
+| 0720 → 0729 | 64.2% | **78.1%** (AUC .840) | 53.3% |
+| 0729 → 0720 | **50.0%** (exactly chance) | **78.4%** (AUC .845) | 51.1% |
+
+⭐ **The session-specificity lives in the GBM's split THRESHOLDS, not in the cues.** A tree
+splits on absolute values, and the features are absolute pixel masses that move with exposure,
+white balance and rim ROI; a per-session standardised linear model is immune to exactly that
+shift. The cue DIRECTIONS transfer fine. Within-session LOCO cost of switching is small
+(0729 84.7%→81.0%, 0720 80.7%→79.5%), so the trade is **give up 1-4 points where you have
+labels, gain 14-28 where you don't.**
+⭐ The z-score is **label-free** — it uses only the new session's feature distribution — so a
+brand-new session can be pre-labelled at ~78% with ZERO labels. It is transductive (needs the
+session's shots as a batch, and enough of them to estimate mean/sd).
+⚠️ **TWO SESSIONS. Not a law.** 78% is still well below a within-session re-fit, so this is a
+better STARTING POINT, not a reason to stop labelling. ⭐ **PRE-REGISTERED: re-run
+`transfer_check.py` on the next session BEFORE relying on it.** ⛔ Self-training on these
+pseudo-labels measured NEGATIVE (−0.9pp) and both reviewers reject it — a confidently-wrong
+model under covariate shift would launder its own errors into training truth.
+⚠️ My fresh 137-shot matrix gives 0729 LOCO **84.7%**, not the recorded 89-90% (122 shots,
+scale-invariant cache). Different matrices, not comparable — do not quote them interchangeably.
+
 ## ⛔⭐⭐ BODY METRICS ARE CAMERA-DEPENDENT (2026-08-03) — the deepest result of the arc
 `flare_report` now emits the full body-metric set from the CLOSE camera (task 17). The wiring
 was small: `compute_form` touches only `shot.frames`/`shot.index`, and `find_release` is
