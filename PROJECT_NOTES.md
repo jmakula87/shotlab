@@ -190,6 +190,47 @@ just no longer trustworthy. Fix is item 2's: normalise by rr² and re-fit.
 - ⛔ **Nothing was tuned before or during this run.** Next knob turned on this session
   invalidates it as a held-out measurement.
 
+## ⭐⭐⭐ FORM-COACH VERDICT (2026-08-03): NOTHING predicts this shooter's makes
+The product ran end-to-end on 07-29 for the first time — 135 shots over 28 min from four 4K
+clips, with chart, per-shot CSV, zone summary, consistency, fatigue trends and drills. Then
+every metric was tested against the **hand-counted** labels (137 of 139 produced shots paired
+to truth; per-clip lead ~+40f, residual sd 7-11f).
+
+**All twelve metrics are null.** Ball arc: release d=0.16, entry d=0.08, apex-above-rim
+d=0.11, apex height d=0.20. Body: knee d=-0.29, balance drift d=-0.39, elbow d=-0.28,
+follow-through d=-0.22. Elbow flare (126 releases from the close cam, audio-synced at
+0.83-0.90 confidence): **d=+0.077, p=0.67 — and the SIGN IS FLIPPED from 0710's d=-0.28**.
+A result that reverses direction between sessions of the same shooter is noise, and 0710's
+labels were later shown to be ~coin-flip anyway. Detectable floor here is d~0.34-0.72.
+
+⛔⭐ **THE KNEE ARTIFACT — my error, worth keeping.** Ungated, knee bend read makes 109° vs
+misses 139°, **d=-0.65, p=0.019**, and it survived a within-zone check (pooled within-zone
+difference -29.7° vs raw -29.9°, so NOT a position confound). It looked like the first real
+find in the project. Then: the knee distribution runs **min 6°, max 178°, with 24 of 58
+readings outside a plausible 90-160°** — a 6° knee is a person folded in half. `metric_ranges`
+already defines knee_bend_deg as (30,150) and `correlate` already applies it (line 101, added
+by the 2026-07-06 audit) — **my ad-hoc analysis bypassed the gate the codebase already had.**
+Gated: **d=-0.29, p=0.44**, 26 of 56 readings dropped. The product's own drivers file reports
+d=+0.285, p=0.469, i.e. it was right all along. ⭐ Lesson: a significant result on a metric
+with impossible values is a data bug wearing a finding's clothes — and the half-split showed
+it too (knee absent in H1 d=-0.09, huge in H2 d=-1.23; balance drift the exact opposite,
+d=-0.72 in H1 and -0.24 in H2 — two metrics whose "effects" appear in opposite halves).
+
+⛔ **WIDE-CAM POSE IS UNFIT FOR BODY FORM.** Coverage is only 35-42% of shots, and ~46% of
+knee readings are physically impossible, because the shooter is ~22% of frame height. Body
+metrics must come from the CLOSE camera. `flare_report` already poses the close cam
+successfully (141 releases) but emits only flare — **extending it to the full body-metric set
+is the concrete next build**, and the only way the form-coach thesis gets a fair test.
+
+✅ **Product changes shipped from this:** the coach no longer prescribes a target off a
+foreshortened number (it coaches the SPREAD, which a constant bias does not corrupt); nulls
+report as nulls with the power floor instead of the three largest noise results being called
+"leans"; the resubstitution guard now lives in `build_session`, not just the eval.
+
+⚠️ **Standing:** the owner's feel-review labels remain the highest-value UNMEASURED axis —
+miss depth (short/long) is the one thing no camera here can see, and it is the axis most
+likely to be coachable.
+
 ## THE LAST 6 MISSES (2026-08-03) — three causes, one of them already built for
 137/143 leaves 6, and they are not six unrelated problems:
 
