@@ -1212,6 +1212,42 @@ def view_make_audit():
                       "form": r.get("shot_form", ""), "setup": r.get("shot_setup", ""),
                       "apex": r.get("apex_height_ft"), "note": r.get("quality_note"),
                       "key": f"{r['clip']}|{int(r['shot_in_clip'])}"})
+    def _make_model_provenance():
+        """Name the model's training session and protocol -- never a bare accuracy.
+
+        This panel used to hard-code "~87% accurate". That number is a WITHIN-
+        session leave-one-clip-out figure. Across sessions the same model scores
+        55-62%, against a ~53% majority-class baseline, i.e. barely above chance --
+        and `--make-model auto` deliberately loads the newest PREVIOUS session's
+        model, which is exactly the cross-session case. Quoting one accuracy for
+        both regimes is how a coin-flip becomes "verified".
+        """
+        import glob as _glob
+        best, sessions = None, []
+        for p in sorted(_glob.glob(os.path.join("models", "*.trained_on.json"))):
+            try:
+                info = json.load(open(p, encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            best = info
+            sessions = [c for c in info.get("clips", [])]
+        if not best:
+            return ("⚠️ No model provenance on disk — the training session is "
+                    "UNKNOWN, so no accuracy figure can be claimed for it.")
+        same = any(any(str(c).startswith(str(x)[:16]) for x in sessions)
+                   for c in {s["clip"] for s in shots})
+        loco = best.get("loco_accuracy")
+        head = (f"Model `{best.get('model','?')}` was fitted on "
+                f"{best.get('n_shots','?')} shots from {len(sessions)} clip(s) "
+                f"dated {best.get('fitted','?')}.")
+        if same:
+            return (head + f" Those are THIS session's clips → its calls here are "
+                    f"RESUBSTITUTION, not a measurement. Honest figure: "
+                    f"{loco:.0%} leave-one-clip-out." if loco else head)
+        return (head + " Those are a DIFFERENT session. Measured cross-session "
+                "accuracy is 55-62% vs a ~53% majority baseline — treat its call "
+                "as a hint, never as evidence.")
+
     def _suspect(s):
         low = s.get("apex") is not None and pd.notna(s["apex"]) and s["apex"] < 2.0
         return bool((low and (s["form"] in ("layup", "floater")
@@ -1263,31 +1299,78 @@ def view_make_audit():
                        f"`python tools/render_shots.py` on {s['clip']}, or watch it in "
                        "the Per-clip overlay.")
     with ci:
-        pred = "MAKE" if s["made"] else ("miss" if s["made"] is False else "?")
-        st.metric(f"Shot {s['shot']} · {s['clip'][-16:]}", f"predicted: {pred}",
-                  f"confidence: {s['conf']}  ·  {s.get('form','')}")
-        if s.get("mpred") is not None:
-            mp = "MAKE" if s["mpred"] else "miss"
-            sure = "unsure" if abs((s["mprob"] or 0.5) - 0.5) < 0.15 else "confident"
-            st.info(f"🤖 Visual model: **{mp}** ({s['mprob']:.0%} make · {sure}) "
-                    f"— ~87% accurate; confirm or correct below.")
+        # ⛔ FAIL CLOSED (2026-08-04, adversarial review). This panel used to:
+        #   (a) show the pipeline's and the model's call BEFORE you answered,
+        #   (b) PRESELECT that call as the radio default, and
+        #   (c) claim a flat "~87% accurate".
+        # With "Save & next" one click away, that is a rubber-stamping machine:
+        # clicking through writes the MODEL's opinion into make_truth.json, which
+        # is the file the model is then TRAINED on. And the accuracy claim is
+        # false off-session -- within a session leave-one-clip-out is ~89%, but
+        # across sessions the same model scores 55-62% (chance is ~53%), while
+        # `--make-model auto` deliberately loads the PREVIOUS session's model.
+        # The resubstitution guard cannot catch that: it fires on training-clip
+        # OVERLAP, and a brand-new session never overlaps.
+        # Now: nothing is revealed until you commit an answer, nothing is
+        # preselected, and every stored label records how it was produced.
+        st.metric(f"Shot {s['shot']} · {s['clip'][-16:]}",
+                  f"confidence: {s['conf']}", s.get("form", ""))
+        # NOTE: make_truth.json stays {key: "make"|"miss"|...} exactly as before.
+        # Six readers across five files consume that contract (train_make_model,
+        # remap_shot_keys, session_recap_pdf, cut_review_clips, apply_make_model,
+        # and this file); changing it to carry provenance would have silently
+        # broken model TRAINING. Provenance goes in a sidecar instead.
+        prev_choice = truth.get(s["key"])
         if _suspect(s):
             st.warning("⚠ Auto-suspected **NOT a shot** (low apex + layup/floater/"
                        "on-the-move). If it's a dribble/retrieve, mark it below.")
         # 'not a shot' is the key addition: the detector fires on dribbles/retrieves
-        labels = ["made", "missed", "NOT a shot (dribble/retrieve)", "can't tell"]
-        vals = ["make", "miss", "notshot", "unsure"]
-        prev_truth = truth.get(s["key"])
-        default = vals.index(prev_truth) if prev_truth in vals else \
-            (0 if s["made"] else 1 if s["made"] is False else 3)
-        pick = st.radio("What actually happened?", labels, index=default,
+        labels = ["— pick one —", "made", "missed",
+                  "NOT a shot (dribble/retrieve)", "can't tell"]
+        vals = [None, "make", "miss", "notshot", "unsure"]
+        default = vals.index(prev_choice) if prev_choice in vals else 0
+        pick = st.radio("What actually happened? (watch it first — no answer is "
+                        "pre-filled on purpose)", labels, index=default,
                         key=f"truth_{s['key']}")
         choice = vals[labels.index(pick)]
-        if st.button("💾 Save & next", key="audit_save", type="primary"):
-            truth[s["key"]] = choice
+        if choice is None:
+            st.caption("Pick an outcome to save. The pipeline's and the model's "
+                       "calls stay hidden until you do, so they can't anchor you.")
+        if st.button("💾 Save & next", key="audit_save", type="primary",
+                     disabled=choice is None):
+            pipe = "make" if s["made"] else ("miss" if s["made"] is False else None)
+            mdl = None if s.get("mpred") is None else ("make" if s["mpred"] else "miss")
+            truth[s["key"]] = choice                    # unchanged contract
             with open(tpath, "w", encoding="utf-8") as f:
                 json.dump(truth, f, indent=2)
+            # Sidecar: HOW the label was produced. Without this, a rubber-stamped
+            # default and a genuine judgement are indistinguishable forever.
+            mpath = os.path.join(d, "make_truth_meta.json")
+            try:
+                meta = json.load(open(mpath, encoding="utf-8"))
+            except (OSError, ValueError):
+                meta = {}
+            meta[s["key"]] = {"label": choice, "source": "human_blind",
+                              "pipeline_said": pipe, "model_said": mdl,
+                              "model_prob": s.get("mprob"),
+                              "agreed_with_model": None if mdl is None else (choice == mdl)}
+            with open(mpath, "w", encoding="utf-8") as f:
+                json.dump(meta, f, indent=2)
             st.session_state["audit_idx"] = (idx + 1) % n; st.rerun()
+
+        # Revealed only AFTER this shot carries a human answer.
+        if prev_choice is not None:
+            pred = "MAKE" if s["made"] else ("miss" if s["made"] is False else "?")
+            bits = [f"pipeline said **{pred}**"]
+            if s.get("mpred") is not None:
+                mp = "MAKE" if s["mpred"] else "miss"
+                bits.append(f"visual model said **{mp}** ({s['mprob']:.0%} make)")
+            st.info("After your answer — " + "; ".join(bits) + ".  \n"
+                    + _make_model_provenance())
+            if s.get("mpred") is not None and prev_choice in ("make", "miss"):
+                agree = prev_choice == ("make" if s["mpred"] else "miss")
+                st.caption("✅ you and the model agree" if agree
+                           else "❌ you and the model DISAGREE on this shot")
         if prev_truth:
             tag = {"make": "made", "miss": "missed", "notshot": "NOT a shot",
                    "unsure": "unsure"}.get(prev_truth, prev_truth)

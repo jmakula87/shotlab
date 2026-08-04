@@ -411,10 +411,35 @@ post-hoc in the same data that produced the follow-through artifact. Expected co
 under a global null across 7 tests is 0.35, so a single 0.037 is unsurprising on its own — what
 raises it above noise is the consistency across four clips and its survival of four independent
 confound tests, neither of which the pooled p captures.
-⭐ **PRE-REGISTERED for the next session:** knee_bend_3d_deg, makes minus misses, one-sided
-positive, d ≥ +0.25 with clip-stratified p < 0.05 on ≥ 80 labelled shots. Anything less is a
-failed replication and the candidate is dead-lettered. Registering the direction NOW is what
-makes the next test confirmatory rather than another exploratory sweep.
+⛔ **THE FIRST PRE-REGISTRATION WAS BROKEN — CORRECTED 2026-08-04 (Fable + Codex, independently
+agreeing).** I registered: *"one-sided positive, d ≥ +0.25 with clip-stratified p < 0.05 on ≥ 80
+labelled shots; anything less is a failed replication and the candidate is dead-lettered."*
+**That rule is self-contradictory and would have destroyed a real effect.** At n=80 balanced,
+one-sided α=.05 needs **d ≈ 0.37** just to reach significance — so the "d ≥ 0.25" clause is
+NON-BINDING, it can never be the operative constraint. And at a true d=0.25 the test has
+**~30% power** (n=122 → ~40%; **~396 shots** are needed for 80%). My rule would have
+dead-lettered a genuine d=0.25 roughly **70% of the time**. Registering a threshold is worthless
+if you do not check that the design can DETECT it — I checked the direction and forgot the power.
+⭐ **CORRECTED REGISTRATION — estimation, not a pass/fail gate.** A single home session cannot
+confirm or refute d≈0.25, so it must not pretend to:
+- Report `knee_bend_3d_deg` makes-minus-misses as **d with a 95% CI**, clip-stratified, on
+  **blind hand-labelled** shots (see below — model labels are disqualified).
+- **Non-significance does NOT dead-letter the candidate**, and significance alone does not
+  promote it. Both are single-session estimates.
+- **Pool across sessions** and re-test the pooled estimate; promote only when the pooled CI
+  excludes 0, kill only when it excludes +0.25. Until then the honest state is "unresolved".
+- Keep the direction (positive) registered, so the pooled test stays one-sided/confirmatory.
+- ⛔ **The permutation test needs a block/circular-shift sensitivity check**: outcomes cluster
+  in runs (clip 2 attempts 12-22 are all misses, clip 3 attempts 7-15 all misses — verified in
+  the hand-count CSVs), so free within-clip shuffling assumes an exchangeability that the data
+  visibly violates.
+
+⛔⛔ **MODEL LABELS ARE DISQUALIFIED for this test, and the margin is not close.** At 89%
+label accuracy, symmetric error attenuates a true d=0.25 by ~(1−2·0.11)=0.78 → observed d≈0.20,
+dropping power from 0.30 to ~0.22; at d=0.40 power falls 0.56→0.40. Worse, make/miss errors are
+plausibly **correlated with rim-event kinematics**, which BIASES d rather than merely shrinking
+it — it could manufacture or erase the effect while overall accuracy still looks fine. The next
+session's knee shots must be **hand-labelled, blind**.
 
 ⭐⭐ **LESSONS.** (a) At n≈30 the SIGN of an effect is nearly a coin flip for any |d|≲0.3 —
 never build an argument on sign agreement. (b) "Same shots" is a claim to be COMPUTED, not
