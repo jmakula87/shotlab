@@ -35,6 +35,27 @@ two metrics that agreed. Full detail + what survives in `PROJECT_NOTES.md`.
   the file has 141 rows across 4 clips. Verify a review's factual claims before acting; it
   cuts both ways.
 
+## ⛔⛔⛔ 2026-08-04 — BODY METRICS ARE CLOSED ON MEASUREMENT GROUNDS. READ BEFORE RE-OPENING.
+Re-measuring the SAME 07-20 shots with a different pose model (`--pose-variant heavy`, same
+video) — repeated measurements of identical physical events, so this yields a within-shot SD and
+a **smallest detectable change**:
+
+| metric | r | within-shot SD | **SDC (95%)** |
+|---|---|---|---|
+| `knee_bend_3d_deg` | **0.07** | 8.5° | **23.7°** |
+| `knee_bend_deg` (2D) | 0.83 | 6.7° | 18.6° |
+| `elbow_angle_at_release_3d_deg` | 0.21 | 7.5° | 20.8° |
+
+Smoothing on/off by contrast: knee_3d **r=0.99, SDC 3.0°**. **The filter is not the noise source
+— the MODEL is.** Every effect chased on 08-04 was ~5° against an SDC of **23.7°**.
+- ⚠️ **The 3D landmarks are WORSE than the 2D ones (r=0.07 vs 0.83.)** They were added that
+  morning expecting camera-invariance. Monocular depth is model-INFERRED; the image-plane
+  projection is directly OBSERVED. **"More physically principled" ≠ "more reproducible."**
+- ✅ What survives: group-level DISTRIBUTION work where random error averages down. Nothing
+  per-shot, nothing at the ~5° scale.
+- ⭐ **Before any future body-form claim: run this reliability check first and quote the SDC.**
+  `tools/flare_report.py --pose-variant heavy` / `--no-smooth` are the two perturbations.
+
 ## ⛔⛔ 2026-08-04 (later) — `knee_bend_3d_deg` PROMOTED THEN RETRACTED THE SAME HOUR
 Read this before touching any close-cam make/miss number. I promoted it on a "replication"
 (07-29 +0.40, 07-20 +0.40, pooled [+0.11,+0.69]) and it was killed **twice, independently**:
