@@ -190,6 +190,30 @@ just no longer trustworthy. Fix is item 2's: normalise by rr² and re-fit.
 - ⛔ **Nothing was tuned before or during this run.** Next knob turned on this session
   invalidates it as a held-out measurement.
 
+## ⛔⭐ `back_extend` WAS NEVER INERT — I MEASURED IT IN THE ONE CONDITION WHERE IT'S REDUNDANT
+It was recorded **MEASURED INERT** (eval C6 byte-identical to C5) and kept opt-in. That test was
+correct and the conclusion drawn from it was too broad: C6 sits **on top of the beam union**,
+which already recovers the same flights from the same cloud. Re-measured 2026-08-04 against both
+hand-counts (recall, precision in brackets):
+
+| config | 07-29 (143 attempts) | 07-20 (111) |
+|---|---|---|
+| greedy alone — **what shipped by default** | 86.7% [.984] | 54.1% [1.000] |
+| greedy + back_extend | **91.6%** [.985] | **57.7%** [1.000] |
+| greedy + back_extend (0.01 cloud) | 90.9% [.985] | **68.5%** [1.000] |
+| beam-union | **95.8%** [.986] | **86.5%** [.990] |
+| beam-union + back_extend | 95.8% [.986] — **identical, hence C6≡C5** | — |
+
+⭐ **07-20 is HELD OUT for back_extend** (it was built on 07-29): +4 tp at the 0.25 cloud, **+16
+tp at the 0.01 cloud (54.1%→68.5%), zero false positives in every configuration.**
+✅ **PROMOTED**: `pipeline.py` now passes `cands_by_frame` as the cloud on the calibrated path,
+so the DEFAULT (no `--beam`) run gets +7 tp / +0 fp on 07-29 and +4 tp / +0 fp on 07-20 for
+free. ⚠️ **It is still DOMINATED by `--beam`** (95.8% vs 91.6%) at the *same detection cost* —
+conf only FILTERS a YOLO pass that runs regardless, so the low-conf cloud is free. This is the
+free win for the default path, **not** the best available one; prefer `--beam`.
+⭐ **LESSON: "measured inert" is a statement about a CONDITION, not about a component.** The
+component was fine; I tested it only where a better mechanism had already consumed its input.
+
 ## ⚠️ THE 78° GATE COSTS 3 REAL SHOTS IN 254 — MEASURED, DELIBERATELY NOT TUNED (2026-08-04)
 Task 20 was "make the 78° gate camera-aware". Measured first, across BOTH hand-counted sessions
 (7 clips, 254 attempts), using `detect_shots_to_rim(reject_log=)`:

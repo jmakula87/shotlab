@@ -109,7 +109,22 @@ def run_phase1(video_path: str,
     track = assemble_track(greedy_cands)
     if calib is not None:
         from ..court import detect_shots_to_rim
-        shots = detect_shots_to_rim(track, calib)
+        # Feed the candidate cloud so back_extend can walk backwards from a
+        # confirmed rim arrival and recover flights the greedy tracker dropped.
+        # MEASURED 2026-08-04 against both hand-counts, greedy path, recall:
+        #   07-29  86.7% -> 91.6%  (124 -> 131 tp, 2 fp unchanged)
+        #   07-20  54.1% -> 57.7%  ( 60 ->  64 tp, 0 fp unchanged)   [held out --
+        #                            back_extend was built on 07-29]
+        # It was previously recorded MEASURED INERT. That verdict was taken in the
+        # one condition where it is redundant -- on top of the beam union, which
+        # already recovers the same flights from the same cloud (union 137 tp,
+        # union+back_extend 137 tp, byte-identical). The measurement was right; the
+        # conclusion "it does nothing" was too broad.
+        # ⚠️ back_extend is DOMINATED by --beam (07-29 95.8%, 07-20 86.5%) at the
+        # same detection cost, since conf only FILTERS a YOLO pass that runs
+        # regardless. This is the free win for the default path, not the best
+        # available one: prefer --beam when you can afford the tracking.
+        shots = detect_shots_to_rim(track, calib, cloud=cands_by_frame)
         rim_x = calib.rim_x
         if use_beam:
             shots, track = _union_beam(shots, track, cands_by_frame, calib)
