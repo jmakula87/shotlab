@@ -97,6 +97,37 @@ def draw_flare_still(frame, fp, flare_deg, made):
     return crop
 
 
+def assign_one_to_one(event_times, wide_times, max_dist=1.5):
+    """Match close-cam releases to wide-cam shots so NEITHER side is reused.
+
+    Returns {event_index: (wide_index, distance_seconds)}, omitting events with no
+    match inside `max_dist`.
+
+    Greedy nearest-first: repeatedly take the globally closest surviving pair and
+    spend both sides. This is not guaranteed optimal (that would be Hungarian),
+    but with well-separated shots it is the same answer, and it is monotone --
+    adding a distant event can never steal an existing close match.
+
+    Why this exists: each release used to pick its own nearest wide shot
+    independently, which is not injective. Measured 2026-08-04, 141 releases
+    claimed only 112 distinct wide shots, 14 of them twice. Duplicates then get
+    analysed as independent observations = pseudo-replication, which makes
+    permutation p-values anticonservative.
+    """
+    if not event_times or not wide_times:
+        return {}
+    cand = sorted((abs(float(t) - float(e)), i, j)
+                  for i, e in enumerate(event_times)
+                  for j, t in enumerate(wide_times))
+    out, used_e, used_w = {}, set(), set()
+    for dist, i, j in cand:
+        if dist >= max_dist or i in used_e or j in used_w:
+            continue
+        used_e.add(i); used_w.add(j)
+        out[i] = (j, dist)
+    return out
+
+
 def process_pair(wide_stem, close_stem):
     wide = os.path.join(WIDE_DIR, wide_stem + ".mp4")
     close = os.path.join(CLOSE_DIR, close_stem + ".mp4")
@@ -131,7 +162,15 @@ def process_pair(wide_stem, close_stem):
                 rel.append(f)
 
     os.makedirs(STILLS, exist_ok=True)
-    rows = []
+
+    # Refine every candidate release FIRST, then assign wide shots ONE-TO-ONE.
+    # Letting each release pick its own nearest wide shot is not injective:
+    # measured 2026-08-04 on this session, 141 releases claimed only 112 distinct
+    # wide shots, with 14 shots taking TWO releases each. Those duplicates then
+    # enter analyses as independent observations -- pseudo-replication, which makes
+    # permutation p-values anticonservative. Global nearest-first assignment
+    # instead: the closest pair wins and spends BOTH the release and the shot.
+    events = []                       # (frame, elbow_deg, flare, pose-clock time)
     for f0 in rel:
         # snap to the extended-arm release; skip gathers/pumps (bent elbow)
         f, elb = refine_release_frame(series, f0)
@@ -139,17 +178,29 @@ def process_pair(wide_stem, close_stem):
             continue
         fp = series[f]
         fl = elbow_flare(fp.w("r_shoulder"), fp.w("r_elbow"), fp.w("r_wrist"), up=UP)
-        ptime = cts.get(f, f / fps) + offset
-        made = None
-        if wtimes:
-            j = int(np.argmin([abs(t - ptime) for t, _ in wtimes]))
-            if abs(wtimes[j][0] - ptime) < 1.5:
-                made = wtimes[j][1]
-        still = draw_flare_still(frames[f], fp, fl.angle_deg, made)
+        events.append((f, elb, fl, cts.get(f, f / fps) + offset))
+
+    assign = assign_one_to_one([ev[3] for ev in events], [t for t, _m in wtimes])
+    if wtimes:
+        print(f"    {len(assign)}/{len(events)} releases matched one-to-one to "
+              f"{len(wtimes)} wide shots; {len(events) - len(assign)} unmatched",
+              flush=True)
+
+    rows = []
+    for i, (f, elb, fl, _pt) in enumerate(events):
+        j, dist = assign.get(i, (None, None))
+        made = wtimes[j][1] if j is not None else None
+        still = draw_flare_still(frames[f], series[f], fl.angle_deg, made)
         name = f"{close_stem}_{f}_{'make' if made else ('miss' if made is not None else 'unk')}.jpg"
         cv2.imwrite(os.path.join(STILLS, name), still)
         row = {"clip": close_stem, "frame": int(f), "flare_deg": fl.angle_deg,
                "elbow_deg": round(float(elb), 0), "made": made,
+               # WHICH wide shot this release owns (1-based, matching the CSV's
+               # shot_in_clip) and how far off the match was. Emitting these means
+               # downstream code can audit or re-do the join instead of silently
+               # re-deriving a different one, which is how the duplicates hid.
+               "wide_shot": None if j is None else j + 1,
+               "join_dist_s": None if dist is None else round(float(dist), 3),
                "still": os.path.join("flare_stills", name)}
         row.update(body_metrics(allposes, f, fps, shooter_height_ft=SHOOTER_FT))
         rows.append(row)
