@@ -26,13 +26,36 @@ two metrics that agreed. Full detail + what survives in `PROJECT_NOTES.md`.
 - ⚠️ **Wording correction, previously repeated by me:** "~47% physically impossible knee reads"
   was overstated. Of 58 raw wide knees, 6 were below 30° but 21 were above 150° (median 138°).
   A 178° knee is straight, not impossible — the wide camera mostly never catches the load.
-- 🔬 **The sharp test is pre-registered and pending:** 2D-vs-3D within the WIDE (oblique)
-  camera, where a projection should distort. Within the close profile camera they should agree
-  and that proves little. ⛔ If 3D also fails, that does NOT re-retire pose — it fails to
-  isolate a cause. Do not repeat the over-reach being corrected here.
+- 🔬 **The pre-registered sharp test RAN and REFUTED my hypothesis:** 2D-vs-3D agreement is
+  *not* worse on the oblique wide camera (knee r=+0.65 / elbow r=+0.68) than on the close
+  profile camera (+0.76 / +0.46) — on the elbow the oblique camera agrees BETTER. Projection is
+  not what broke the wide camera; **coverage is**, and 3D recovers none of it (58/139, identical
+  to 2D). Cross-camera knee in 3D is r=+0.07, which isolates nothing.
 - ⚠️ **Trust note:** one reviewer's headline claim (a "77-row, 3-clip" artifact) was FALSE —
   the file has 141 rows across 4 clips. Verify a review's factual claims before acting; it
   cuts both ways.
+
+## ⛔⛔ 2026-08-04 (later) — `knee_bend_3d_deg` PROMOTED THEN RETRACTED THE SAME HOUR
+Read this before touching any close-cam make/miss number. I promoted it on a "replication"
+(07-29 +0.40, 07-20 +0.40, pooled [+0.11,+0.69]) and it was killed **twice, independently**:
+1. **The two +0.40s used DIFFERENT wide-side join anchors.** `wide_shot_times` returns the
+   MID-FLIGHT time; my 07-20 harness matched on the RELEASE. On a consistent anchor: 07-29
+   **−0.19**, 07-20 **+0.40**. Stable core (rows both anchors agree on): **−0.07 / +0.47**.
+   ⭐ The labels were fine — the **MEMBERSHIP** was not: ~25% of rows match under only one
+   anchor, and that alone swings d by 0.6.
+2. **Window truncation** (Codex): `span` began at `frames[0]−20` while the re-derived release
+   could land 18f earlier, leaving ~2f of pre-roll, so the knee loop never reached the dip.
+   corr(knee, `release_frame_delta`) = **−0.62/−0.72**. ✅ FIXED: `min(frames[0], rel_f) − 20`.
+- ✅ **After the fix both symptoms vanish together**: corr → +0.20/−0.12, >150° reads 16→1 and
+  14→0, and the anchor swing collapses from 0.24 to **0.01**. One defect drove both.
+- ⛔ **No effect survives** (07-20 d≈+0.19, n=82, floor ~0.44). The published BlazePose-World
+  knee error is 7.1-17.2° MAE against a 5.4° contrast — it was under the noise floor throughout.
+- ⭐⭐ **A replication must run the IDENTICAL pipeline.** Two different pipelines agreeing on one
+  number is a coincidence you went looking for.
+- ⭐⭐ **Confound checks conditioned on a sample cannot see a defect in SAMPLE SELECTION** —
+  coverage, distance, clip-stratification and reactivity all passed and were all irrelevant.
+- ⚠️ A pose pass **crashed natively** (`access violation writing 0x…20`), silently losing 42 of
+  141 releases. **Check per-clip counts in the log, not just that the file was written.**
 
 ## ⭐⭐⭐ RECALL 85% → 96% (2026-08-03), from one scale-correct constant
 `detect_shots_to_rim`'s RANSAC `threshold_px` was a raw `8.0` — 0.22 rim radii at 0720 but
