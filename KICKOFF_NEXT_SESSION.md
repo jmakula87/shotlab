@@ -1,8 +1,38 @@
 # ShotLab — KICKOFF (read this first on restart)
 
-Last updated: **2026-07-29** · all pushed, tree clean.
+Last updated: **2026-08-04**.
 Location: `C:\Users\jmaku\Desktop\ShotLab`. Read-order: **this → `PROJECT_NOTES.md`
 (the living log) → `process/reviews/2026-07-23_broad_*` → `process/EVAL_HARNESS_RUNBOOK.md`**.
+
+## ⛔⭐ 2026-08-04 — "BODY METRICS ARE CAMERA-DEPENDENT" IS RETRACTED
+I called opposite Cohen's-d signs across two cameras proof that pose metrics measure the
+camera, not the shot, and told the owner to stop pursuing body-form drivers on that basis.
+The owner asked for adversarial review; **the claim broke on every count.** Opposite signs are
+the MODAL outcome under a null at these n (P(≥2 flips of 4) = 0.69); "same shots" was false
+(knee overlap 15); on the shots the cameras DO share, knee agrees in sign; and I omitted the
+two metrics that agreed. Full detail + what survives in `PROJECT_NOTES.md`.
+- ✅ **The NULL still stands** — nothing separates makes from misses on either camera. And the
+  wide camera is still disqualified for form, on independent evidence (22-40% coverage,
+  outcome-correlated pose survival). The DECISION was right; the stated reason was wrong.
+- ⛔ **Three real code defects came out of it**, all now fixed: the close path was measuring a
+  window ending **a full second before the release** (`compute_form` re-finds its own release
+  from `shot.frames[0]`, so a `rel_f±45` pseudo-shot mis-anchored everything); `release_conf`
+  was never emitted, silently bypassing `correlate.py`'s confidence gate; and the close→wide
+  join is not one-to-one (14 shots took 2 releases each) = pseudo-replication.
+- ⭐ **The instrument was in the repo, unused.** `form.py` computed joint angles on image
+  PIXELS, which cannot be compared across cameras by construction — while MediaPipe's metric
+  `world` landmarks were already captured and already used elsewhere. Now emitted as
+  `knee_bend_3d_deg` / `elbow_angle_at_release_3d_deg`, beside the 2D values, never replacing.
+- ⚠️ **Wording correction, previously repeated by me:** "~47% physically impossible knee reads"
+  was overstated. Of 58 raw wide knees, 6 were below 30° but 21 were above 150° (median 138°).
+  A 178° knee is straight, not impossible — the wide camera mostly never catches the load.
+- 🔬 **The sharp test is pre-registered and pending:** 2D-vs-3D within the WIDE (oblique)
+  camera, where a projection should distort. Within the close profile camera they should agree
+  and that proves little. ⛔ If 3D also fails, that does NOT re-retire pose — it fails to
+  isolate a cause. Do not repeat the over-reach being corrected here.
+- ⚠️ **Trust note:** one reviewer's headline claim (a "77-row, 3-clip" artifact) was FALSE —
+  the file has 141 rows across 4 clips. Verify a review's factual claims before acting; it
+  cuts both ways.
 
 ## ⭐⭐⭐ RECALL 85% → 96% (2026-08-03), from one scale-correct constant
 `detect_shots_to_rim`'s RANSAC `threshold_px` was a raw `8.0` — 0.22 rim radii at 0720 but
