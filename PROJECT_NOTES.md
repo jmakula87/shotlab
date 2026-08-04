@@ -207,16 +207,61 @@ zero): flare d=0.08, knee d=0.28, balance d=0.27, elbow d=-0.02, follow-through 
 (n=13/18, floor 0.71), jump d=-0.00, release height d=-0.06, tempo d=-0.12. Bonferroni
 threshold p<0.0063; **nothing survives, nothing is close.**
 
-⛔⭐ **THE FINDING THAT MATTERS: the same metric from two cameras gives OPPOSITE SIGNS.**
-knee bend d=-0.29 (wide) vs +0.28 (close); balance drift d=-0.39 (wide) vs +0.27 (close) —
-same shots, same session, same metric definitions. A quantity whose *direction* depends on
-which camera measured it is not measuring a property of the shot. This retires single-camera
-pose body metrics as a make/miss instrument regardless of coverage or sample size, and it
-explains why every apparent effect in this project has evaporated on contact: they were
-camera artifacts, not shooting.
-⇒ **Do not chase body-form make-drivers further on one camera.** The remaining honest routes
-are (a) the owner's feel labels, whose short/long axis no camera here can see, and (b) a
-genuinely metric 2-camera reconstruction, which is scaffolded and unvalidated.
+⛔⛔ **RETRACTED 2026-08-04 — "OPPOSITE SIGNS ⇒ CAMERA-DEPENDENT" WAS WRONG.**
+I wrote: *"the same metric from two cameras gives opposite signs — knee -0.29 wide vs +0.28
+close, balance -0.39 vs +0.27, same shots, same session, same definitions … not measuring a
+property of the shot … retires single-camera pose regardless of sample size … explains why
+every apparent effect in this project has evaporated: camera artifacts, not shooting."*
+Owner asked for adversarial review; it broke on four independent counts (Fable, all recomputed
+from the artifacts, scripts in the session scratchpad):
+
+1. **Opposite signs is the MODAL null outcome.** Sampling sd of d̂ at these n is 0.20-0.38, so
+   |d|=0.27-0.39 is 0.8-1.4 SE — ordinary wobble. Among 4 metrics, P(≥2 sign flips | global
+   null) = **0.69**; two flips is the single most likely result. Worse, a REAL shared effect of
+   d=0.2 still flips 31-40% of the time here, so a flip cannot even distinguish artifact from
+   small-real. I treated sign(d̂) as if it were sign(d) at n≈30.
+2. **"Same shots" was false.** Subset overlap among the 143 truth-labelled attempts: knee 31
+   wide vs 92 close sharing **15**; balance 31; elbow 21; follow-through 6. Largely disjoint —
+   which is also why the two estimates are near-independent, i.e. exactly the Q1 regime.
+3. **On the shots the cameras ACTUALLY share, knee does not flip**: wide d=-0.71, close
+   d=-0.38 (n=6/9), same sign. The headline example is falsified on its own premise.
+4. **I cherry-picked.** Two of four metrics flipped; **elbow (-0.28/-0.02) and follow-through
+   (-0.22/-0.61) AGREED in sign** and my write-up never mentioned them.
+
+⭐ **What the review found that I had MISSED — and it is a real defect:** wide-camera pose
+coverage is **outcome-correlated**. Balance 0.48 of makes vs 0.31 of misses (p=0.057), elbow
+0.43/0.27 (p=0.052), follow-through 0.40/0.26 (p=0.075) — three metrics sharing one mechanism
+(pose success), so one finding, not three near-misses. The close camera shows no such trend.
+So the WIDE analysis rows are selected by something correlated with the outcome.
+⚠️ Also: my close-cam d's are **join-variant** — an equally defensible rebuild gives knee +0.15
+(not +0.28) and balance +0.40 (not +0.27). Numbers that move that much must not carry doctrine.
+⚠️ And the two paths are not the same measurement even in code: the wide window is the
+ball-flight span (`form.py:439`), the close one a fixed ±45f around the wrist apex
+(`flare_report.py`); `balance_drift` is monotone in window length and projects different world
+components on an oblique vs a profile view.
+
+✅ **WHAT SURVIVES.** The NULL is solid — pooled inverse-variance across both cameras: knee
++0.03±0.36, balance +0.09±0.33, elbow -0.16±0.35, follow-through -0.39±0.45; all consistent
+with zero, nothing near the d≈0.35 detectability floor. And the practical decision stands, on
+**different evidence**: the wide camera is independently disqualified for form (22-40%
+coverage, outcome-correlated survival, ~47% physically impossible knee reads).
+⛔ **STILL OPEN, not refuted:** whether the CLOSE camera measures stable per-shot form. The
+cross-camera correlation test was the right instrument but is underpowered (knee r=+0.08 on
+n=15, CI [-0.45,+0.57]) — resolving r=0.3 needs ~85 shared pairs and wide-cam coverage caps us
+at 15-31. ⭐ The clean next test needs no second camera at all: **within-close-camera split-half
+reliability on the 141 releases.** Also unresolved: ungated wide-vs-close knee gives Spearman
+ρ=+0.37 (p=0.050, n=29), weak evidence of shared signal that the plausibility gate may be
+discarding along with the artifacts.
+
+⭐⭐ **LESSONS.** (a) At n≈30 the SIGN of an effect is nearly a coin flip for any |d|≲0.3 —
+never build an argument on sign agreement. (b) "Same shots" is a claim to be COMPUTED, not
+assumed; the overlap was 15. (c) State the whole table: I reported the two metrics that flipped
+and omitted the two that agreed. (d) "Every past effect was a camera artifact" was
+fabrication-adjacent — the effects died of noise at d-SE 0.2-0.4, and no artifact mechanism was
+ever demonstrated.
+⇒ Do not chase body-form make-drivers on the WIDE camera. Remaining routes: the owner's feel
+labels (short/long is invisible to every camera here), a close-camera reliability check, and a
+genuinely metric 2-camera reconstruction (scaffolded, unvalidated).
 
 ## ⭐⭐⭐ FORM-COACH VERDICT (2026-08-03): NOTHING predicts this shooter's makes
 The product ran end-to-end on 07-29 for the first time — 135 shots over 28 min from four 4K
