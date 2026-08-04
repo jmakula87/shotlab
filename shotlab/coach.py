@@ -228,9 +228,15 @@ def recommend_drills(df: pd.DataFrame, max_drills: int = 5) -> list[str]:
     # session where makes released earlier). release_vs_apex dropped (low-conf).
     from .correlate import correlate_makes
     _DRIVER_DRILLS = {
-        "follow_through_hold_s": ("higher",
-            "**Freeze the follow-through:** hold your wrist snapped until the ball "
-            "hits the rim, every rep — your makes hold it longer than your misses."),
+        # ⛔ follow_through_hold_s REMOVED 2026-08-04. Its drill read "your makes
+        # hold it longer than your misses" -- which states a reversed causal arrow
+        # outright. The hold is measured entirely AFTER the ball leaves the hand,
+        # over a 1.0s window, while the ball needs ~1s to reach the rim: P(hold>=t)
+        # is identical for makes and misses through t=10 frames and separates only
+        # at 0.6-0.8s post-release, when the ball is at the rim. A miss sends the
+        # shooter to rebound; a make does not. Prescribing "hold it longer" coaches
+        # the shooter to MIMIC AN EFFECT of making the shot. correlate.py now
+        # excludes the metric outright, so this entry was also dead code.
         "knee_bend_deg": ("lower",          # lower knee angle = deeper bend
             "**Load the legs:** exaggerate a deeper dip on a set of 25 — your makes "
             "come with more knee bend. Power from the legs, not the arm."),

@@ -35,10 +35,22 @@ def test_no_backwards_drill_when_direction_contradicts_premise():
     assert not any("Freeze the follow" in d for d in recommend_drills(df))
 
 
-def test_prescribes_the_drill_when_direction_matches():
-    # makes hold LONGER -> the follow-through drill IS appropriate
-    df = _session(follow_makes=0.72, follow_misses=0.40)
-    assert any("Freeze the follow" in d for d in recommend_drills(df))
+def test_never_prescribes_the_follow_through_drill_from_make_direction():
+    """UPDATED 2026-08-04. This test used to assert the OPPOSITE: that makes
+    holding LONGER should prescribe "hold it longer". That is a reversed causal
+    arrow. follow_through_hold_s is measured entirely AFTER the ball leaves the
+    hand, over a 1.0s window, while the ball needs ~1s to reach the rim --
+    P(hold>=t) is identical for makes and misses through t=10 frames and separates
+    only at 0.6-0.8s post-release, when the ball is at the rim. A miss sends the
+    shooter to rebound; a make does not. So "makes hold longer" is an EFFECT of
+    making, and prescribing it coaches the shooter to mimic that effect.
+    It must not be prescribed in EITHER direction."""
+    assert not any("Freeze the follow" in d
+                   for d in recommend_drills(_session(follow_makes=0.72,
+                                                      follow_misses=0.40)))
+    assert not any("Freeze the follow" in d
+                   for d in recommend_drills(_session(follow_makes=0.40,
+                                                      follow_misses=0.72)))
 
 
 def test_money_spot_is_best_make_pct_not_tightest_spread():

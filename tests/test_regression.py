@@ -55,7 +55,10 @@ def test_correlate_finds_no_driver_on_alternating_labels():
     df = _fixture()
     # made/miss alternate -> no metric should be a strong make-driver here
     assocs = correlate_makes(df.to_dict("records"), n_perm=200)
-    assert all(a.confidence in ("low", "insufficient") for a in assocs)
+    # "excluded" joined this list 2026-08-04 (outcome-reactive metrics, e.g.
+    # follow_through_hold_s). It is likewise NOT a driver, which is what this
+    # test is actually asserting -- nothing reaches "medium" on random labels.
+    assert all(a.confidence in ("low", "insufficient", "excluded") for a in assocs)
 
 
 if __name__ == "__main__":
