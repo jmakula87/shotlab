@@ -319,7 +319,55 @@ Committing to the readings now, so no result can be reinterpreted after the fact
 - Standing caveat: monocular 3D is a model ESTIMATE, not a calibrated rig. A clean 3D result
   raises the metric's ceiling; it does not make it ground truth.
 
-🔄 Close pass re-running with the corrected anchor + 3D angles (2026-08-04); results below.
+### ⛔⭐⭐ RESULT 2026-08-04 — the anchor fix produced a Bonferroni-surviving effect, AND IT IS NOT REAL
+Close pass re-ran clean: 141 releases, 126 matched (coverage unchanged, so the fix cost no
+reads). With the release anchored correctly and a one-to-one join, `follow_through_hold_s` came
+in at **d=+0.52, p=0.0054, n=49/61 — clearing both its power floor (0.38) and the Bonferroni
+threshold (0.0071)**. It would have been the first real make/miss signal in the project. Pre-fix
+it read d=−0.61 on n=13/18; the sign flip and the 4× n are both explained by the old anchor
+having measured a window ending a second before the release.
+
+⛔ **It is the shooter reacting to the outcome, not form.** The metric is measured ENTIRELY
+after the ball leaves the hand, over a 1.0s window, while the ball needs ~1s to reach the rim —
+so the shooter can read the flight while it is still being measured. The survival curves settle
+it, and needed no re-run because `hold >= t` is derivable from the scalar already on disk:
+
+| t (frames) | 1-10 | 11 | 12 | 15 | 18 | 21 | 24 |
+|---|---|---|---|---|---|---|---|
+| P(hold≥t \| make) | **1.00** | 0.98 | 0.86 | 0.43 | 0.24 | 0.24 | 0.18 |
+| P(hold≥t \| miss) | **1.00** | 0.95 | 0.80 | 0.26 | 0.08 | 0.07 | 0.03 |
+| Fisher p | 1.000 | 0.63 | 0.61 | 0.072 | **0.032** | **0.013** | **0.011** |
+
+**Identical through t=10, separating only from t≈15 and significant at t=18-24 — 0.6-0.8s after
+release, when the ball is at the rim.** The plain mechanism: a miss sends the shooter to
+rebound, a make does not. ⭐ It is also **structurally incapable** of being a form metric as
+defined — every shot held ≥0.33s, so the metric has NO variance in the window where form lives;
+100% of its variance sits where outcome knowledge exists. Dead-lettered in code as
+`_OUTCOME_REACTIVE`, wired so it can be neither reported as a driver nor quoted as the largest
+effect in the null message. **Any future follow-through driver must separate at t≤6 first.**
+
+⭐ **The genuinely clean candidate is `knee_bend_3d_deg`: d=+0.40, p=0.037, n=49/61**, clearing
+its 0.38 floor. Knee bend is measured BEFORE the release, so it cannot be outcome-reactive —
+the objection that kills follow-through does not apply. ⚠️ But it does **not** survive
+Bonferroni (0.037 vs 0.0071), it is one shooter and one session, and its 2D twin is weaker
+(d=0.24, p=0.24) partly on a different subsample. **Not a finding yet — a candidate for the
+next session.** Everything else stayed null (balance 0.16, jump −0.15, release height −0.10).
+⭐ Note the 2D elbow was correctly **gated out entirely (0/0)** once `release_conf` was emitted —
+the bypassed gate doing its job.
+
+**Measured facts about the 3D landmarks** (close cam, n=126/136): 2D-vs-3D knee r=+0.76, median
+gap 8°; 2D-vs-3D **elbow r=+0.46, median gap 27°, means 164.5° vs 138.1°** — the image-plane
+elbow is systematically ~26° overstated even on a profile view. 11 shots where 3D reports a
+knee that the 30-150° window discarded. `release_frame_delta` (flare release vs pose-refound
+release): median −3.0f, sd 5.1f, only 28% within 1 frame — the two release estimates disagree by
+~0.1-0.17s, which is why `release_conf` staying "low" is the honest reading, not a formality.
+⚠️ Cross-camera correlation on 2D went NEGATIVE after the fix (knee −0.38, elbow −0.25, vs +0.08
+/ +0.12 before) — but the wide camera is independently disqualified, so this measures the wide
+camera's noise, not the close camera's validity. The pre-registered 3D cross-camera test is what
+settles it.
+
+🔄 Wide-camera pose rebuild running (2026-08-04) for the pre-registered sharp test: 2D vs 3D
+WITHIN the oblique wide camera, where a projection should distort if it distorts anywhere.
 
 ⭐⭐ **LESSONS.** (a) At n≈30 the SIGN of an effect is nearly a coin flip for any |d|≲0.3 —
 never build an argument on sign agreement. (b) "Same shots" is a claim to be COMPUTED, not

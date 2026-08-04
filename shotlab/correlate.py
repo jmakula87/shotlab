@@ -68,7 +68,25 @@ class MetricMakeAssoc:
 # metrics measured AT the release frame -- only trustworthy when the release
 # itself was found confidently (else the value is noise about a guessed frame)
 _RELEASE_ANCHORED = {"release_vs_apex_s", "tempo_dip_to_release_s",
-                     "elbow_angle_at_release_deg"}
+                     "elbow_angle_at_release_deg",
+                     # the metric-3D twin is anchored to the SAME release estimate,
+                     # so it inherits the same trust ceiling. Omitting it would have
+                     # let the 3D elbow past a gate its 2D counterpart cannot pass
+                     # (2026-08-04) -- a new metric name silently escaping an
+                     # existing rule is exactly how the release_conf bypass happened.
+                     "elbow_angle_at_release_3d_deg"}
+
+# ⛔ NOT a form metric, whatever its p-value: follow_through_hold_s is measured
+# ENTIRELY after the ball has left the hand, over a 1.0s window, while the ball
+# needs ~1s to reach the rim. Measured 2026-08-04 on 49 makes / 61 misses: the
+# survival curves P(hold >= t) are IDENTICAL (1.00 vs 1.00) through t=10 frames
+# and separate only from t~15, significant at t=18-24 -- i.e. 0.6-0.8s post
+# release, when the ball is at the rim and the shooter already knows. The plain
+# mechanism is that a miss sends the shooter to rebound and a make does not.
+# It cleared Bonferroni (d=+0.52, p=0.0054) and is still not usable for coaching:
+# making causes the hold, not the reverse. Any future "follow-through" driver must
+# show separation EARLY (t <= 6) before it means anything.
+_OUTCOME_REACTIVE = {"follow_through_hold_s"}
 
 
 def _as_bool(made) -> bool | None:
@@ -145,6 +163,17 @@ def correlate_label(rows, *, label_field="made", min_n=8, n_perm=2000,
     rows = list(rows)
     out: list[MetricMakeAssoc] = []
     for field, label, depth in CANDIDATE_METRICS:
+        if field in _OUTCOME_REACTIVE:
+            # "excluded" keeps it out of `real` in summarize_drivers, so it can be
+            # neither reported as a driver NOR quoted as the largest effect in the
+            # null message. Measured and dead-lettered, not silently dropped.
+            out.append(MetricMakeAssoc(
+                field, label, 0, 0, None, None, None, None, None,
+                None, "excluded", "",
+                note="measured entirely AFTER release, over a window in which the "
+                     "shooter can already read the flight -- separation appears only "
+                     "0.6-0.8s post-release (2026-08-04). Outcome causes it."))
+            continue
         vals, lab = _pair_values(rows, field, label_field)
         n_made, n_miss = int((lab == 1).sum()), int((lab == 0).sum())
         if n_made == 0 or n_miss == 0:
@@ -180,7 +209,9 @@ def correlate_label(rows, *, label_field="made", min_n=8, n_perm=2000,
             None if p is None else round(p, 4), conf, direction, note))
 
     def _key(a: MetricMakeAssoc):
-        rank = {"medium": 0, "low": 1, "insufficient": 2}[a.confidence]
+        # .get, not [], so a new confidence tier sorts last instead of raising --
+        # "excluded" (outcome-reactive) is the first such tier.
+        rank = {"medium": 0, "low": 1, "insufficient": 2}.get(a.confidence, 3)
         mag = abs(a.cohen_d) if a.cohen_d is not None else -1.0
         return (rank, -mag)
 
