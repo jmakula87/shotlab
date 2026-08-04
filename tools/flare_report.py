@@ -43,6 +43,7 @@ DEFAULT_PAIRS = [("PXL_20260710_175751234", "20260710_135805"),
                  ("PXL_20260710_181146426", "20260710_141132"),
                  ("PXL_20260710_181811930", "20260710_141758")]
 PAIRS = DEFAULT_PAIRS
+SHOOTER_FT = 5.83          # 5'10" -- the body-height ruler for height metrics
 WIDE_DIR = paths.wide_cam_dir(ROOT)
 CLOSE_DIR = paths.close_cam_dir(ROOT)     # prefers the rotation-corrected upright/
 OUT = os.path.join(ROOT, "data", "out", "session_0710_3d")
@@ -106,11 +107,16 @@ def process_pair(wide_stem, close_stem):
           f"{len(wtimes)} wide shots", flush=True)
 
     ext = PoseExtractor(fps=fps, variant="full", smooth=True)
-    series, frames = {}, {}
+    # `series` = arm-visible frames, used to find the wrist apex (the release).
+    # `allposes` = EVERY valid pose, because the body metrics are not all measured
+    # at release: knee bend peaks at the gather and follow-through/balance run past
+    # it, so restricting to arm-visible frames would silently truncate them.
+    series, frames, allposes = {}, {}, {}
     for idx, frame in iter_frames(close, start=0, stop=None):
         fp = ext.process_frame(idx, frame)
         if fp is None or fp.world is None:
             continue
+        allposes[idx] = fp
         if all(fp.v(n) >= 0.5 for n in ("r_shoulder", "r_elbow", "r_wrist", "nose")):
             series[idx] = fp; frames[idx] = frame
     ext.close()
@@ -142,10 +148,57 @@ def process_pair(wide_stem, close_stem):
         still = draw_flare_still(frames[f], fp, fl.angle_deg, made)
         name = f"{close_stem}_{f}_{'make' if made else ('miss' if made is not None else 'unk')}.jpg"
         cv2.imwrite(os.path.join(STILLS, name), still)
-        rows.append({"clip": close_stem, "frame": int(f), "flare_deg": fl.angle_deg,
-                     "elbow_deg": round(float(elb), 0), "made": made,
-                     "still": os.path.join("flare_stills", name)})
+        row = {"clip": close_stem, "frame": int(f), "flare_deg": fl.angle_deg,
+               "elbow_deg": round(float(elb), 0), "made": made,
+               "still": os.path.join("flare_stills", name)}
+        row.update(body_metrics(allposes, f, fps, shooter_height_ft=SHOOTER_FT))
+        rows.append(row)
     return rows
+
+
+def body_metrics(poses, rel_f, fps, *, shooter_height_ft=None, window=45):
+    """Knee bend, follow-through, balance drift etc. from the CLOSE camera.
+
+    The wide camera cannot do this: the shooter is ~22% of frame height there,
+    which yielded 35-42% coverage and ~46% physically impossible knee angles
+    (measured 2026-08-03, min 6 deg). The close camera frames him ~35% and in
+    clean profile.
+
+    compute_form only touches `shot.frames` and `shot.index`, and its release
+    anchor is the WRIST APEX -- the ball is used solely to raise confidence. So a
+    pseudo-shot spanning the release window is enough, with an empty ball track;
+    release_conf comes back low, which is honest (no hand-off confirmed a release
+    the close camera cannot see the ball for).
+
+    Every value is gated through metric_ranges, so an implausible read is dropped
+    here rather than reaching the CSV -- an ungated knee bend produced a p=0.019
+    "finding" that collapsed to p=0.44 once gated.
+    """
+    from shotlab.phase2_pose.form import compute_form
+    from shotlab.metric_ranges import in_range
+
+    span = [f for f in poses if rel_f - window <= f <= rel_f + window]
+    if len(span) < 10:
+        return {}
+
+    class _Shot:                       # compute_form needs only these two
+        index = 0
+        frames = sorted(span)
+
+    try:
+        form = compute_form(_Shot(), {}, poses, fps, handedness="right",
+                            camera_angle="side_on",      # the close cam IS profile
+                            shooter_height_ft=shooter_height_ft)
+    except Exception as e:
+        return {"body_error": f"{type(e).__name__}: {e}"}
+
+    out = {}
+    for m in form.metrics:
+        if m.value is None or not in_range(m.name, m.value):
+            continue                    # implausible -> absent, never a number
+        out[m.name] = m.value
+        out[m.name + "_conf"] = m.confidence
+    return out
 
 
 def main(argv=None):

@@ -190,6 +190,34 @@ just no longer trustworthy. Fix is item 2's: normalise by rr² and re-fit.
 - ⛔ **Nothing was tuned before or during this run.** Next knob turned on this session
   invalidates it as a held-out measurement.
 
+## ⛔⭐⭐ BODY METRICS ARE CAMERA-DEPENDENT (2026-08-03) — the deepest result of the arc
+`flare_report` now emits the full body-metric set from the CLOSE camera (task 17). The wiring
+was small: `compute_form` touches only `shot.frames`/`shot.index`, and `find_release` is
+anchored to the WRIST APEX with the ball used solely to raise confidence — so a pseudo-shot
+over the release window plus an empty ball track is enough. Every value is gated through
+`metric_ranges` at emission, so an implausible read is ABSENT rather than a number.
+
+**Coverage roughly doubled and is now all-plausible**: knee 110/141 vs 58/139 on the wide cam,
+balance 111/141 vs 58/139, elbow 103/141 vs 51/139, jump 121/141 vs 44/139.
+
+**Still nothing separates makes from misses.** Joined THROUGH the wide shots (close release
+--audio sync--> wide shot --time--> attempt; 125 of 141 paired, because the direct
+release→attempt join had residual sd 17-75f and a bad join attenuates real effects toward
+zero): flare d=0.08, knee d=0.28, balance d=0.27, elbow d=-0.02, follow-through d=-0.61
+(n=13/18, floor 0.71), jump d=-0.00, release height d=-0.06, tempo d=-0.12. Bonferroni
+threshold p<0.0063; **nothing survives, nothing is close.**
+
+⛔⭐ **THE FINDING THAT MATTERS: the same metric from two cameras gives OPPOSITE SIGNS.**
+knee bend d=-0.29 (wide) vs +0.28 (close); balance drift d=-0.39 (wide) vs +0.27 (close) —
+same shots, same session, same metric definitions. A quantity whose *direction* depends on
+which camera measured it is not measuring a property of the shot. This retires single-camera
+pose body metrics as a make/miss instrument regardless of coverage or sample size, and it
+explains why every apparent effect in this project has evaporated on contact: they were
+camera artifacts, not shooting.
+⇒ **Do not chase body-form make-drivers further on one camera.** The remaining honest routes
+are (a) the owner's feel labels, whose short/long axis no camera here can see, and (b) a
+genuinely metric 2-camera reconstruction, which is scaffolded and unvalidated.
+
 ## ⭐⭐⭐ FORM-COACH VERDICT (2026-08-03): NOTHING predicts this shooter's makes
 The product ran end-to-end on 07-29 for the first time — 135 shots over 28 min from four 4K
 clips, with chart, per-shot CSV, zone summary, consistency, fatigue trends and drills. Then
