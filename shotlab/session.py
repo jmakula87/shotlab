@@ -80,6 +80,14 @@ class ShotRecord:
     release_vs_apex_s: float | None = None
     tempo_dip_to_release_s: float | None = None   # quickness: deepest load -> release
     elbow_angle_at_release_deg: float | None = None
+    # metric-3D twins (2026-08-04). The *_deg fields above are IMAGE-PLANE angles,
+    # so they are not comparable between an oblique and a profile camera. These are
+    # computed from MediaPipe world landmarks (meters, hip-origin). Carried
+    # ALONGSIDE, never replacing -- a swap would move every historical number.
+    # NOTE: this record is the reason a new form metric does not reach
+    # session_shots.csv on its own; the copy below is explicit, field by field.
+    knee_bend_3d_deg: float | None = None
+    elbow_angle_at_release_3d_deg: float | None = None
     follow_through_hold_s: float | None = None
     balance_drift_px_per_ht: float | None = None
     release_conf: str = "na"        # confidence in the ball/pose release sync
@@ -243,6 +251,8 @@ def _records_from_shots(shots, track, video_path, calib, info, clip_start, *,
             rec.release_height_ft = _mv("release_height_ft")
             rec.jump_height_ft = _mv("jump_height_ft")
             rec.elbow_angle_at_release_deg = _mv("elbow_angle_at_release_deg")
+            rec.knee_bend_3d_deg = _mv("knee_bend_3d_deg")
+            rec.elbow_angle_at_release_3d_deg = _mv("elbow_angle_at_release_3d_deg")
             rec.follow_through_hold_s = _mv("follow_through_hold_s")
             rec.balance_drift_px_per_ht = _mv("balance_drift_px_per_ht")
             rec.release_conf = sf.release_conf
