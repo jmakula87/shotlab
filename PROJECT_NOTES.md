@@ -582,6 +582,32 @@ make the camera choice irrelevant on this footage.**
 ⭐ Knee is NOT a proxy for tempo (tempo's make-direction is opposite) — it is a proxy for **how
 much valid pre-release history survived**, which no metric reported directly.
 
+#### ✅ THE FIX VERIFIED — and it explains BOTH defects at once
+Re-ran both close passes on the corrected `span`:
+
+| | corr(knee, release_frame_delta) | knee reads >150° |
+|---|---|---|
+| 07-29 | −0.60 → **+0.20** | 16 → **1** |
+| 07-20 | −0.77 → **−0.12** | 14 → **0** |
+
+(My −0.60 / −0.77 independently reproduce Codex's −0.62 / −0.72.) The straight-leg artifact is
+essentially gone and the mean knee drops to a physically sensible 98-104°.
+⭐⭐ **And the join-anchor sensitivity collapsed with it.** On 07-20 the anchor swing was
++0.40 vs +0.16; it is now **+0.19 vs +0.18** — a 0.24 spread reduced to 0.01. **One defect was
+driving both symptoms**: truncated rows are exactly the ones whose release detection is
+unstable, which are exactly the marginal join cases. That is why the "membership, not labels"
+split found the effect living in the ambiguous 25%.
+⛔ **On the fixed metric there is no effect: 07-20 d≈+0.19 on n=82, against a detectable floor
+of ~0.44.** The instrument is materially better than it was this morning — correctly anchored,
+correctly windowed, honestly gated, and no longer anchor-dependent — and it has produced no
+finding. Both statements are worth keeping.
+⚠️ **REPRODUCIBILITY HAZARD:** the 07-29 re-run **crashed on clip 4** with a native
+`access violation writing 0x0000000000000020` in the pose stack, silently losing 42 of 141
+releases (141 → 99). The persist-before-fragile-steps change from earlier that day saved the
+other 99 instead of the whole pass. ⚠️ This box already has a hardware question open (6 silent
+power-losses in 5 days, PSU suspected) — a native access violation belongs on that list.
+**Always check the per-clip counts in the log, not just that the file was written.**
+
 ### ⛔ SUPERSEDED — the promotion this retracts (kept for the record)
 **It did not need a new session.** 07-20 was untouched for this hypothesis, carries 111
 hand-counted outcomes, and its close-cam clips were on disk all along (as S8-named files in
