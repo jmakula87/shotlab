@@ -518,7 +518,43 @@ confirm or refute d≈0.25, so it must not pretend to:
   the hand-count CSVs), so free within-clip shuffling assumes an exchangeability that the data
   visibly violates.
 
-### ⭐⭐⭐ REPLICATED 2026-08-04 — `knee_bend_3d_deg` IS THE PROJECT'S FIRST REAL MAKE/MISS FINDING
+### ⛔⛔⛔ RETRACTED WITHIN THE HOUR — THE "REPLICATION" COMPARED TWO DIFFERENT JOINS (2026-08-04)
+I promoted `knee_bend_3d_deg` below and then broke it myself while looking for a mechanism.
+**The two `+0.40`s were computed with DIFFERENT wide-side anchors.** `flare_report.wide_shot_
+times` returns the **mid-flight** time (`f[len(f)//2]`), which is what the 07-29 discovery used;
+my new 07-20 harness matched on the **release** (`frames[0]`). Same readings, same truth, same
+n — only the anchor differs:
+
+| session | release anchor | mid-flight anchor |
+|---|---|---|
+| 07-29 | **−0.19** | +0.40 |
+| 07-20 | +0.40 | **+0.16** |
+
+⭐ **The labels are not wrong — the MEMBERSHIP is.** Of rows labelled under both anchors, **0%
+get a different make/miss label**; but 29 rows (07-29) and 19 (07-20) are matched under only one
+anchor. So an arbitrary half-flight shift changes *which ~25% of shots enter the analysis*, and
+that is enough to swing d by 0.6 and flip its sign.
+⛔ **On the STABLE CORE (rows both anchors agree on) there is no effect and no replication:**
+**07-29 d=−0.07 (n=95), 07-20 d=+0.47 (n=74)** — opposite signs, discovery session ≈ zero.
+Pooled on the core: **d≈+0.17, 95% CI [−0.14, +0.48] — includes 0**, so the pre-registered
+promotion criterion is NOT met. **The candidate returns to unresolved.**
+
+⛔⛔ **I IGNORED MY OWN RECORDED WARNING.** This file already said, from the 08-03 work: *"my
+close-cam d's are join-variant — an equally defensible rebuild gives knee +0.15 (not +0.28)...
+Numbers that move that much must not carry doctrine."* I then built a "replication" without
+re-checking join sensitivity, and treated agreement between two different pipelines as
+confirmation. ⭐ **A replication must run the IDENTICAL pipeline on new data. Two pipelines
+agreeing on one number is not replication — it is a coincidence I went looking for.**
+⭐⭐ **THE DURABLE FINDING IS ABOUT THE JOIN, NOT THE KNEE:** the close-cam→wide-shot match is
+too fragile to carry ANY make/miss claim. Shots are spaced closely enough that a ~0.5s anchor
+shift re-selects a quarter of the sample. **Every close-cam make/miss number in this file
+inherits that fragility** and should be read as provisional until the join is anchored on a
+single defensible event and that choice is justified rather than inherited.
+⭐ Note the coverage/distance/clip/reactivity checks all PASSED and were irrelevant — they test
+the rows you kept, and the defect was in which rows you keep. **Confound checks conditioned on a
+sample cannot see a defect in sample selection.**
+
+### ⛔ SUPERSEDED — the promotion this retracts (kept for the record)
 **It did not need a new session.** 07-20 was untouched for this hypothesis, carries 111
 hand-counted outcomes, and its close-cam clips were on disk all along (as S8-named files in
 `Camera 1/Old/` — Pixel filenames are UTC, the S8 is UTC−4, which is why they read as unrelated).
