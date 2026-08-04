@@ -518,6 +518,40 @@ confirm or refute d≈0.25, so it must not pretend to:
   the hand-count CSVs), so free within-clip shuffling assumes an exchangeability that the data
   visibly violates.
 
+### ⭐⭐⭐ REPLICATED 2026-08-04 — `knee_bend_3d_deg` IS THE PROJECT'S FIRST REAL MAKE/MISS FINDING
+**It did not need a new session.** 07-20 was untouched for this hypothesis, carries 111
+hand-counted outcomes, and its close-cam clips were on disk all along (as S8-named files in
+`Camera 1/Old/` — Pixel filenames are UTC, the S8 is UTC−4, which is why they read as unrelated).
+That close-cam pose pass had never been run; it was a standing TODO from July.
+
+| session | d | n mk/ms | SE | 95% CI |
+|---|---|---|---|---|
+| 07-29 (discovery) | +0.40 | 49/61 | 0.194 | [+0.02, +0.78] |
+| **07-20 (replication, independent)** | **+0.40** | 38/44 | 0.224 | [−0.04, +0.83] |
+| **POOLED (inverse-variance)** | **+0.40** | | 0.146 | **[+0.11, +0.69]** |
+
+✅ **The pre-registered promotion criterion is MET**: the pooled CI excludes 0, and does not
+exclude +0.25 (so the kill condition does not fire). The replication's **one-sided
+clip-stratified permutation p = 0.0451** in the direction registered *before* the run
+(committed in this file at 5070350, hours before 07-20 was touched); two-sided is 0.0756, and
+both are reported so the one-sided figure cannot look like a choice made after seeing the sign.
+Every confound re-checked independently on 07-20: **coverage 79% of makes vs 88% of misses,
+Fisher p=0.282 — clean, and leaning AGAINST the effect**; **corr(knee, rim_dist) = −0.04**
+(07-29: +0.01); clip-stratified throughout; one-to-one on both join hops.
+
+⚠️ **WINNER'S CURSE, stated plainly:** the 07-29 estimate is the discovery — it was selected as
+the 1 of 7 metrics that cleared its floor, so it is biased UPWARD, and the pooled figure
+inherits that bias. The unbiased number is the replication alone: **d=+0.40, CI [−0.04, +0.83]**,
+which includes 0. What is genuinely striking is that it did **not shrink** — a winner's-curse
+artifact almost always regresses toward 0 on replication, and this did not move at all.
+⚠️ **Effect size in real units: 108.8° vs 103.4°, i.e. makes come with ~5.4° LESS knee bend.**
+⛔ **This is NOT coaching advice and must not become a drill.** It is a correlation with no
+established mechanism, it is counterintuitive (the textbook expectation is deeper legs), and
+"bend less" is exactly the kind of knob this project has repeatedly proven to be a bandaid.
+⛔ One shooter, two sessions, one hoop, both home footage — external validity is untested.
+⭐ It is measured entirely BEFORE release, so the reactivity objection that killed
+`follow_through_hold_s` cannot apply. Next: a mechanism, not a third session.
+
 ⛔⛔ **MODEL LABELS ARE DISQUALIFIED for this test, and the margin is not close.** At 89%
 label accuracy, symmetric error attenuates a true d=0.25 by ~(1−2·0.11)=0.78 → observed d≈0.20,
 dropping power from 0.30 to ~0.22; at d=0.40 power falls 0.56→0.40. Worse, make/miss errors are
