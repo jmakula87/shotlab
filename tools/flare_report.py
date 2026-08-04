@@ -44,6 +44,12 @@ DEFAULT_PAIRS = [("PXL_20260710_175751234", "20260710_135805"),
                  ("PXL_20260710_181811930", "20260710_141758")]
 PAIRS = DEFAULT_PAIRS
 SHOOTER_FT = 5.83          # 5'10" -- the body-height ruler for height metrics
+# Pose estimator configuration. Overridable so the SAME shots can be re-measured
+# under a different estimator (--pose-variant heavy / --no-smooth), which turns
+# existing footage into repeated measurements of identical events -- the only
+# route to a within-shot SD and a smallest-detectable-change without filming.
+POSE_VARIANT = "full"
+POSE_SMOOTH = True
 WIDE_DIR = paths.wide_cam_dir(ROOT)
 CLOSE_DIR = paths.close_cam_dir(ROOT)     # prefers the rotation-corrected upright/
 OUT = os.path.join(ROOT, "data", "out", "session_0710_3d")
@@ -137,7 +143,13 @@ def process_pair(wide_stem, close_stem):
     print(f"  {wide_stem} <-> {close_stem}: sync {offset:.2f}s conf {conf:.2f}, "
           f"{len(wtimes)} wide shots", flush=True)
 
-    ext = PoseExtractor(fps=fps, variant="full", smooth=True)
+    # POSE_VARIANT / POSE_SMOOTH are module-level so a reliability run can
+    # re-measure the SAME shots under a different estimator without touching the
+    # rest of the pipeline. Two passes over one clip are repeated measurements of
+    # identical physical events, which is the only way to get a within-shot SD --
+    # and therefore a smallest-detectable-change -- out of footage that already
+    # exists. Defaults are the shipping configuration.
+    ext = PoseExtractor(fps=fps, variant=POSE_VARIANT, smooth=POSE_SMOOTH)
     # `series` = arm-visible frames, used to find the wrist apex (the release).
     # `allposes` = EVERY valid pose, because the body metrics are not all measured
     # at release: knee bend peaks at the gather and follow-through/balance run past
@@ -271,7 +283,7 @@ def body_metrics(poses, rel_f, fps, *, shooter_height_ft=None, post=30):
 
 
 def main(argv=None):
-    global WIDE_DIR, CLOSE_DIR, OUT, STILLS, PAIRS
+    global WIDE_DIR, CLOSE_DIR, OUT, STILLS, PAIRS, POSE_VARIANT, POSE_SMOOTH
     import argparse
     ap = argparse.ArgumentParser(
         description="Elbow-flare stills + flare-vs-make for a 2-camera session.")
@@ -282,8 +294,16 @@ def main(argv=None):
                     help="close-cam clips; defaults to data/raw/Camera 2/upright "
                          "when it exists (the rotation-corrected copies)")
     ap.add_argument("--out", default=OUT, help="session output dir for analysis3d.json")
+    ap.add_argument("--pose-variant", default="full", choices=("lite", "full", "heavy"),
+                    help="MediaPipe model size. Re-running a session with a different "
+                         "variant re-measures the SAME shots with a different estimator, "
+                         "which is how within-shot SD / smallest-detectable-change are "
+                         "obtained without new footage.")
+    ap.add_argument("--no-smooth", action="store_true",
+                    help="disable the One-Euro filter (the other reliability perturbation)")
     args = ap.parse_args(argv)
 
+    POSE_VARIANT, POSE_SMOOTH = args.pose_variant, not args.no_smooth
     WIDE_DIR, CLOSE_DIR = args.wide_dir, args.close_dir
     OUT = args.out
     STILLS = os.path.join(OUT, "flare_stills")
