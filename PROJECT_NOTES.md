@@ -190,6 +190,30 @@ just no longer trustworthy. Fix is item 2's: normalise by rr² and re-fit.
 - ⛔ **Nothing was tuned before or during this run.** Next knob turned on this session
   invalidates it as a held-out measurement.
 
+## ✅ FROZEN EVAL RE-BANKED AFTER THE 08-04 EDITS — NO REGRESSION
+Today changed the default detection path (`back_extend` now fed the cloud), `form.py`'s `span`,
+`metric_ranges`, `correlate`, `session.py` and the dashboard. Re-ran the ablation ladder on all
+four 07-29 clips to confirm none of it moved detection:
+
+| clip | recall | precision |
+|---|---|---|
+| 155320813 | 0.93 | 1.00 |
+| 155914855-001 | 0.95 | 0.97 |
+| 160743954 | 0.95 | 0.97 |
+| 161439291-002 | 1.00 | 1.00 |
+| **total** | **137/143 = 95.8%** | **~0.986** |
+
+Identical to the pre-existing figure — **no regression**. Full ladder on clip 1: C1 greedy 0.79
+→ C2 cloud-greedy 0.79 → C3 beam 0.75 → C4 greedy∪beam 0.89 → C5 +rim-recovery 0.93 → **C6
++back_extend 0.93**. ⭐ **C6 ≡ C5 still holds**, which is the direct confirmation that
+`back_extend` is redundant on the full stack and earns its keep only on the default non-beam
+path (where it is worth +7 tp on 07-29 and +16 held-out on 07-20).
+⚠️ Still NOT held out — same 143 attempts that produced the frozen 85%. The resubstitution
+guard fired correctly on every `make_visual` line of the run.
+⛔ **07-10 CANNOT serve as a third session for anything pixel-based**: its raw clips are gone,
+leaving only annotated overlays (graphics drawn over the rim ROI the make model reads) and
+per-shot review clips. Relevant to the zLR transfer check, which still needs a third dataset.
+
 ## ⛔⭐ `back_extend` WAS NEVER INERT — I MEASURED IT IN THE ONE CONDITION WHERE IT'S REDUNDANT
 It was recorded **MEASURED INERT** (eval C6 byte-identical to C5) and kept opt-in. That test was
 correct and the conclusion drawn from it was too broad: C6 sits **on top of the beam union**,

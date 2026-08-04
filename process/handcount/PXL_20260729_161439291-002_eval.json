@@ -90,7 +90,7 @@
       "make_hit": 18,
       "make_tot": 19
     },
-    "visual_model": "make_visual_0729.joblib"
+    "visual_model": "make_visual_0729.joblib  \u26a0\ufe0f RESUBSTITUTION"
   },
   "union_tol_sweep": {
     "5": 0.125,
