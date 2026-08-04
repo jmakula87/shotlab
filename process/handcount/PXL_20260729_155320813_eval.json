@@ -5,67 +5,79 @@
   "conditions": [
     {
       "condition": "C1 baseline@0.25 (greedy)",
-      "produced": 19,
-      "tp": 19,
+      "produced": 22,
+      "tp": 22,
       "fp": 0,
-      "fn": 9,
+      "fn": 6,
       "precision": 1.0,
-      "recall_all": 0.6785714285714286,
-      "recall_rim": 0.6538461538461539,
+      "recall_all": 0.7857142857142857,
+      "recall_rim": 0.7692307692307693,
       "recall_airball": 2,
       "n_airball": 2
     },
     {
       "condition": "C2 cloud@0.01 (greedy)",
-      "produced": 19,
-      "tp": 19,
+      "produced": 22,
+      "tp": 22,
       "fp": 0,
-      "fn": 9,
+      "fn": 6,
       "precision": 1.0,
-      "recall_all": 0.6785714285714286,
-      "recall_rim": 0.6538461538461539,
+      "recall_all": 0.7857142857142857,
+      "recall_rim": 0.7692307692307693,
       "recall_airball": 2,
       "n_airball": 2
     },
     {
       "condition": "C3 beam (cloud MHT)",
-      "produced": 19,
-      "tp": 19,
+      "produced": 21,
+      "tp": 21,
       "fp": 0,
-      "fn": 9,
+      "fn": 7,
       "precision": 1.0,
-      "recall_all": 0.6785714285714286,
-      "recall_rim": 0.6538461538461539,
+      "recall_all": 0.75,
+      "recall_rim": 0.7307692307692307,
       "recall_airball": 2,
       "n_airball": 2
     },
     {
       "condition": "C4 greedy u beam",
-      "produced": 23,
-      "tp": 23,
+      "produced": 25,
+      "tp": 25,
       "fp": 0,
-      "fn": 5,
+      "fn": 3,
       "precision": 1.0,
-      "recall_all": 0.8214285714285714,
-      "recall_rim": 0.8076923076923077,
+      "recall_all": 0.8928571428571429,
+      "recall_rim": 0.8846153846153846,
       "recall_airball": 2,
       "n_airball": 2
     },
     {
       "condition": "C5 + rim-recovery (production candidate)",
-      "produced": 24,
-      "tp": 24,
+      "produced": 26,
+      "tp": 26,
       "fp": 0,
-      "fn": 4,
+      "fn": 2,
       "precision": 1.0,
-      "recall_all": 0.8571428571428571,
-      "recall_rim": 0.8461538461538461,
+      "recall_all": 0.9285714285714286,
+      "recall_rim": 0.9230769230769231,
+      "recall_airball": 2,
+      "n_airball": 2
+    },
+    {
+      "condition": "C6 + backward extension",
+      "produced": 26,
+      "tp": 26,
+      "fp": 0,
+      "fn": 2,
+      "precision": 1.0,
+      "recall_all": 0.9285714285714286,
+      "recall_rim": 0.9230769230769231,
       "recall_airball": 2,
       "n_airball": 2
     }
   ],
   "make_miss": {
-    "n_matched": 24,
+    "n_matched": 26,
     "geometric": {
       "correct": 8,
       "na": 12,
@@ -73,17 +85,17 @@
       "make_tot": 15
     },
     "visual": {
-      "correct": 13,
+      "correct": 25,
       "na": 0,
-      "make_hit": 8,
+      "make_hit": 15,
       "make_tot": 15
     },
-    "visual_model": "make_visual_0720.joblib"
+    "visual_model": "make_visual_0729.joblib  \u26a0\ufe0f RESUBSTITUTION"
   },
   "union_tol_sweep": {
-    "5": 0.14285714285714285,
-    "10": 0.5,
-    "15": 0.8214285714285714,
-    "30": 0.8571428571428571
+    "5": 0.17857142857142858,
+    "10": 0.5357142857142857,
+    "15": 0.8928571428571429,
+    "30": 0.9285714285714286
   }
 }

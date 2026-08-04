@@ -33,6 +33,17 @@ VALID_RANGE = {
     "apex_height_ft": (0.5, 25.0),           # ball ruler is jittery -> loose gate
     "apex_above_rim_ft": (0.0, 8.0),
     "release_vs_apex_s": (-0.6, 0.6),        # |release - jump apex| within ~0.6s
+    # The metric-3D twins (2026-08-04). These are ANATOMICAL bounds only, and
+    # deliberately NOT the 30-150 window used above. That window conflates two
+    # different things: a physics violation (a 6 deg knee) and a censoring choice
+    # (a 178 deg knee is not impossible, it is STRAIGHT -- the load simply was not
+    # captured). Of 58 raw wide knees, 6 were below 30 but 21 were above 150, so
+    # the "47% physically impossible" framing was overstated. Keeping the 3D gate
+    # anatomical means "did not bend" stays visible as DATA; apply the 30-150
+    # window in the analysis when comparing against the 2D metric, so the
+    # censoring is an explicit analysis step rather than a silent one.
+    "knee_bend_3d_deg": (20.0, 180.0),
+    "elbow_angle_at_release_3d_deg": (20.0, 180.0),
 }
 
 

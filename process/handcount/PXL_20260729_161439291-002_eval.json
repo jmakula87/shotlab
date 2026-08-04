@@ -5,85 +5,97 @@
   "conditions": [
     {
       "condition": "C1 baseline@0.25 (greedy)",
-      "produced": 32,
-      "tp": 32,
+      "produced": 37,
+      "tp": 37,
       "fp": 0,
-      "fn": 8,
+      "fn": 3,
       "precision": 1.0,
-      "recall_all": 0.8,
-      "recall_rim": 0.8205128205128205,
+      "recall_all": 0.925,
+      "recall_rim": 0.9487179487179487,
       "recall_airball": 0,
       "n_airball": 1
     },
     {
       "condition": "C2 cloud@0.01 (greedy)",
-      "produced": 29,
-      "tp": 29,
+      "produced": 35,
+      "tp": 35,
       "fp": 0,
-      "fn": 11,
+      "fn": 5,
       "precision": 1.0,
-      "recall_all": 0.725,
-      "recall_rim": 0.717948717948718,
+      "recall_all": 0.875,
+      "recall_rim": 0.8717948717948718,
       "recall_airball": 1,
       "n_airball": 1
     },
     {
       "condition": "C3 beam (cloud MHT)",
-      "produced": 29,
-      "tp": 29,
+      "produced": 35,
+      "tp": 35,
       "fp": 0,
-      "fn": 11,
+      "fn": 5,
       "precision": 1.0,
-      "recall_all": 0.725,
-      "recall_rim": 0.717948717948718,
+      "recall_all": 0.875,
+      "recall_rim": 0.8717948717948718,
       "recall_airball": 1,
       "n_airball": 1
     },
     {
       "condition": "C4 greedy u beam",
-      "produced": 34,
-      "tp": 34,
+      "produced": 40,
+      "tp": 40,
       "fp": 0,
-      "fn": 6,
+      "fn": 0,
       "precision": 1.0,
-      "recall_all": 0.85,
-      "recall_rim": 0.8461538461538461,
+      "recall_all": 1.0,
+      "recall_rim": 1.0,
       "recall_airball": 1,
       "n_airball": 1
     },
     {
       "condition": "C5 + rim-recovery (production candidate)",
-      "produced": 34,
-      "tp": 34,
+      "produced": 40,
+      "tp": 40,
       "fp": 0,
-      "fn": 6,
+      "fn": 0,
       "precision": 1.0,
-      "recall_all": 0.85,
-      "recall_rim": 0.8461538461538461,
+      "recall_all": 1.0,
+      "recall_rim": 1.0,
+      "recall_airball": 1,
+      "n_airball": 1
+    },
+    {
+      "condition": "C6 + backward extension",
+      "produced": 40,
+      "tp": 40,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall_all": 1.0,
+      "recall_rim": 1.0,
       "recall_airball": 1,
       "n_airball": 1
     }
   ],
   "make_miss": {
-    "n_matched": 34,
+    "n_matched": 40,
     "geometric": {
-      "correct": 12,
-      "na": 16,
-      "make_hit": 7,
-      "make_tot": 16
+      "correct": 14,
+      "na": 18,
+      "make_hit": 9,
+      "make_tot": 19
     },
     "visual": {
-      "correct": 23,
+      "correct": 38,
       "na": 0,
-      "make_hit": 10,
-      "make_tot": 16
+      "make_hit": 18,
+      "make_tot": 19
     },
-    "visual_model": "make_visual_0720.joblib"
+    "visual_model": "make_visual_0729.joblib"
   },
   "union_tol_sweep": {
-    "5": 0.075,
-    "10": 0.55,
-    "15": 0.8,
-    "30": 0.85
+    "5": 0.125,
+    "10": 0.7,
+    "15": 0.95,
+    "30": 1.0
   }
 }

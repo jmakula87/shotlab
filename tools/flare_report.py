@@ -156,19 +156,26 @@ def process_pair(wide_stem, close_stem):
     return rows
 
 
-def body_metrics(poses, rel_f, fps, *, shooter_height_ft=None, window=45):
+def body_metrics(poses, rel_f, fps, *, shooter_height_ft=None, post=30):
     """Knee bend, follow-through, balance drift etc. from the CLOSE camera.
 
-    The wide camera cannot do this: the shooter is ~22% of frame height there,
-    which yielded 35-42% coverage and ~46% physically impossible knee angles
-    (measured 2026-08-03, min 6 deg). The close camera frames him ~35% and in
-    clean profile.
+    The wide camera struggles here: the shooter is ~22% of frame height there,
+    which yielded 35-42% coverage and a raw knee median of 138 deg -- i.e. it
+    mostly fails to catch the load at all. The close camera frames him ~35% and
+    in clean profile.
 
-    compute_form only touches `shot.frames` and `shot.index`, and its release
-    anchor is the WRIST APEX -- the ball is used solely to raise confidence. So a
-    pseudo-shot spanning the release window is enough, with an empty ball track;
-    release_conf comes back low, which is honest (no hand-off confirmed a release
-    the close camera cannot see the ball for).
+    THE PSEUDO-SHOT MUST START AT THE RELEASE. compute_form does not accept a
+    release frame; it re-finds one from `shot.frames[0]` (form.py:186) and windows
+    every metric off that. The first version here spanned rel_f+-45, so:
+      - the wrist-apex search ran [rel_f-63, rel_f-30] -- it ended a full second
+        BEFORE the release it was meant to measure;
+      - the knee load search breaks at `f > rel_f`, so it never reached the dip;
+      - `span` was 3.7s vs the wide path's ~1.7s, and balance drift is a max-min
+        range, so it came out ~4x inflated (close 1.69 vs wide 0.43).
+    Starting at rel_f reproduces the wide path's own window shape -- span is
+    frames[0]-20 .. frames[-1], i.e. 0.67s of load before the release and `post`
+    frames of follow-through after it. Same code was never the same estimator
+    until this held. (Found by adversarial review, 2026-08-04.)
 
     Every value is gated through metric_ranges, so an implausible read is dropped
     here rather than reaching the CSV -- an ungated knee bend produced a p=0.019
@@ -177,13 +184,13 @@ def body_metrics(poses, rel_f, fps, *, shooter_height_ft=None, window=45):
     from shotlab.phase2_pose.form import compute_form
     from shotlab.metric_ranges import in_range
 
-    span = [f for f in poses if rel_f - window <= f <= rel_f + window]
-    if len(span) < 10:
+    win = sorted(f for f in poses if rel_f <= f <= rel_f + post)
+    if len(win) < 8 or rel_f not in poses:
         return {}
 
     class _Shot:                       # compute_form needs only these two
         index = 0
-        frames = sorted(span)
+        frames = win
 
     try:
         form = compute_form(_Shot(), {}, poses, fps, handedness="right",
@@ -198,6 +205,17 @@ def body_metrics(poses, rel_f, fps, *, shooter_height_ft=None, window=45):
             continue                    # implausible -> absent, never a number
         out[m.name] = m.value
         out[m.name + "_conf"] = m.confidence
+    # Emit the release confidence, un-laundered. The close camera cannot see the
+    # ball, so no hand-off can confirm the release and this comes back "low" --
+    # which makes correlate.py drop the release-anchored metrics. That gate was
+    # silently BYPASSED before, because a missing release_conf reads as None and
+    # correlate only rejects a KNOWN-low one (correlate.py:105).
+    # release_frame_delta is the independent check: the flare detector's release
+    # vs the one compute_form re-finds from pose alone. If that stays tight, a
+    # pose-corroborated confidence tier can be argued for with evidence.
+    out["release_conf"] = form.release_conf
+    out["release_frame"] = int(form.release_frame)
+    out["release_frame_delta"] = int(form.release_frame) - int(rel_f)
     return out
 
 

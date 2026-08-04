@@ -244,7 +244,8 @@ components on an oblique vs a profile view.
 +0.03±0.36, balance +0.09±0.33, elbow -0.16±0.35, follow-through -0.39±0.45; all consistent
 with zero, nothing near the d≈0.35 detectability floor. And the practical decision stands, on
 **different evidence**: the wide camera is independently disqualified for form (22-40%
-coverage, outcome-correlated survival, ~47% physically impossible knee reads).
+coverage, outcome-correlated survival, and 47% of raw knee reads outside 30-150° with a
+median of 138° — i.e. it mostly never catches the load; see the wording correction below).
 ⛔ **STILL OPEN, not refuted:** whether the CLOSE camera measures stable per-shot form. The
 cross-camera correlation test was the right instrument but is underpowered (knee r=+0.08 on
 n=15, CI [-0.45,+0.57]) — resolving r=0.3 needs ~85 shared pairs and wide-cam coverage caps us
@@ -252,6 +253,73 @@ at 15-31. ⭐ The clean next test needs no second camera at all: **within-close-
 reliability on the 141 releases.** Also unresolved: ungated wide-vs-close knee gives Spearman
 ρ=+0.37 (p=0.050, n=29), weak evidence of shared signal that the plausibility gate may be
 discarding along with the artifacts.
+
+### ⭐ Second review (Codex, 2026-08-04) — 3 code defects CONFIRMED, its headline claim FALSE
+Verified-vs-asserted cuts both ways here, so both directions are on the record.
+
+⚠️ **Its lead claim was false, and checking it first was correct.** Codex reported
+`flare_readings_raw.json` as *"77 rows, three clips, no `20260729_120729`"* and called it a hard
+reproducibility failure. The file on disk has **141 rows across all four clips** (29/37/33/42).
+Its overlap, duplicate-count and close-coverage tables are all derived from that misread, so
+those numbers are void — I recomputed the ones that mattered rather than inheriting them.
+
+**Three of its code-level findings are real. I confirmed each in the source before acting:**
+1. ⛔⛔ **THE CLOSE PATH NEVER MEASURED THE RELEASE.** `compute_form` accepts no release frame —
+   it re-finds one from `shot.frames[0]` (`form.py:186`) and windows every metric off that. My
+   `body_metrics()` passed a pseudo-shot spanning `rel_f±45`, so `frames[0] = rel_f−45` and the
+   wrist-apex search ran **[rel_f−63, rel_f−30] — it ended a full second BEFORE the release**.
+   The knee loop breaks at `f > rel_f`, so it never reached the dip; `span` was 3.7s against the
+   wide path's ~1.7s, and `balance_drift` is a max−min range, hence ~4× inflated (close mean
+   **1.69** vs wide **0.43**, measured). **"Same function" was never "same estimator."** Fixed:
+   the pseudo-shot now starts AT `rel_f`, reproducing the wide window shape exactly.
+2. **The release-confidence gate was silently bypassed.** `correlate.py:105` rejects a
+   release-anchored metric only when `release_conf` is *known* low — `None` passes through.
+   `body_metrics()` emitted per-metric `_conf` but never `release_conf`, while its own docstring
+   asserted "release_conf comes back low, which is honest." Now emitted un-laundered, plus
+   `release_frame_delta` (flare-detected release − pose-refound release) as the evidence a
+   pose-corroborated confidence tier would have to be argued from.
+3. **The close→wide join is not one-to-one** (task #24). On the full 141 rows: 141 releases →
+   112 distinct wide shots, **14 shots taking 2 releases each**, 15 unmatched. Duplicates then
+   enter as independent observations — pseudo-replication, which makes permutation p's
+   anticonservative. This is in the product path (`process_pair`), not only the scratch scripts.
+
+⚠️ **WORDING CORRECTION — "physically impossible knee reads" was overstated**, and I had
+repeated it. The 58 raw wide knees: **6 below 30°, 21 above 150°**, median **138°**. A 178° knee
+is not impossible, it is *straight* — the wide camera mostly fails to catch the load at all.
+Arguably worse for the wide camera, but that is a coverage/timing failure, not a physics
+violation, and the 30-150° gate is a censoring rule I chose, not a law.
+
+⛔ **This invalidates the cross-camera correlation numbers above.** Recomputed on the full
+artifact (nearest release per shot, wide values gated): knee r=+0.08 (n=15), balance −0.15
+(n=31), elbow +0.12 (n=21), follow-through +0.29 (n=6) — near-zero throughout. But the close
+side was measuring **the wrong second of video**, so near-zero is the expected consequence of
+defect 1, not evidence about cameras. The test only becomes interpretable after the re-run.
+### 🔬 The 3D-landmark test — PRE-REGISTERED 2026-08-04, before any result
+The review's most useful finding was not statistical. `form.py`'s joint angles are computed on
+**image-plane pixels** (`pose.py:151`), so an oblique knee and a profile knee are different
+projections of one 3D joint — **not comparable across cameras by construction**. But MediaPipe's
+`pose_world_landmarks` (metric, meters, hip-origin) were already being captured in
+`PoseFrame.world`, already used by `analysis3d.py` and the elbow-flare metric, and **never used
+by `form.py`**. So the instrument for the actual question may have been sitting unused all along.
+Now emitted as `knee_bend_3d_deg` / `elbow_angle_at_release_3d_deg`, **alongside** the 2D values
+(swapping would silently move every historical number). Gated on ANATOMICAL bounds (20-180°) and
+deliberately not the 30-150° window, so "did not bend" stays visible as data.
+
+Committing to the readings now, so no result can be reinterpreted after the fact:
+- **3D agrees across cameras where 2D does not** → the projection was the defect, camera-
+  dependence was self-inflicted, and body-form metrics are salvageable. The strong outcome.
+- **3D also fails across cameras** → does NOT isolate a cause. Monocular 3D may simply be
+  unreliable at 22% frame height, or the release anchors may still differ. Not a licence to
+  retire pose again — that is the exact over-reach being corrected here.
+- **2D vs 3D WITHIN the close camera**: expected to AGREE, and agreement proves little. The
+  close camera is a profile view, so knee flexion is already in its image plane — projection
+  costs almost nothing there. ⭐ **The sharp test is 2D-vs-3D within the WIDE camera**, whose
+  oblique view is where a projection should distort. That needs a wide-camera pose rebuild,
+  which is queued behind the close pass.
+- Standing caveat: monocular 3D is a model ESTIMATE, not a calibrated rig. A clean 3D result
+  raises the metric's ceiling; it does not make it ground truth.
+
+🔄 Close pass re-running with the corrected anchor + 3D angles (2026-08-04); results below.
 
 ⭐⭐ **LESSONS.** (a) At n≈30 the SIGN of an effect is nearly a coin flip for any |d|≲0.3 —
 never build an argument on sign agreement. (b) "Same shots" is a claim to be COMPUTED, not

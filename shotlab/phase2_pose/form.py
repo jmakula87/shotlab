@@ -498,6 +498,51 @@ def compute_form(shot, ball_track, poses, fps, *, handedness="right",
     # not a real read.
     rel_conf = "high" if rel.confidence == "high" else "medium" if rel.confidence == "medium" else "low"
 
+    # ---- 2c. the SAME two joints, from METRIC 3D landmarks --------------
+    # Every angle above is an IMAGE-PLANE projection: pose.py:151 builds `xy` in
+    # pixels, so an oblique-view knee and a profile knee are different projections
+    # of one 3D joint and are not comparable across cameras BY CONSTRUCTION. That
+    # undercuts any cross-camera agreement test done on the 2D values.
+    # MediaPipe's world landmarks (metric, meters, hip-origin) are already captured
+    # in PoseFrame.world and already trusted by analysis3d.py and the elbow-flare
+    # metric -- pose.py's "depth is qualitative only" caveat is about the SEPARATE
+    # `z` field, not `world`. Emitted ALONGSIDE the 2D values and never replacing
+    # them: a swap would silently move every historical number.
+    # Caveat kept in the note: monocular 3D is an estimate, not a calibrated rig.
+    knee3 = []
+    for f in span:
+        if f > rel_f:
+            break
+        fp = poses.get(f)
+        if fp is None or fp.world is None:
+            continue
+        if not _vis_ok(fp, [keys["hip"], keys["knee"], keys["ankle"]]):
+            continue
+        a3 = joint_angle(fp.w(keys["hip"]), fp.w(keys["knee"]), fp.w(keys["ankle"]))
+        if np.isfinite(a3):
+            knee3.append(float(a3))
+    if knee3:
+        metrics.append(FormMetric("knee_bend_3d_deg", round(min(knee3), 1), "medium",
+                                  "metric 3D landmarks -- camera-invariant in principle; "
+                                  "monocular depth estimate, so not a calibrated 3D read"))
+    else:
+        metrics.append(FormMetric("knee_bend_3d_deg", None, "na",
+                                  "no world landmarks over the load"))
+
+    fp3 = poses.get(rel_f)
+    a3 = None
+    if fp3 is not None and fp3.world is not None and \
+            _vis_ok(fp3, [keys["shoulder"], keys["elbow"], keys["wrist"]]):
+        a3 = joint_angle(fp3.w(keys["shoulder"]), fp3.w(keys["elbow"]),
+                         fp3.w(keys["wrist"]))
+    if a3 is not None and np.isfinite(a3):
+        metrics.append(FormMetric("elbow_angle_at_release_3d_deg", round(float(a3), 1),
+                                  rel_conf, "metric 3D landmarks; still release-anchored, "
+                                            "so no better than the release estimate"))
+    else:
+        metrics.append(FormMetric("elbow_angle_at_release_3d_deg", None, "na",
+                                  "no world landmarks at release"))
+
     # ---- 2b. shot tempo: dip bottom -> release (quickness) --------------
     if load_f is not None and rel_t >= load_f and (rel_t - load_f) / fps >= 0.05:
         tempo = (rel_t - load_f) / fps
