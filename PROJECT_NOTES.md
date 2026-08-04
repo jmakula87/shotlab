@@ -366,8 +366,55 @@ release): median −3.0f, sd 5.1f, only 28% within 1 frame — the two release e
 camera's noise, not the close camera's validity. The pre-registered 3D cross-camera test is what
 settles it.
 
-🔄 Wide-camera pose rebuild running (2026-08-04) for the pre-registered sharp test: 2D vs 3D
-WITHIN the oblique wide camera, where a projection should distort if it distorts anywhere.
+### ⛔ SHARP TEST RESULT — MY PROJECTION HYPOTHESIS IS REFUTED (2026-08-04)
+Pre-registered reading: much worse 2D-vs-3D agreement on the oblique wide camera than on the
+profile close camera would mean the image-plane projection was the defect.
+
+| 2D vs 3D agreement | knee r | knee median gap | elbow r | elbow median gap |
+|---|---|---|---|---|
+| **Wide (oblique)** | +0.65 | 13.8° | **+0.68** | **7.4°** |
+| **Close (profile)** | +0.76 | 8.0° | **+0.46** | **27.2°** |
+
+⛔ Not much worse — and on the ELBOW the oblique camera agrees *better*, the opposite of what
+projection geometry predicts. **Image-plane projection is not what broke the wide camera.**
+Coverage is, which was already established independently — and 3D recovers **none** of it
+(58 of 139 shots, identical to 2D). The unused instrument was worth adding and worth measuring;
+it simply did not explain what I expected it to.
+⚠️ Cross-camera knee in metric 3D: **r=+0.07, n=35** — 3D did not rescue agreement either. Per
+the pre-registration this **isolates nothing**: the wide camera is independently disqualified,
+so its values are noise, and near-zero correlation against noise is what you would see whether
+or not the close camera is sound. ⛔ Explicitly NOT a second licence to retire pose.
+⭐ Open question this raises: the close camera's 27° 2D-vs-3D elbow gap is the *largest*
+disagreement in the table, on the camera that should be the most favourable. Worth a look
+before trusting any close-cam elbow number; a profile view can put the shooting arm behind the
+torso, where monocular depth is least constrained.
+
+### ⭐ `knee_bend_3d_deg` — a CANDIDATE that survived every confound I could test
+d=+0.40, p=0.037, n=49/61 makes/misses, clearing its 0.38 power floor. Makes show the HIGHER
+knee angle, i.e. **LESS** bend. Ruled out, each measured not assumed:
+- **Outcome-reactivity** — measured entirely BEFORE release, so the objection that killed
+  follow-through cannot apply.
+- **Outcome-correlated coverage** (the defect that disqualified the wide camera) — present on
+  **49/49 makes vs 61/62 misses, p=1.000**.
+- **Clip artifact / Simpson's paradox** — clip-STRATIFIED permutation (labels shuffled only
+  within a clip, the correct null for blocked data) gives **p=0.0372** vs 0.0365 pooled, and all
+  four clips agree in sign: +0.41, +0.86, +0.12, +0.24.
+- **Shot distance** — the obvious explanation for "makes bend less" is that deeper shots need
+  more bend and go in less. Refuted: **corr(knee_3d, rim_dist_px) = +0.01**, and residualising
+  knee on distance leaves **d=+0.40, p=0.0398**. Within-zone it also keeps its sign
+  (mid-right +0.33 on 36/37, near-right +0.55 on 11/16).
+- **Pseudo-replication** — one-to-one join throughout.
+
+⚠️ **Still NOT a finding, and must not be coached on.** It does not survive Bonferroni across
+the 7 metrics tested (0.037 vs 0.0071); it is one shooter, one session; and it was found
+post-hoc in the same data that produced the follow-through artifact. Expected count of p<0.05
+under a global null across 7 tests is 0.35, so a single 0.037 is unsurprising on its own — what
+raises it above noise is the consistency across four clips and its survival of four independent
+confound tests, neither of which the pooled p captures.
+⭐ **PRE-REGISTERED for the next session:** knee_bend_3d_deg, makes minus misses, one-sided
+positive, d ≥ +0.25 with clip-stratified p < 0.05 on ≥ 80 labelled shots. Anything less is a
+failed replication and the candidate is dead-lettered. Registering the direction NOW is what
+makes the next test confirmatory rather than another exploratory sweep.
 
 ⭐⭐ **LESSONS.** (a) At n≈30 the SIGN of an effect is nearly a coin flip for any |d|≲0.3 —
 never build an argument on sign agreement. (b) "Same shots" is a claim to be COMPUTED, not
