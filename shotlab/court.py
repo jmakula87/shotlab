@@ -386,6 +386,20 @@ def detect_shots_to_rim(track, calib: Calibration, *, max_rim_gap: int = 20,
             _drop("never rose above rim height (bounce/roll)"); continue
         rel = fit.release_angle_deg()
         ent = fit.entry_angle_deg(calib.rim_x)
+        # MEASURED COST 2026-08-04: across both hand-counted sessions (7 clips,
+        # 254 attempts) this gate fires 3 times, and all 3 are real attempts that
+        # no other rim event recovers -- 1.2%. Angles were (81,86), (78,84),
+        # (84,84).
+        # NOT raised, on purpose. An 84 deg RELEASE is not a steep shot (real ones
+        # are 45-60); it is inflated because this camera sits nearly in line with
+        # the shot, so foreshortening collapses horizontal motion. That makes 78 an
+        # IMAGE-PLANE quantity compared against a WORLD-FRAME constant -- the same
+        # defect class as the old raw 8.0 RANSAC threshold and the 2D joint angles.
+        # Retuning it on the only data that could reveal the number is
+        # resubstitution, and a looser gate readmits the near-vertical
+        # tosses/rebounds it exists to reject. The real fix needs a measured camera
+        # tilt (ballistic.fit_camera_tilt, synth-validated, never fed real arcs) to
+        # de-project the angles first. See PROJECT_NOTES "THE 78 GATE".
         if min(rel, ent) > 78:
             _drop(f"78deg gate (rel {rel:.0f}, ent {ent:.0f})"); continue
         s = Shot(index=len(shots) + 1, frames=f_seg, xs=x_seg, ys=y_seg,

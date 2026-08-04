@@ -190,6 +190,40 @@ just no longer trustworthy. Fix is item 2's: normalise by rr² and re-fit.
 - ⛔ **Nothing was tuned before or during this run.** Next knob turned on this session
   invalidates it as a held-out measurement.
 
+## ⚠️ THE 78° GATE COSTS 3 REAL SHOTS IN 254 — MEASURED, DELIBERATELY NOT TUNED (2026-08-04)
+Task 20 was "make the 78° gate camera-aware". Measured first, across BOTH hand-counted sessions
+(7 clips, 254 attempts), using `detect_shots_to_rim(reject_log=)`:
+
+| reason a rim event produced no shot | count |
+|---|---|
+| too few points | 57 |
+| insufficient drop | 11 |
+| arc curves the wrong way | 4 |
+| **78° gate** | **3** |
+| RANSAC failed / never rose above rim | 1 / 1 |
+
+All 3 78°-gate drops sit near a hand-counted attempt that **no other rim event recovered**, so
+the gate genuinely loses 3 real shots (2 on 07-29, 1 on 07-20) — 1.2% of attempts. Their angles:
+(rel 81, ent 86), (78, 84), (84, 84).
+
+⛔ **I am NOT raising the constant.** An 84° *release* angle is not a steep shot — a real jump
+shot releases at 45-60°. It is inflated because this camera sits nearly in line with the shot,
+so foreshortening collapses the horizontal motion and inflates every image-plane angle. ⭐ **This
+is the SAME defect class as the body metrics and the old raw `8.0` RANSAC threshold: an
+IMAGE-PLANE quantity compared against a WORLD-FRAME constant.** Raising 78 to ~85 would recover
+3 shots on the only data that could have told me the number — textbook resubstitution, and it
+would admit exactly the near-vertical tosses/rebounds the gate exists to reject.
+⭐ The principled fix needs the camera's obliquity, which is not calibrated (`ballistic.fit_
+camera_tilt` exists and is synth-validated but has never been fed ≥2 real clean arcs). **Pre-
+registered:** if a future session supplies a measured tilt, de-project the angles before gating
+and re-measure recall AND precision on the frozen harness; until then the gate stays at 78 and
+the 1.2% is a known, quantified cost rather than an unexamined one.
+⚠️⚠️ **METHOD NOTE — my first run of this measurement was VACUOUS.** I filtered
+`r.get("why","")` while `_drop()` writes the field as `"reason"`, so every count came back 0 and
+I nearly recorded "the gate never binds, task moot". A stray `55 ?` in an unrelated column is
+the only thing that exposed it. **A filter on a key that does not exist returns zero, and zero
+looks exactly like a clean result.** Same family as the 08-03 checkguard lesson.
+
 ## ⭐⭐ "EVERY SESSION NEEDS ITS OWN LABELS" IS TRUE OF THE MODEL, NOT THE FEATURES (2026-08-04)
 Found by Fable during a labelling-design review, then **independently replicated on a
 separately-built 137-shot feature matrix** (`tools/transfer_check.py`, both directions):
