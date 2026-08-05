@@ -374,8 +374,8 @@ another object and the walk-back marched straight through it. The fix looked pri
 launch cannot lie across a physically impossible jump, exactly as it cannot lie across the
 dead-ball void the adjacent line already stops at. Implemented as
 `break if step > 2.0·rim_radius·frame_gap` (gap-normalised so bridged dropouts survive).
-**Measured on 254 attempts: 07-29 95.8%→92.3% (−5 tp), 07-20 86.5%→87.4% (+1). Net −4**, trading
-recall for a little precision (.986→.992) at a bad rate. **Reverted**, dead-lettered in
+**Measured on 254 attempts: 07-29 95.8%→92.3% (−5 tp), 07-20 88.3%→87.4% (−1 tp). Net −6**,
+trading recall for a little precision (.986→.992) at a bad rate. **Reverted**, dead-lettered in
 `court.py`. ⭐ Real launches DO sit across large image-space steps — the ball moves fastest
 exactly at the launch, which is also where the greedy track is sparsest. The intuition is wrong,
 and the comment now carries the measurement so the next person does not re-derive it.

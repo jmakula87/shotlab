@@ -321,8 +321,11 @@ def detect_shots_to_rim(track, calib: Calibration, *, max_rim_gap: int = 20,
             # it cannot lie across the dead-ball void the line above stops at.
             # Implemented as `break if step > 2.0 * rim_radius * frame_gap`.
             # RESULT, over both hand-counted sessions (254 attempts):
-            #   07-29  95.8% -> 92.3%  (-5 tp)   07-20  86.5% -> 87.4%  (+1 tp)
-            # Net -4. Precision rose slightly (.986 -> .992), so it was trading
+            #   07-29  95.8% -> 92.3%  (-5 tp)   07-20  88.3% -> 87.4%  (-1 tp)
+            # Net -6. (The 07-20 baseline is 98/111 with back_extend, NOT the
+            # 96/111 union-only figure -- comparing across configurations briefly
+            # made this look like a +1 improvement.)
+            # Precision rose slightly (.986 -> .992), so it was trading
             # recall for precision at a bad rate. Real launches evidently DO sit
             # across large image-space steps -- the ball moves fastest exactly at
             # the launch, where the greedy track is also sparsest. Do not re-add a

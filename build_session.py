@@ -135,7 +135,7 @@ def main(argv=None):
                          "shots. ⭐ STRONGLY RECOMMENDED, and the single biggest "
                          "detection lever: measured 2026-08-04 against 254 hand-counted "
                          "attempts across BOTH sessions, recall 91.6%%->95.8%% on 07-29 "
-                         "and 57.7%%->86.5%% on 07-20, at essentially unchanged precision "
+                         "and 57.7%%->88.3%% on 07-20, at essentially unchanged precision "
                          "(.985->.986 and 1.000->.990). ⚠️ NOT the default only because it "
                          "detects the full conf-0.01 cloud, which costs time and memory -- "
                          "the YOLO pass itself is the same either way, since conf only "
