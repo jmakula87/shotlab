@@ -345,6 +345,62 @@ def _detect_full_clip(clip):
     return out
 
 
+def production_shots(clip, calib=None):
+    """The shots PRODUCTION would produce for `clip`, and the truth to score them.
+
+    Returns (shots, track, attempts, calib).
+
+    ⭐ USE THIS IN EVERY AD-HOC MEASUREMENT. It exists because the same error was
+    made twice on 2026-08-04, both times costing a wrong conclusion:
+
+      * the knee "replication" compared two joins built on different wide-side
+        ANCHORS and read the agreement as confirmation;
+      * a teleport-stop experiment was scored against a baseline computed WITHOUT
+        `cloud=`, turning a 1-shot regression into an apparent 1-shot gain.
+
+    Both came from each throwaway script re-assembling the detection stack by
+    hand and differing in one argument. One definition removes the class. If the
+    production path changes, change it HERE and every measurement moves with it.
+
+    Current definition = greedy(conf 0.25) + back_extend(cloud 0.01), unioned with
+    the beam tracker: 137/143 = 95.8% on 07-29 and 98/111 = 88.3% on 07-20.
+    """
+    from shotlab.phase1_ball.track import assemble_track
+    from shotlab.phase1_ball.pipeline import _union_beam
+    from shotlab.court import detect_shots_to_rim
+    from tools import rim_segments as rs
+
+    if calib is None:
+        calib = rs.calib_at(rs.load_rims(clip), 0)
+    raw = _detect_full_clip(clip)
+    greedy_cands = _cands_at_conf(raw, 0.25)
+    cloud = _cands_at_conf(raw, 0.01)
+    track = assemble_track(greedy_cands)
+    shots, track = _union_beam(detect_shots_to_rim(track, calib, cloud=cloud),
+                               track, cloud, calib)
+    return shots, track, load_attempts(clip), calib
+
+
+def score_against_truth(shots, calib, attempts, tol=30):
+    """(true_positives, false_positives) with a ONE-TO-ONE match to the hand count.
+
+    Nearest-first and each attempt spendable once -- the same rule as the
+    close-cam join, for the same reason: a non-injective match silently
+    double-counts and flatters recall.
+    """
+    from shotlab.phase1_ball.pipeline import _rim_frame
+    used, tp = set(), 0
+    for s in sorted(shots, key=lambda s: _rim_frame(s, calib)):
+        rf = _rim_frame(s, calib)
+        near = [a for a in attempts
+                if abs(a["rim_frame"] - rf) <= tol and a["attempt_id"] not in used]
+        if near:
+            a = min(near, key=lambda a: abs(a["rim_frame"] - rf))
+            used.add(a["attempt_id"])
+            tp += 1
+    return tp, len(shots) - tp
+
+
 def _cands_at_conf(raw, conf):
     from shotlab.phase1_ball.detect import BallCandidate
     out = {}
