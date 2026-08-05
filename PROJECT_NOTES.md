@@ -226,6 +226,37 @@ damning, and it agrees with published BlazePose-World error of 7.1-17.2° MAE.
 ✅ **What survives:** group-level *distribution* work may still be defensible where random error
 averages down — but nothing per-shot, and nothing at the ~5° scale. Before any future body-form
 claim, **run this reliability check first and quote the SDC.**
+✅ **AND IT CLOSES THE OPEN ELBOW QUESTION.** I had flagged the close camera's **27° median
+2D-vs-3D elbow gap** (r=+0.46) as the largest disagreement in the table, on the camera that
+should be most favourable, and left it unexplained. It needs no special explanation: the 3D
+elbow's own reproducibility is **r=0.21, SDC 20.8°**, so a 27° gap is inside the metric's noise.
+⭐ The "anomaly" was the 3D estimate being unreliable, not the profile view being strange —
+**an unexplained discrepancy between two measurements is usually the noisier one, and it is
+cheaper to measure reliability than to theorise about geometry.**
+
+## ⚠️ THE 07-29 vs 07-20 RECALL GAP: ball SIZE correlates, rim radius is NOT the cause
+07-29 scores **95.8%** and 07-20 **~88%**, so the gap is worth understanding — it is the closest
+thing to actionable filming advice the data can give.
+
+| clip | ball r px | filed rim r px | ball/rim | recall |
+|---|---|---|---|---|
+| 0729 ×4 | 63.5-67.2 | 112-120 | **0.55-0.57** | 92.9-100% |
+| 0720 ×3 | 34.5-34.9 | 35.6-39.3 | **0.89-0.97** | 85.7-93.9% |
+
+**corr(ball radius px, recall) = +0.74** across the 7 clips — consistent with the standing
+"film closer" lever, though n=7 and confounded with session.
+⛔ **A tempting story, MEASURED AND REFUTED.** Regulation ball/rim is 9.43in/18in = **0.524**.
+07-29's 0.55-0.57 is physically right; **07-20's 0.89-0.97 is impossible**, implying its rim
+radii (filed before the "measure the paint, don't click it" lesson) are ~1.8× too small — and
+rim radius feeds `threshold_px = (8/36)·rr`, the exact constant whose scale error cost 11 points
+of recall on 4K. So: recompute the rim from physics and recover the gap?
+**No.** Substituting the physics-implied radius (~66px) gives **88.3% → 86.5%, −2 tp, +1 fp.**
+The correction does not help, so a wrong rim radius is NOT what separates the two sessions and
+the filed rims stay untouched.
+⭐ The likeliest reading is that the DETECTOR'S ball radius is inflated on a small fast ball at
+1080p (motion blur widens the box), so the "implied rim" was itself too large — i.e. the
+implausible ratio indicts the ball measurement, not necessarily the rim. **Either way it was a
+clean, cheap test of a plausible story, and the story lost.**
 
 ## ✅ FROZEN EVAL RE-BANKED AFTER THE 08-04 EDITS — NO REGRESSION
 Today changed the default detection path (`back_extend` now fed the cloud), `form.py`'s `span`,
