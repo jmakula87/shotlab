@@ -360,6 +360,25 @@ conf only FILTERS a YOLO pass that runs regardless, so the low-conf cloud is fre
 free win for the default path, **not** the best available one; prefer `--beam`.
 ⭐ **LESSON: "measured inert" is a statement about a CONDITION, not about a component.** The
 component was fine; I tested it only where a better mechanism had already consumed its input.
+⚠️ **CORRECTION (later the same day): "adds nothing on top of the union" was TOO GENERAL.** It
+holds on 07-29 (union 137 = union+back_extend 137) but **NOT on 07-20, where it adds +2**
+(96→98, i.e. 86.5%→88.3%). Both figures were right for their configuration; the generalisation
+was not. **The production path (union + back_extend) is 137/143 and 98/111.** ⭐ I drew a general
+conclusion from the one session where the component happened to be redundant — the same shape of
+error as the original "measured inert" verdict, made twice in one day about the same component.
+
+### ⛔ A spatial TELEPORT-STOP in the walk-back: built, measured, REVERTED (2026-08-04)
+Attempt 34's segment carried **6 jumps >2 rim radii, spanned x 1000..3211, and dropped −609px**
+— an "arc" ending 609px ABOVE its start, which no shot does. The greedy tracker had flipped onto
+another object and the walk-back marched straight through it. The fix looked principled: a
+launch cannot lie across a physically impossible jump, exactly as it cannot lie across the
+dead-ball void the adjacent line already stops at. Implemented as
+`break if step > 2.0·rim_radius·frame_gap` (gap-normalised so bridged dropouts survive).
+**Measured on 254 attempts: 07-29 95.8%→92.3% (−5 tp), 07-20 86.5%→87.4% (+1). Net −4**, trading
+recall for a little precision (.986→.992) at a bad rate. **Reverted**, dead-lettered in
+`court.py`. ⭐ Real launches DO sit across large image-space steps — the ball moves fastest
+exactly at the launch, which is also where the greedy track is sparsest. The intuition is wrong,
+and the comment now carries the measurement so the next person does not re-derive it.
 
 ## ⚠️ THE 78° GATE COSTS 3 REAL SHOTS IN 254 — MEASURED, DELIBERATELY NOT TUNED (2026-08-04)
 Task 20 was "make the 78° gate camera-aware". Measured first, across BOTH hand-counted sessions
