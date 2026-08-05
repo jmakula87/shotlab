@@ -234,6 +234,36 @@ elbow's own reproducibility is **r=0.21, SDC 20.8°**, so a 27° gap is inside t
 **an unexplained discrepancy between two measurements is usually the noisier one, and it is
 cheaper to measure reliability than to theorise about geometry.**
 
+## ⭐ THE 6 REMAINING 07-29 MISSES, DIAGNOSED ONE BY ONE (2026-08-04)
+Detection is the part of this system that works (95.8%), so the remaining 4.2% is the real
+work-list. Every miss traced to the exact rejection that killed it:
+
+| attempt | rim frame | why the rim event died |
+|---|---|---|
+| 17 | 5311 | **78° gate** (rel 81, ent 86) |
+| 18 | 5403 | never rose above rim height (bounce/roll) |
+| 5 | 1984 | **no rim event at all** — ball never tracked to the rim (detection-limited) |
+| 30 | 9695 | **78° gate** (rel 78, ent 84) |
+| 32 | 9262 | arc curves the wrong way |
+| 34 | 9910 | insufficient drop (**−609** px — the "arc" ENDS 609px higher than it starts, i.e. a mis-assembled track running upward) |
+
+⭐ **The 78° gate is 2 of the 6 — a third of the remaining loss**, which quantifies the cost of
+having declined to tune it (rightly: it compares an IMAGE-PLANE angle to a WORLD constant, so
+retuning on this data is resubstitution).
+⛔ **THE PRINCIPLED FIX IS BLOCKED ON CAMERA INTRINSICS, AND NOTHING ELSE.**
+`ballistic.fit_camera_tilt` recovers pitch/roll from the physics of ≥2 clean arcs with no rim or
+board, is synth-validated (18/4° → 17.1/4.3°, rmse 0.69px), and **has never been fed real
+arcs** — 137 are now available. But it needs `K`, and there are **no intrinsics anywhere on
+disk** (`config/` holds only rim files; no ChArUco artifacts exist). Assuming a focal length
+would put an unmeasured constant under a geometric correction, which is precisely the failure
+pattern of this whole day.
+⭐⭐ **The unblock is a ~2-MINUTE CALIBRATION CLIP (checkerboard/ChArUco close-ups), NOT a
+session.** That is a materially smaller ask than re-filming, and it would also unlock W2 (true
+depth) and the release/entry angles that are currently geometry-limited. Worth separating from
+the "film a fresh session" item, which is about a held-out detection number.
+⚠️ Note miss 34: a drop of **−609px** means `assemble_track` produced a segment travelling
+upward across the rim event. That is a tracker defect, not a threshold to loosen.
+
 ## ⭐⭐ THE LABELLING RULE: LABEL ~50+ SHOTS OR LABEL NONE — IN BETWEEN IS NEGATIVE RETURN
 The learning curve alone was the wrong question. A brand-new session can be pre-labelled for
 FREE at ~77-78% by the z-scored transfer model, which needs zero labels from it, so the
