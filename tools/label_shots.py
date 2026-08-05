@@ -219,6 +219,21 @@ def main(argv=None):
     secs = [m.get("seconds", 0) for m in meta.values() if isinstance(m, dict)]
     pace = f", median {sorted(secs)[len(secs)//2]:.1f}s/shot" if secs else ""
     print(f"\ndone: {saved} labelled this run, {len(truth)} total{pace}")
+    # MEASURED 2026-08-04 (tools/label_curve.py): a new session can be pre-labelled
+    # for free at ~77% by the z-scored transfer model, and a refit on fewer than
+    # ~48 hand labels LOSES to it (k=32 -> 76%, k=16 -> 71%). Partial labelling has
+    # NEGATIVE return, which is the opposite of the natural intuition, so the tool
+    # says so rather than leaving it in a document nobody reads.
+    usable = sum(1 for v in truth.values() if v in ("make", "miss"))
+    if usable < 48:
+        print(f"\n⚠️  {usable} make/miss labels. A refit on fewer than ~48 is WORSE")
+        print(f"   than the free zero-label transfer model (~77%): at 32 labels a")
+        print(f"   refit scores ~76%, at 16 only ~71%. Either push on to ~50+, or")
+        print(f"   stop and use transfer (tools/transfer_check.py) -- stopping in")
+        print(f"   between spends effort for a worse model. {48 - usable} to go.")
+    else:
+        print(f"\n✅ {usable} make/miss labels -- past the ~48 break-even, so a")
+        print(f"   within-session refit now beats the free transfer model.")
     print(f"  labels     -> {tpath}")
     print(f"  provenance -> {mpath}")
     print("  model agreement: python -X utf8 tools/label_shots.py "

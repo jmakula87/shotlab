@@ -213,6 +213,21 @@ def main(argv=None):
                   f"{len(hit)} of these clips ({', '.join(h[-13:] for h in hit)}).")
             print("  ⚠️  The make% below is RESUBSTITUTION, not a measurement -- it "
                   "reflects how well the model memorised this session.")
+        elif trained:
+            # The INVERSE case, and the more dangerous one (2026-08-04 review):
+            # this guard only ever fired on overlap, so a BRAND-NEW session --
+            # precisely the known-bad case -- produced no warning at all while
+            # `--make-model auto` happily loaded the previous session's model.
+            # Measured cross-session accuracy is 55-62% against a ~53%
+            # majority-class baseline, i.e. barely above chance.
+            print(f"  ⚠️  {os.path.basename(make_model)} was fitted on a DIFFERENT "
+                  f"session ({len(trained)} clips), and none of them are these.")
+            print("  ⚠️  Make/miss does NOT transfer: measured 55-62% cross-session "
+                  "vs a ~53% majority baseline. Treat the make% below as a HINT.")
+            print("  ⚠️  Better options: label ~50+ shots of this session "
+                  "(tools/label_shots.py) and re-fit, or use the z-scored transfer "
+                  "model (~77%, tools/transfer_check.py). Labelling FEWER than ~48 "
+                  "is worse than doing neither.")
 
     fixed_calib = Calibration.load(args.calib) if args.calib else None
 
