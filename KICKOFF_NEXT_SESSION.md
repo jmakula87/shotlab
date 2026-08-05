@@ -156,8 +156,29 @@ the 0720 rim. **137/143 = 96% [CI 91-98], precision 0.986, per clip 93/95/95/100
    calibration parity; cache code-hashing; beam coast fix; **arc-metric honesty pass**
    (camera-aware angle confidence, `--camera`; `process/ARC_METRIC_HONESTY.md`).
 
-## OPEN — the only things left, both need the OWNER
-1. **An untouched test session — THE FOOTAGE IS HERE (2026-07-29), the hand-count is not.**
+## OPEN — current state (the 07-29 hand-count below is DONE; kept for the runbook)
+**Owner asks, smallest first:**
+- ⭐ **A ~2-minute CALIBRATION CLIP** (task #26) — print `process/calibration_board/` and film
+  the board at varied angles from the wide camera's position. This is NOT a shooting session.
+  It yields camera intrinsics, which exist nowhere on disk, and unblocks `fit_camera_tilt`
+  (synth-validated, never fed real arcs; 137 are waiting), a camera-aware 78° gate (**2 of the
+  6 remaining 07-29 misses**), true depth, and the geometry-limited arc angles.
+- **A fresh shooting session** (task #22) — the only way to make 96% a HELD-OUT number. The
+  frozen **85%** remains the last clean held-out figure. ⛔ 07-20 cannot substitute: the
+  `(8/36)·rr` fix is an IDENTITY transform there by construction.
+- **Arc-metric VALUE changes** (task #12, below) — coaching-facing judgment.
+
+**Not blocked on the owner:**
+- Tracker defect behind miss 34 (task #27) — note a spatial teleport-stop was already built,
+  measured (−4 tp over 254 attempts) and REVERTED; do not retry it blind.
+- Wire the zero-label transfer model into the product (task #28) — measured but unreachable
+  from `build_session`. ⚠️ Re-run `transfer_check.py` on a third session first; 07-10 cannot
+  supply it (raw clips gone, overlays only).
+
+**Current production numbers** (union + `back_extend`, both hand-counted sessions):
+**07-29 137/143 = 95.8%** (2 fp) · **07-20 98/111 = 88.3%** (1 fp).
+
+1. **[DONE 2026-08-03] An untouched test session — the hand-count is now complete.**
    Extracted and smoke-tested; details in the PROJECT_NOTES 07-29 section. **FOUR** wide
    clips, **4K30 CFR**, ~26.5 min total, and the ball now reads ~22 px radius in model space
    (vs ~10 px on 0720) — he filmed closer. The detector was trained on the 0720 clips, so
