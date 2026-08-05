@@ -162,6 +162,64 @@ def main():
     print("  confounds SAMPLE SIZE with CLIP DIVERSITY -- compare it to A at the")
     print("  same shot count to see which of the two is actually doing the work.")
 
+    # ---- D: WHEN IS LABELLING WORTH IT AT ALL? -------------------------------
+    # A brand-new session can be pre-labelled for FREE at ~78% by the z-scored
+    # transfer model (tools/transfer_check.py), which needs zero labels from it.
+    # So the operative question is not "how many labels reach 89%" but "at what k
+    # does labelling this session finally beat the free option". Below that k,
+    # every label collected is wasted effort.
+    print("\nD: k labels from THIS session vs the FREE zero-label transfer model")
+    from sklearn.linear_model import LogisticRegression
+
+    def _z(X):
+        s = X.std(0); s[s < 1e-9] = 1.0
+        return (X - X.mean(0)) / s
+
+    other = {}
+    for c in ["PXL_20260720_151519220", "PXL_20260720_152319112",
+              "PXL_20260720_153054813"]:
+        p = FEAT_CACHE / f"{c}.json"
+        if p.exists():
+            d = json.load(open(p))
+            other.setdefault("X", []).extend(d["X"])
+            other.setdefault("y", []).extend(d["y"])
+    if not other:
+        print("    07-20 feature cache missing -- skipped")
+        return 0
+    Xo, yo = np.array(other["X"], float), np.array(other["y"], int)
+    zlr_other = LogisticRegression(max_iter=2000).fit(_z(Xo), yo)
+
+    print(f"    {'k labels':>9}{'GBM refit':>12}{'zLR refit':>12}"
+          f"{'free transfer':>15}{'worth it?':>11}")
+    print("    " + "-" * 60)
+    for k in [0, 8, 16, 24, 32, 48, 64, 80]:
+        g, z, t = [], [], []
+        for rep in range(N_REP):
+            r = np.random.default_rng(2000 + rep)
+            idx = r.permutation(len(y))
+            te, pool = idx[:N_TEST], idx[N_TEST:]
+            if k > len(pool):
+                continue
+            # the free option: trained on the OTHER session, z-scored on THIS one
+            t.append(float((zlr_other.predict(_z(X[te])) == y[te]).mean()))
+            if k == 0:
+                continue
+            sel = pool[:k]
+            if len(np.unique(y[sel])) < 2:
+                continue
+            g.append(float((mv.train(X[sel], y[sel]).predict(X[te]) == y[te]).mean()))
+            z.append(float((LogisticRegression(max_iter=2000)
+                            .fit(_z(X[sel]), y[sel]).predict(_z(X[te])) == y[te]).mean()))
+        tr = np.mean(t) if t else float("nan")
+        gm = np.mean(g) if g else float("nan")
+        zm = np.mean(z) if z else float("nan")
+        best = max([v for v in (gm, zm) if v == v], default=float("nan"))
+        verdict = "--" if k == 0 else ("yes" if best > tr else "NO")
+        print(f"    {k:>9}{(f'{gm:.0%}' if gm == gm else '--'):>12}"
+              f"{(f'{zm:.0%}' if zm == zm else '--'):>12}{tr:>15.0%}{verdict:>11}")
+    print("\n    'NO' means the labels collected so far are WORSE than the free")
+    print("    zero-label transfer model -- effort spent for negative return.")
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

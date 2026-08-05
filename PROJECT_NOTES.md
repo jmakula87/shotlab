@@ -234,6 +234,31 @@ elbow's own reproducibility is **r=0.21, SDC 20.8°**, so a 27° gap is inside t
 **an unexplained discrepancy between two measurements is usually the noisier one, and it is
 cheaper to measure reliability than to theorise about geometry.**
 
+## ⭐⭐ THE LABELLING RULE: LABEL ~50+ SHOTS OR LABEL NONE — IN BETWEEN IS NEGATIVE RETURN
+The learning curve alone was the wrong question. A brand-new session can be pre-labelled for
+FREE at ~77-78% by the z-scored transfer model, which needs zero labels from it, so the
+operative question is **at what k does labelling this session finally beat the free option**:
+
+| k labels from this session | GBM refit | zLR refit | **free transfer** | worth it? |
+|---|---|---|---|---|
+| 0 | — | — | **77%** | — |
+| 8 | 63% | 62% | 77% | **NO** |
+| 16 | 71% | 69% | 77% | **NO** |
+| 24 | 74% | 71% | 77% | **NO** |
+| 32 | 76% | 73% | 77% | **NO** |
+| 48 | **79%** | 75% | 77% | yes |
+| 64 | 82% | 76% | 77% | yes |
+| 80 | **84%** | 77% | 77% | yes |
+
+⛔ **Labelling fewer than ~48 shots is WORSE THAN LABELLING NONE.** A small hand-labelled refit
+loses to the free transfer model, so partial effort has *negative* return — the intuition that
+"some labels must help" is exactly wrong here.
+⭐ **zLR is the model for TRANSFER only.** Once real labels exist the GBM wins at every k
+(84% vs 77% at k=80), so the workflow is: zero labels → z-scored logistic from a prior session;
+≥48 labels → refit the GBM on this session. Do not use one where the other belongs.
+⭐ This is what the earlier "no plateau" curve was missing: a REFERENCE LINE for doing nothing.
+A learning curve without the free alternative on it cannot tell you whether to spend the effort.
+
 ## ⚠️ THE 07-29 vs 07-20 RECALL GAP: ball SIZE correlates, rim radius is NOT the cause
 07-29 scores **95.8%** and 07-20 **~88%**, so the gap is worth understanding — it is the closest
 thing to actionable filming advice the data can give.
