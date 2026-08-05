@@ -312,6 +312,21 @@ def detect_shots_to_rim(track, calib: Calibration, *, max_rim_gap: int = 20,
             # it only trips on a genuine between-possession void. (Tune vs the eval.)
             if frames[j] - frames[j - 1] > max_launch_gap:
                 break
+            # ⛔ A SPATIAL teleport-stop here was BUILT AND MEASURED AND REVERTED
+            # (2026-08-04). The reasoning was clean: the greedy tracker can flip
+            # onto another object, and 07-29 clip 3 attempt 34 died on a segment
+            # carrying 6 jumps >2 rim radii, spanning x 1000..3211, with a drop of
+            # -609px (an "arc" ending 609px ABOVE its start, which no shot does).
+            # A launch cannot lie across a physically impossible jump, exactly as
+            # it cannot lie across the dead-ball void the line above stops at.
+            # Implemented as `break if step > 2.0 * rim_radius * frame_gap`.
+            # RESULT, over both hand-counted sessions (254 attempts):
+            #   07-29  95.8% -> 92.3%  (-5 tp)   07-20  86.5% -> 87.4%  (+1 tp)
+            # Net -4. Precision rose slightly (.986 -> .992), so it was trading
+            # recall for precision at a bad rate. Real launches evidently DO sit
+            # across large image-space steps -- the ball moves fastest exactly at
+            # the launch, where the greedy track is also sparsest. Do not re-add a
+            # spatial stop here without re-measuring; the intuition is wrong.
             j -= 1
         if int(frames[j]) in seen_launch:
             continue
