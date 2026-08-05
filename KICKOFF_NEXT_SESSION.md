@@ -35,6 +35,28 @@ two metrics that agreed. Full detail + what survives in `PROJECT_NOTES.md`.
   the file has 141 rows across 4 clips. Verify a review's factual claims before acting; it
   cuts both ways.
 
+## ⭐⭐ 2026-08-04 — THE LABELLING RULE: ~50+ SHOTS OR NONE. IN BETWEEN IS NEGATIVE RETURN.
+A new session can be pre-labelled **free at ~77%** by the z-scored transfer model (zero labels
+needed). So the question is never "how many labels reach 89%", it is **when does labelling beat
+doing nothing**:
+
+| k hand labels | GBM refit | zLR refit | **free transfer** | worth it? |
+|---|---|---|---|---|
+| 8 | 63% | 62% | **77%** | NO |
+| 16 | 71% | 69% | 77% | NO |
+| 32 | 76% | 73% | 77% | **NO** |
+| 48 | 79% | 75% | 77% | yes |
+| 80 | **84%** | 77% | 77% | yes |
+
+⛔ **Fewer than ~48 labels is WORSE than labelling none.** Partial effort has negative return.
+⭐ **zLR is for TRANSFER only** (zero labels); once labels exist the GBM wins at every k.
+✅ Both rules are wired into the tools — `tools/label_shots.py` reports progress against the
+break-even, and `build_session` now warns when `--make-model auto` resolves to a DIFFERENT
+session's model (the guard previously fired only on overlap, so the known-bad cross-session case
+was silent). `tools/transfer_check.py` is the zero-label path.
+⚠️ The zLR transfer result rests on ONE session pair; re-run `transfer_check.py` before relying
+on it. ⛔ 07-10 cannot supply the third pair — its raw clips are gone (overlays only).
+
 ## ⛔⛔⛔ 2026-08-04 — BODY METRICS ARE CLOSED ON MEASUREMENT GROUNDS. READ BEFORE RE-OPENING.
 Re-measuring the SAME 07-20 shots with a different pose model (`--pose-variant heavy`, same
 video) — repeated measurements of identical physical events, so this yields a within-shot SD and

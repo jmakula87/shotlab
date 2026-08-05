@@ -132,9 +132,14 @@ def main(argv=None):
     ap.add_argument("--beam", action="store_true",
                     help="union the multi-hypothesis beam tracker (over the conf-0.01 "
                          "cloud) with the greedy tracker -- recovers fragmented-arc "
-                         "shots. Measured on the held-out 07-29 session: the greedy->union "
-                         "->+rim-recovery ladder runs 68%%->82%%->86%% on clip 1 and holds "
-                         "its shape on all four. Slower (detects the full cloud).")
+                         "shots. ⭐ STRONGLY RECOMMENDED, and the single biggest "
+                         "detection lever: measured 2026-08-04 against 254 hand-counted "
+                         "attempts across BOTH sessions, recall 91.6%%->95.8%% on 07-29 "
+                         "and 57.7%%->86.5%% on 07-20, at essentially unchanged precision "
+                         "(.985->.986 and 1.000->.990). ⚠️ NOT the default only because it "
+                         "detects the full conf-0.01 cloud, which costs time and memory -- "
+                         "the YOLO pass itself is the same either way, since conf only "
+                         "FILTERS its output. --validated turns it on.")
     ap.add_argument("--camera", default="unknown",
                     choices=["side_on", "oblique", "behind", "unknown"],
                     help="camera geometry -- gates arc-angle confidence. release/entry "
