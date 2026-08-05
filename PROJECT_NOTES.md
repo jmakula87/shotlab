@@ -249,10 +249,26 @@ instead of deferring to it.)*
    user never selects, sees, or controls. And if `heavy` is simply more accurate, the gap is
    `full`'s ERROR — and `full` is what ships. **Both readings close it.**
 
-⏳ **One genuine escape route is still being tested** — see the robust-estimator section below.
-`knee_bend` is a MINIMUM over the load window, and a minimum is the most noise-sensitive
-statistic available: one bad landmark sets it. That indicts the ESTIMATOR and the DEFINITION
-together, and only the definition is free to change.
+5. ⛔ **THE ONE GENUINE ESCAPE ROUTE, TESTED AND CLOSED.** `knee_bend` is a MINIMUM over the
+   load window — the most noise-sensitive statistic available, since one bad landmark sets it.
+   That indicts the ESTIMATOR and the DEFINITION together, and only the definition can change.
+   So I added robust twins of the same quantity and re-ran both pose passes:
+
+   | estimator | r | bias | SD_within | **SDC** |
+   |---|---|---|---|---|
+   | MIN over the load (shipped) | 0.07 | −7.1° | 8.5° | **23.7°** |
+   | 10th percentile | 0.00 | −8.5° | 7.7° | 21.3° |
+   | mean of the 5 deepest frames | −0.02 | −8.3° | 7.5° | 20.7° |
+   | 2D min (reference) | **0.83** | +0.3° | 6.7° | 18.6° |
+
+   **Robustifying moves the SDC by 13% and leaves the correlation at ZERO.** The minimum was
+   not the problem: the whole 3D angle series is noisy, so averaging over the dip has nothing
+   better to average. ⭐ Note the consistent **−7 to −8.5° bias** — the two models disagree
+   *systematically* as well as having no per-shot agreement, which is worse than random error
+   because it does not average away in group-level work either.
+   ⇒ **The closure stands, now on stronger evidence: the most plausible rescue was tested and
+   failed.** The 2D projection remains the most reproducible of the four and is still
+   unusable at 5°.
 ✅ **AND IT CLOSES THE OPEN ELBOW QUESTION.** I had flagged the close camera's **27° median
 2D-vs-3D elbow gap** (r=+0.46) as the largest disagreement in the table, on the camera that
 should be most favourable, and left it unexplained. It needs no special explanation: the 3D
