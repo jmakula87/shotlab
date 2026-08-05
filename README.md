@@ -26,6 +26,16 @@ It compares each shot to **your own profile** (see below), plus a small set of
 today (elbow bend, knee, tempo, follow-through, balance); elbow flare needs the
 2-camera rig.
 
+⚠️ **Read the cues as form REMINDERS, not measurements.** Per-shot pose angles
+have a measured smallest-detectable-change of ~19-24° (see the Pose honesty rule
+below), so a live cue reacting to a few degrees of knee bend is inside the noise.
+⛔ In particular, **"hold your follow-through" is not supported by this data**:
+follow-through hold is measured entirely *after* the ball leaves the hand, and
+makes/misses separate only 0.6-0.8s post-release — when the ball is at the rim
+and a miss has already sent you to rebound. The drill built on it was removed
+from the desktop coach on 2026-08-04. Universal form advice is fine; presenting
+it as something the system *measured about that shot* is not.
+
 ## Desktop pipeline (recorded clips)
 
 ```bash
@@ -121,9 +131,19 @@ feels like too much, keep the profile out of `app/` and sideload it instead.
   CPU speedup — the production path). `ultralytics` is AGPL-3.0 (fine for
   personal use).
 - **Pose:** MediaPipe **BlazePose-33** (Apache-2.0, real-time on CPU), One-Euro
-  smoothed. **Honesty rule:** in-plane angles (knee side-on, release-vs-apex) are
-  high-confidence; depth-dependent ones (elbow flare, squareness, release height)
-  are low-confidence on one camera and labeled so.
+  smoothed.
+  ⛔ **Honesty rule, CORRECTED 2026-08-04 — the old one overstated the case.** It
+  used to say in-plane angles were "high-confidence". They are not. Re-measuring
+  the *same* shots with a different pose model (identical video, everything else
+  fixed) gives a **smallest detectable change of 18.6° for the 2D knee and 23.7°
+  for the 3D knee**, with the 3D angle agreeing with itself at only **r=0.07**.
+  Smoothing is not the culprit (r=0.99) — the model is.
+  ⇒ **Single-camera pose body metrics are not a per-shot instrument here.** They
+  remain usable for group-level *distribution* work, where random error averages
+  down. Depth-dependent quantities (elbow flare, squareness, release height) were
+  already labeled low-confidence and stay that way.
+  ⭐ Before trusting any body-form number, run the reliability check and quote the
+  SDC: `tools/flare_report.py --pose-variant heavy` / `--no-smooth`.
 - **Environment:** CPU-only, Python 3.13, ffmpeg. Every choice is the
   CPU-friendly option.
 
