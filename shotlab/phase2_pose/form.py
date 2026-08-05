@@ -536,9 +536,25 @@ def compute_form(shot, ball_track, poses, fps, *, handedness="right",
         metrics.append(FormMetric("knee_bend_3d_deg", round(min(knee3), 1), "medium",
                                   "metric 3D landmarks -- camera-invariant in principle; "
                                   "monocular depth estimate, so not a calibrated 3D read"))
+        # ROBUST twins of the same quantity (2026-08-05). `knee_bend` is a MINIMUM
+        # over the load window, and a minimum is the most noise-sensitive statistic
+        # there is: it takes the single most extreme frame, so ONE bad landmark
+        # sets it. The reliability study measured the min at r=0.07 / SDC 23.7 deg
+        # across pose models -- but that indicts the ESTIMATOR and the DEFINITION
+        # together, and only the definition is free to change. These separate them.
+        _s = sorted(knee3)
+        _k = max(1, int(round(0.10 * len(_s))))
+        metrics.append(FormMetric("knee_bend_3d_p10_deg",
+                                  round(float(np.percentile(_s, 10)), 1), "medium",
+                                  "10th-percentile knee over the load -- a min that "
+                                  "cannot be set by one frame"))
+        metrics.append(FormMetric("knee_bend_3d_low5_deg",
+                                  round(float(np.mean(_s[:min(5, len(_s))])), 1), "medium",
+                                  "mean of the 5 deepest frames -- averages the dip "
+                                  "bottom instead of sampling its extreme"))
     else:
-        metrics.append(FormMetric("knee_bend_3d_deg", None, "na",
-                                  "no world landmarks over the load"))
+        for _n in ("knee_bend_3d_deg", "knee_bend_3d_p10_deg", "knee_bend_3d_low5_deg"):
+            metrics.append(FormMetric(_n, None, "na", "no world landmarks over the load"))
 
     fp3 = poses.get(rel_f)
     a3 = None

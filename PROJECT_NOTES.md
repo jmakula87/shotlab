@@ -226,6 +226,33 @@ damning, and it agrees with published BlazePose-World error of 7.1-17.2° MAE.
 ✅ **What survives:** group-level *distribution* work may still be defensible where random error
 averages down — but nothing per-shot, and nothing at the ~5° scale. Before any future body-form
 claim, **run this reliability check first and quote the SDC.**
+
+#### ✅ THE CLOSURE, CHECKED FOR OVER-REACH (2026-08-05)
+Closing a front deserves the same scrutiny as opening one, and my record this week is bad in
+BOTH directions — so an over-retraction is exactly as likely as an over-claim and has nobody
+arguing for it. ⚠️ The external review commissioned for this **hung for 20 hours and produced
+zero bytes**; I killed it and did the checks myself rather than wait again. *(Lesson: a
+background job with an empty output file after ~30 min is stuck, not thinking. Kill and relaunch
+instead of deferring to it.)*
+
+1. **Is n=22 enough?** The SDC is what is robust, not r. **r=0.07 is imprecise — 95% CI
+   [−0.36, +0.48]** — so quoting it as a point value overstated the precision. But the
+   within-shot SD's chi-square CI gives **SDC 23.6°, 95% CI [18.1°, 33.7°]**, and even the
+   OPTIMISTIC end is **3.4× the 5.4° effect**. The closure survives sampling error comfortably.
+2. **Is 3D-worse-than-2D real?** Yes: **[−0.36,+0.48] vs [+0.63,+0.93] do not overlap.**
+3. **Does the 22-of-39 matched subset bias it?** It does — and **in the conservative
+   direction.** Matched = both models found a release within ±3 frames, i.e. the EASIER shots,
+   so measured reliability is OPTIMISTIC and the true SDC over all 39 is worse. Selection
+   cannot rescue the metric.
+4. **Is heavy-vs-full a legitimate perturbation?** Smoothing on/off gives r=0.99, so the
+   pipeline is deterministic GIVEN a model; the variance is model-choice variance, which the
+   user never selects, sees, or controls. And if `heavy` is simply more accurate, the gap is
+   `full`'s ERROR — and `full` is what ships. **Both readings close it.**
+
+⏳ **One genuine escape route is still being tested** — see the robust-estimator section below.
+`knee_bend` is a MINIMUM over the load window, and a minimum is the most noise-sensitive
+statistic available: one bad landmark sets it. That indicts the ESTIMATOR and the DEFINITION
+together, and only the definition is free to change.
 ✅ **AND IT CLOSES THE OPEN ELBOW QUESTION.** I had flagged the close camera's **27° median
 2D-vs-3D elbow gap** (r=+0.46) as the largest disagreement in the table, on the camera that
 should be most favourable, and left it unexplained. It needs no special explanation: the 3D

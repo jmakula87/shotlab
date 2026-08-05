@@ -43,6 +43,9 @@ VALID_RANGE = {
     # window in the analysis when comparing against the 2D metric, so the
     # censoring is an explicit analysis step rather than a silent one.
     "knee_bend_3d_deg": (20.0, 180.0),
+    # robust twins of the 3D knee -- same anatomical bounds, different statistic
+    "knee_bend_3d_p10_deg": (20.0, 180.0),
+    "knee_bend_3d_low5_deg": (20.0, 180.0),
     "elbow_angle_at_release_3d_deg": (20.0, 180.0),
 }
 
